@@ -12,13 +12,21 @@ _A fast, beautiful, and completely free platform for tracking products, planning
 
 ---
 
-![GitHub stars](https://img.shields.io/github/stars/codeboy2012/DerList?style=for-the-badge)
-![GitHub forks](https://img.shields.io/github/forks/codeboy2012/DerList?style=for-the-badge)
-![GitHub License](https://img.shields.io/github/license/codeboy2012/DerList?style=for-the-badge)
-![Open Source](https://img.shields.io/badge/Open%20Source-Always-success?style=for-the-badge)
-![AI Assisted](https://img.shields.io/badge/AI-Assisted-OpenRouter-blueviolet?style=for-the-badge)
-![TypeScript](https://img.shields.io/badge/TypeScript-Ready-3178C6?style=for-the-badge)
-![Self Hostable](https://img.shields.io/badge/Self--Hostable-Yes-brightgreen?style=for-the-badge)
+![License](https://img.shields.io/github/license/codeboy2012/DerList?style=for-the-badge)
+
+![Stars](https://img.shields.io/github/stars/codeboy2012/DerList?style=for-the-badge)
+
+![Issues](https://img.shields.io/github/issues/codeboy2012/DerList?style=for-the-badge)
+
+![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen?style=for-the-badge)
+
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript)
+
+![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js)
+
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-38B2AC?style=for-the-badge&logo=tailwindcss)
+
+![Open Source](https://img.shields.io/badge/Open_Source-❤️-success?style=for-the-badge)
 
 🌐 **Official Website:** https://derlist.dpdns.org
 
