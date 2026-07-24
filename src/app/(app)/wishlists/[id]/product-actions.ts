@@ -46,6 +46,10 @@ export interface ImportPreviewState {
     currency: string;
     inStock: boolean | null;
     availability: string | null;
+    confidence: number;
+    priceSource: string;
+    priceCandidates: Array<{ method: string; price: number; currency: string | null; confidence: number; reason: string }>;
+    needsReview: boolean;
   };
 }
 
@@ -209,6 +213,18 @@ export async function confirmImportAction(
         lastFetchedAt: new Date(),
       },
     });
+
+    // Record initial price history
+    if (data.currentPrice != null) {
+      await prisma.priceHistory.create({
+        data: {
+          productId: product.id,
+          price: data.currentPrice,
+          currency: data.currency,
+          availability: data.availability,
+        },
+      });
+    }
   }
 
   // Get next position in wishlist
@@ -256,6 +272,14 @@ export async function confirmImportAction(
       position,
     },
   });
+
+  // Auto-queue product for background refresh
+  const { enqueueProductRefresh } = await import('@/lib/jobs/queue');
+  if (product.id) {
+    // Schedule first refresh in 12 hours
+    const twelveHoursFromNow = new Date(Date.now() + 12 * 60 * 60 * 1000);
+    await enqueueProductRefresh(product.id, twelveHoursFromNow);
+  }
 
   revalidatePath(`/wishlists/${wishlistId}`);
   revalidatePath('/dashboard');

@@ -35,6 +35,14 @@ export interface ImportedProductData {
   currency: string;
   inStock: boolean | null;
   availability: string | null;
+  /** 0-100 overall extraction confidence */
+  confidence: number;
+  /** Which extractor won the price vote */
+  priceSource: string;
+  /** All price candidates considered */
+  priceCandidates: Array<{ method: string; price: number; currency: string | null; confidence: number; reason: string }>;
+  /** True if confidence is low and review is recommended */
+  needsReview: boolean;
 }
 
 export interface ImportResult {
@@ -103,6 +111,10 @@ export async function importProductFromUrl(rawUrl: string): Promise<ImportOutcom
       currency: cached.currency,
       inStock: cached.inStock,
       availability: cached.availability,
+      confidence: 100,  // Cached products are already verified
+      priceSource: 'cached',
+      priceCandidates: [],
+      needsReview: false,
     };
     return { success: true, data };
   }
@@ -176,6 +188,10 @@ export async function importProductFromUrl(rawUrl: string): Promise<ImportOutcom
     currency: pipelineResult.currency ?? 'USD',
     inStock: pipelineResult.inStock,
     availability: pipelineResult.availability,
+    confidence: pipelineResult.confidence,
+    priceSource: pipelineResult.priceSource,
+    priceCandidates: pipelineResult.priceCandidates,
+    needsReview: pipelineResult.needsReview,
   };
 
   return { success: true, data };
