@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
+import { WishlistPriorityDisplay } from '@/components/ui/WishlistPriority';
 import {
   Check,
   CheckCircle2,
@@ -34,6 +35,7 @@ interface ItemRowProps {
     currentPrice: unknown;
     currency: string;
     priority: string;
+    starPriority: number;
     quantity: number;
     purchased: boolean;
     notes: string | null;
@@ -131,7 +133,7 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
                   {item.brand && (
                     <span className="text-[11px] text-muted-foreground">{item.brand}</span>
                   )}
-                  {item.priority !== 'MEDIUM' && <PriorityBadge priority={item.priority} />}
+                  {item.starPriority > 1 && <WishlistPriorityDisplay value={item.starPriority} />}
                   {item.quantity > 1 && (
                     <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                       ×{item.quantity}

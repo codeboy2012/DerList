@@ -422,6 +422,9 @@ model WishlistItem {
   /// How badly the user wants this item.
   priority ItemPriority @default(MEDIUM)
 
+  /// Star-based priority (1-4). 1=Want, 2=Really Want, 3=I NEED This, 4=O.M.G. MUST HAVE!!
+  starPriority Int @default(1)
+
   /// Desired quantity.
   quantity Int @default(1)
 
