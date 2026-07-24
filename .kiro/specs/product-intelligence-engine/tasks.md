@@ -1,6 +1,6 @@
 ## Tasks
 
-- [ ] 1. Create shared types and interfaces for the extraction pipeline
+- [x] 1. Create shared types and interfaces for the extraction pipeline
   Create `src/lib/products/engine/types.ts` with:
   - `ExtractionResult` interface (title, price, currency, image, brand, sku, mpn, gtin, inStock, availability, description, confidence, source)
   - `PipelineInput` interface (html, url, domain, existingProduct?)
@@ -8,14 +8,14 @@
   - `VotableResult` interface for consensus engine
   - `RetailerParser` interface (name, domains[], extract(html, url) → ExtractionResult)
 
-- [ ] 2. Create parser registry with domain-to-parser mapping
+- [x] 2. Create parser registry with domain-to-parser mapping
   Create `src/lib/products/parsers/index.ts` with:
   - `getParserForDomain(domain: string): RetailerParser | null` function
   - `getAllParsers(): RetailerParser[]` function
   - Domain matching logic (supports subdomains like amazon.co.uk)
   - Registry that maps domain patterns to parser modules
 
-- [ ] 3. Create Amazon site-specific parser
+- [x] 3. Create Amazon site-specific parser
   Create `src/lib/products/parsers/amazon.ts` with:
   - Buy box price extraction (priceToPay, corePriceDisplay, corePrice_feature_div)
   - Coupon/savings filtering (never mistake "Save $59" for the price)
@@ -26,7 +26,7 @@
   - SKU/ASIN extraction from URL
   - Confidence scoring based on how much was successfully extracted
 
-- [ ] 4. Create individual extractors as separate modules
+- [x] 4. Create individual extractors as separate modules
   Create files in `src/lib/products/extractors/`:
   - `json-ld.ts` — Extract from schema.org Product JSON-LD (confidence 95-100)
   - `opengraph.ts` — Extract from og:title, og:image, og:price:amount (confidence 75-80)
@@ -35,7 +35,7 @@
   - `index.ts` — barrel export of all extractors
   Each extractor returns an ExtractionResult with its own confidence score.
 
-- [ ] 5. Create consensus engine for merging extraction results
+- [x] 5. Create consensus engine for merging extraction results
   Create `src/lib/products/engine/consensus.ts` with:
   - `buildConsensus(results: VotableResult[]): ConsensusResult` function
   - Price grouping: cluster candidates within 5% tolerance
@@ -45,7 +45,7 @@
   - Agreement score: proportion of extractors that agree
   - needsReview flag when no clear majority exists (agreement < 0.5)
 
-- [ ] 6. Create extraction pipeline orchestrator
+- [x] 6. Create extraction pipeline orchestrator
   Create `src/lib/products/engine/pipeline.ts` with:
   - `runExtractionPipeline(input: PipelineInput): Promise<PipelineResult>` function
   - Detects retailer parser from domain
@@ -55,12 +55,12 @@
   - Returns merged PipelineResult with overall confidence
   - Does NOT invoke browser or AI (those are triggered by callers if needed)
 
-- [ ] 7. Integrate pipeline into import flow and background sync
+- [x] 7. Integrate pipeline into import flow and background sync
   Modify `src/lib/products/index.ts`:
   - Replace `extractMetadata(html, domain)` call with `runExtractionPipeline({ html, url: canonicalUrl, domain })`
   - Map PipelineResult fields back to ImportedProductData format
   - Preserve existing 5-minute cache check and error handling
-  Modify `src/lib/products/jobs/product-sync.ts`:
+  Modify `src/lib/jobs/product-sync.ts`:
   - Replace `extractMetadata(html)` with `runExtractionPipeline({ html, url, domain, existingProduct })`
   - Use pipeline's confidence score in sync result logging
 
