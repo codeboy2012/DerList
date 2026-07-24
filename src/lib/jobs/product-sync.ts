@@ -133,6 +133,7 @@ export async function syncProduct(productId: string): Promise<SyncResult> {
   await prisma.product.update({
     where: { id: product.id },
     data: {
+      // Continuous learning: merge in any newly discovered data
       title: metadata.title ?? product.title,
       description: metadata.description ?? product.description,
       image: metadata.image ?? product.image,
@@ -141,6 +142,10 @@ export async function syncProduct(productId: string): Promise<SyncResult> {
       inStock: metadata.inStock ?? product.inStock,
       availability: metadata.availability,
       brand: metadata.brand ?? undefined,
+      // Learn new identifiers if discovered
+      sku: metadata.sku ?? undefined,
+      mpn: metadata.mpn ?? undefined,
+      gtin: metadata.gtin ?? undefined,
       lastFetchedAt: new Date(),
     },
   });

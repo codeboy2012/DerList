@@ -120,6 +120,21 @@ export default async function ProductDetailPage({ params }: PageProps) {
 
   const canRefresh = !!product.canonicalUrl;
 
+  // Calculate product health score
+  const { calculateProductHealth } = await import('@/lib/products/health');
+  const health = calculateProductHealth({
+    image: product.image,
+    title: product.title,
+    currentPrice: product.currentPrice,
+    brand: product.brand,
+    retailer: product.retailer,
+    sku: product.sku,
+    gtin: product.gtin,
+    mpn: product.mpn,
+    inStock: product.inStock,
+    lastFetchedAt: product.lastFetchedAt,
+  });
+
   return (
     <div className="flex flex-col gap-8">
       {/* Back button */}
@@ -131,6 +146,12 @@ export default async function ProductDetailPage({ params }: PageProps) {
         </Button>
         <Badge variant="secondary" className="text-[10px]">
           {product.source === 'IMPORTED' ? 'Imported' : 'Manual'}
+        </Badge>
+        <Badge
+          variant={health.label === 'Excellent' ? 'success' : health.label === 'Good' ? 'default' : health.label === 'Fair' ? 'warning' : 'danger'}
+          className="text-[10px]"
+        >
+          {health.score}% Health
         </Badge>
         {canRefresh && (
           <form action={refreshProductAction} className="ml-auto">
