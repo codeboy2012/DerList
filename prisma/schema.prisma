@@ -508,6 +508,15 @@ model Product {
   /// Global Trade Item Number (UPC/EAN/ISBN).
   gtin String?
 
+  /// Amazon Standard Identification Number.
+  asin String?
+
+  /// Universal Product Code (UPC/EAN barcode).
+  upc String?
+
+  /// Retailer-specific product ID (e.g., Best Buy SKU, Newegg Item#).
+  retailerProductId String?
+
   // ── Media ──
 
   /// Primary image URL.

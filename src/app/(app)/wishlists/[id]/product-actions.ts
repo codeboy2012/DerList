@@ -149,6 +149,19 @@ export async function confirmImportAction(
     if (byMpn) product = byMpn;
   }
 
+  // Also try matching by normalized title + brand (fuzzy deduplication)
+  if (!product && data.title && data.brand) {
+    const byTitleBrand = await prisma.product.findFirst({
+      where: {
+        title: data.title,
+        brand: data.brand,
+        retailer: data.retailer,
+      },
+      select: { id: true, currentPrice: true },
+    });
+    if (byTitleBrand) product = byTitleBrand;
+  }
+
   if (product) {
     // Reuse existing product — update pricing if newer
     const oldPrice = product.currentPrice;
