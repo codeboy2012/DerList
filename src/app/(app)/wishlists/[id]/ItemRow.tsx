@@ -256,7 +256,7 @@ function InlineStarPriority({ item, wishlistId }: { item: ItemRowProps['item']; 
   };
 
   return (
-    <WishlistPriority value={optimistic} onChange={handleChange} showLabel={false} size="sm" />
+    <WishlistPriority value={optimistic} onChange={handleChange} showLabel size="sm" />
   );
 }
 
