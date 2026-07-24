@@ -64,7 +64,7 @@
   - Replace `extractMetadata(html)` with `runExtractionPipeline({ html, url, domain, existingProduct })`
   - Use pipeline's confidence score in sync result logging
 
-- [ ] 8. Create remaining retailer parsers (Best Buy, Newegg, Walmart, Target, Micro Center)
+- [x] 8. Create remaining retailer parsers (Best Buy, Newegg, Walmart, Target, Micro Center)
   Create files in `src/lib/products/parsers/`:
   - `bestbuy.ts` — priceView-hero-price, sku-title, primary-image
   - `newegg.ts` — price-current, product-title, product-image
@@ -73,7 +73,7 @@
   - `microcenter.ts` — #pricing section, product info
   Register all in `parsers/index.ts`
 
-- [ ] 9. Create browser rendering module (optional, Playwright)
+- [x] 9. Create browser rendering module (optional, Playwright)
   Create `src/lib/products/browser/`:
   - `index.ts` — `isBrowserAvailable()` (dynamic import check), `renderWithBrowser(url)` 
   - `render.ts` — Playwright launch with stealth (random UA, viewport, delays), 30s timeout
@@ -81,7 +81,7 @@
   - Graceful fallback: if playwright not installed, return null
   - Integration: callers check `isBrowserAvailable()` before invoking
 
-- [ ] 10. Create AI verification module (optional)
+- [x] 10. Create AI verification module (optional)
   Create `src/lib/products/ai/`:
   - `index.ts` — `isAIConfigured()`, `verifyWithAI(input)` orchestrator
   - `providers.ts` — adapter for Gemini/OpenAI/Anthropic/Ollama (dynamic imports)
