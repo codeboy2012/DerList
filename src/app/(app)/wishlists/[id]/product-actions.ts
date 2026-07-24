@@ -117,21 +117,69 @@ export async function confirmImportAction(
   // Duplicate detection: check if product with this canonical URL already exists
   let product = await prisma.product.findUnique({
     where: { canonicalUrl: data.canonicalUrl },
-    select: { id: true },
+    select: { id: true, currentPrice: true },
   });
+
+  // Enhanced duplicate detection: check SKU, GTIN, MPN
+  if (!product && data.sku && data.retailer) {
+    const bySku = await prisma.product.findFirst({
+      where: { sku: data.sku, retailer: data.retailer },
+      select: { id: true, currentPrice: true },
+    });
+    if (bySku) product = bySku;
+  }
+
+  if (!product && data.gtin) {
+    const byGtin = await prisma.product.findFirst({
+      where: { gtin: data.gtin },
+      select: { id: true, currentPrice: true },
+    });
+    if (byGtin) product = byGtin;
+  }
+
+  if (!product && data.mpn && data.brand) {
+    const byMpn = await prisma.product.findFirst({
+      where: { mpn: data.mpn, brand: data.brand },
+      select: { id: true, currentPrice: true },
+    });
+    if (byMpn) product = byMpn;
+  }
 
   if (product) {
     // Reuse existing product — update pricing if newer
+    const oldPrice = product.currentPrice;
+    const newPrice = data.currentPrice;
+
     await prisma.product.update({
       where: { id: product.id },
       data: {
-        currentPrice: data.currentPrice,
+        currentPrice: newPrice,
         currency: data.currency,
         inStock: data.inStock,
         availability: data.availability,
         lastFetchedAt: new Date(),
       },
     });
+
+    // Record price history and change if price differs
+    if (newPrice != null && String(oldPrice) !== String(newPrice)) {
+      await prisma.priceHistory.create({
+        data: {
+          productId: product.id,
+          price: newPrice,
+          currency: data.currency,
+          availability: data.availability,
+        },
+      });
+      await prisma.productChange.create({
+        data: {
+          productId: product.id,
+          changeType: 'PRICE',
+          oldValue: oldPrice != null ? String(oldPrice) : null,
+          newValue: String(newPrice),
+        },
+      });
+    }
   } else {
     // Create new product record
     let gallery: string[] = [];
@@ -264,6 +312,17 @@ export async function createManualProductAction(
       source: 'MANUAL',
     },
   });
+
+  // Record initial price history if a price was provided
+  if (data.currentPrice != null) {
+    await prisma.priceHistory.create({
+      data: {
+        productId: product.id,
+        price: data.currentPrice,
+        currency: data.currency,
+      },
+    });
+  }
 
   // Get next position
   const lastItem = await prisma.wishlistItem.findFirst({
