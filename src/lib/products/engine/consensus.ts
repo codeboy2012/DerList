@@ -9,7 +9,7 @@
  * 5. If no clear majority, flag needsReview
  */
 
-import type { ConsensusResult, VotableResult } from './types';
+import type { ConsensusResult, PriceCandidateInfo, VotableResult } from './types';
 
 /**
  * Build consensus from multiple extraction results.
@@ -18,9 +18,21 @@ export function buildConsensus(results: VotableResult[]): ConsensusResult {
   const defaultResult: ConsensusResult = {
     price: null, currency: null, title: null, image: null, brand: null,
     overallConfidence: 0, priceSource: 'none', agreement: 0, needsReview: true,
+    priceCandidates: [],
   };
 
   if (results.length === 0) return defaultResult;
+
+  // ── Collect all price candidates for debugging ──
+  const priceCandidates: PriceCandidateInfo[] = results
+    .filter((r) => r.price != null && r.price > 0)
+    .map((r) => ({
+      method: r.source,
+      price: r.price!,
+      currency: r.currency,
+      confidence: r.confidence,
+      reason: `Extracted by ${r.source} with confidence ${r.confidence}`,
+    }));
 
   // ── Price Voting ──
   const priceResults = results.filter((r) => r.price != null && r.price > 0);
@@ -80,6 +92,7 @@ export function buildConsensus(results: VotableResult[]): ConsensusResult {
     priceSource,
     agreement,
     needsReview,
+    priceCandidates,
   };
 }
 

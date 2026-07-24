@@ -94,6 +94,7 @@ export async function runExtractionPipeline(input: PipelineInput): Promise<Pipel
     confidence: consensus.overallConfidence,
     priceSource: consensus.priceSource,
     needsReview: consensus.needsReview,
+    priceCandidates: consensus.priceCandidates,
   };
 
   return pipelineResult;

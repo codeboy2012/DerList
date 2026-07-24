@@ -75,6 +75,21 @@ export interface PipelineResult {
   priceSource: string;
   /** True if confidence is too low and human review is recommended */
   needsReview: boolean;
+  /** All price candidates considered during consensus voting */
+  priceCandidates: PriceCandidateInfo[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Price Candidate (debugging / future UI)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A single price candidate from an extractor, preserved for debugging/future UI. */
+export interface PriceCandidateInfo {
+  method: string;
+  price: number;
+  currency: string | null;
+  confidence: number;
+  reason: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -111,6 +126,8 @@ export interface ConsensusResult {
   agreement: number;
   /** True if no clear majority — product needs human review */
   needsReview: boolean;
+  /** All price candidates that participated in voting */
+  priceCandidates: PriceCandidateInfo[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
