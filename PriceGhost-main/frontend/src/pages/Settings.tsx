@@ -1,0 +1,2115 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import Layout from '../components/Layout';
+import PasswordInput from '../components/PasswordInput';
+import {
+  settingsApi,
+  profileApi,
+  adminApi,
+  NotificationSettings,
+  AISettings,
+  UserProfile,
+  SystemSettings,
+} from '../api/client';
+
+type SettingsSection = 'profile' | 'notifications' | 'ai' | 'admin';
+
+interface VersionInfo {
+  version: string;
+  releaseDate: string;
+}
+
+export default function Settings() {
+  const [activeSection, setActiveSection] = useState<SettingsSection>('profile');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
+
+  // Profile state
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileName, setProfileName] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  // Notification state
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(null);
+  const [telegramBotToken, setTelegramBotToken] = useState('');
+  const [telegramChatId, setTelegramChatId] = useState('');
+  const [telegramEnabled, setTelegramEnabled] = useState(true);
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
+  const [discordEnabled, setDiscordEnabled] = useState(true);
+  const [pushoverUserKey, setPushoverUserKey] = useState('');
+  const [pushoverAppToken, setPushoverAppToken] = useState('');
+  const [pushoverEnabled, setPushoverEnabled] = useState(true);
+  const [ntfyTopic, setNtfyTopic] = useState('');
+  const [ntfyServerUrl, setNtfyServerUrl] = useState('');
+  const [ntfyUsername, setNtfyUsername] = useState('');
+  const [ntfyPassword, setNtfyPassword] = useState('');
+  const [ntfyEnabled, setNtfyEnabled] = useState(true);
+  const [gotifyUrl, setGotifyUrl] = useState('');
+  const [gotifyAppToken, setGotifyAppToken] = useState('');
+  const [gotifyEnabled, setGotifyEnabled] = useState(true);
+  const [isTestingGotify, setIsTestingGotify] = useState(false);
+  const [isSavingNotifications, setIsSavingNotifications] = useState(false);
+  const [isTesting, setIsTesting] = useState<'telegram' | 'discord' | 'pushover' | 'ntfy' | 'gotify' | null>(null);
+
+  // AI state
+  const [aiSettings, setAISettings] = useState<AISettings | null>(null);
+  const [aiEnabled, setAIEnabled] = useState(false);
+  const [aiVerificationEnabled, setAIVerificationEnabled] = useState(false);
+  const [aiProvider, setAIProvider] = useState<'anthropic' | 'openai' | 'ollama' | 'gemini'>('anthropic');
+  const [anthropicApiKey, setAnthropicApiKey] = useState('');
+  const [anthropicModel, setAnthropicModel] = useState('');
+  const [openaiApiKey, setOpenaiApiKey] = useState('');
+  const [openaiModel, setOpenaiModel] = useState('');
+  const [ollamaBaseUrl, setOllamaBaseUrl] = useState('');
+  const [ollamaModel, setOllamaModel] = useState('');
+  const [availableOllamaModels, setAvailableOllamaModels] = useState<string[]>([]);
+  const [isTestingOllama, setIsTestingOllama] = useState(false);
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [geminiModel, setGeminiModel] = useState('');
+  const [isTestingGemini, setIsTestingGemini] = useState(false);
+  const [isSavingAI, setIsSavingAI] = useState(false);
+  const [isTestingAI, setIsTestingAI] = useState(false);
+  const [testUrl, setTestUrl] = useState('');
+
+  // Admin state
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
+  const [isLoadingAdmin, setIsLoadingAdmin] = useState(false);
+  const [isSavingAdmin, setIsSavingAdmin] = useState(false);
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState<'user' | 'admin'>('user');
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+
+  useEffect(() => {
+    fetchInitialData();
+    // Fetch version info
+    fetch('/version.json')
+      .then(res => res.json())
+      .then(data => setVersionInfo(data))
+      .catch(() => {}); // Silently fail if version.json not found
+  }, []);
+
+  const fetchInitialData = async () => {
+    try {
+      const [profileRes, notificationsRes, aiRes] = await Promise.all([
+        profileApi.get(),
+        settingsApi.getNotifications(),
+        settingsApi.getAI(),
+      ]);
+      setProfile(profileRes.data);
+      setProfileName(profileRes.data.name || '');
+      setNotificationSettings(notificationsRes.data);
+      // Populate notification fields with actual values
+      setTelegramBotToken(notificationsRes.data.telegram_bot_token || '');
+      setTelegramChatId(notificationsRes.data.telegram_chat_id || '');
+      setTelegramEnabled(notificationsRes.data.telegram_enabled ?? true);
+      setDiscordWebhookUrl(notificationsRes.data.discord_webhook_url || '');
+      setDiscordEnabled(notificationsRes.data.discord_enabled ?? true);
+      setPushoverUserKey(notificationsRes.data.pushover_user_key || '');
+      setPushoverAppToken(notificationsRes.data.pushover_app_token || '');
+      setPushoverEnabled(notificationsRes.data.pushover_enabled ?? true);
+      setNtfyTopic(notificationsRes.data.ntfy_topic || '');
+      setNtfyServerUrl(notificationsRes.data.ntfy_server_url || '');
+      setNtfyUsername(notificationsRes.data.ntfy_username || '');
+      setNtfyPassword(notificationsRes.data.ntfy_password || '');
+      setNtfyEnabled(notificationsRes.data.ntfy_enabled ?? true);
+      setGotifyUrl(notificationsRes.data.gotify_url || '');
+      setGotifyAppToken(notificationsRes.data.gotify_app_token || '');
+      setGotifyEnabled(notificationsRes.data.gotify_enabled ?? true);
+      // Populate AI fields with actual values
+      setAISettings(aiRes.data);
+      setAIEnabled(aiRes.data.ai_enabled);
+      setAIVerificationEnabled(aiRes.data.ai_verification_enabled ?? false);
+      if (aiRes.data.ai_provider) {
+        setAIProvider(aiRes.data.ai_provider);
+      }
+      setAnthropicApiKey(aiRes.data.anthropic_api_key || '');
+      setAnthropicModel(aiRes.data.anthropic_model || '');
+      setOpenaiApiKey(aiRes.data.openai_api_key || '');
+      setOpenaiModel(aiRes.data.openai_model || '');
+      setOllamaBaseUrl(aiRes.data.ollama_base_url || '');
+      setOllamaModel(aiRes.data.ollama_model || '');
+      setGeminiApiKey(aiRes.data.gemini_api_key || '');
+      setGeminiModel(aiRes.data.gemini_model || '');
+    } catch {
+      setError('Failed to load settings');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchAdminData = async () => {
+    if (!profile?.is_admin) return;
+    setIsLoadingAdmin(true);
+    try {
+      const [usersRes, settingsRes] = await Promise.all([
+        adminApi.getUsers(),
+        adminApi.getSettings(),
+      ]);
+      setUsers(usersRes.data);
+      setSystemSettings(settingsRes.data);
+    } catch {
+      setError('Failed to load admin data');
+    } finally {
+      setIsLoadingAdmin(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection === 'admin' && profile?.is_admin && users.length === 0) {
+      fetchAdminData();
+    }
+  }, [activeSection, profile]);
+
+  const clearMessages = () => {
+    setError('');
+    setSuccess('');
+  };
+
+  // Profile handlers
+  const handleSaveProfile = async () => {
+    clearMessages();
+    setIsSavingProfile(true);
+    try {
+      const response = await profileApi.update({ name: profileName });
+      setProfile(response.data);
+      setSuccess('Profile updated successfully');
+    } catch {
+      setError('Failed to update profile');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    clearMessages();
+    if (newPassword !== confirmPassword) {
+      setError('New passwords do not match');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    setIsChangingPassword(true);
+    try {
+      await profileApi.changePassword(currentPassword, newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setSuccess('Password changed successfully');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      setError(error.response?.data?.error || 'Failed to change password');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
+  // Notification handlers
+  const handleSaveTelegram = async () => {
+    clearMessages();
+    setIsSavingNotifications(true);
+    try {
+      const response = await settingsApi.updateNotifications({
+        telegram_bot_token: telegramBotToken || null,
+        telegram_chat_id: telegramChatId || null,
+      });
+      setNotificationSettings(response.data);
+      setTelegramBotToken('');
+      setSuccess('Telegram settings saved successfully');
+    } catch {
+      setError('Failed to save Telegram settings');
+    } finally {
+      setIsSavingNotifications(false);
+    }
+  };
+
+  const handleSaveDiscord = async () => {
+    clearMessages();
+    setIsSavingNotifications(true);
+    try {
+      const response = await settingsApi.updateNotifications({
+        discord_webhook_url: discordWebhookUrl || null,
+      });
+      setNotificationSettings(response.data);
+      setDiscordWebhookUrl('');
+      setSuccess('Discord settings saved successfully');
+    } catch {
+      setError('Failed to save Discord settings');
+    } finally {
+      setIsSavingNotifications(false);
+    }
+  };
+
+  const handleTestTelegram = async () => {
+    clearMessages();
+    setIsTesting('telegram');
+    try {
+      await settingsApi.testTelegram();
+      setSuccess('Test notification sent to Telegram!');
+    } catch {
+      setError('Failed to send test notification');
+    } finally {
+      setIsTesting(null);
+    }
+  };
+
+  const handleTestDiscord = async () => {
+    clearMessages();
+    setIsTesting('discord');
+    try {
+      await settingsApi.testDiscord();
+      setSuccess('Test notification sent to Discord!');
+    } catch {
+      setError('Failed to send test notification');
+    } finally {
+      setIsTesting(null);
+    }
+  };
+
+  const handleSavePushover = async () => {
+    clearMessages();
+    setIsSavingNotifications(true);
+    try {
+      const response = await settingsApi.updateNotifications({
+        pushover_user_key: pushoverUserKey || null,
+        pushover_app_token: pushoverAppToken || null,
+      });
+      setNotificationSettings(response.data);
+      setPushoverUserKey('');
+      setPushoverAppToken('');
+      setSuccess('Pushover settings saved successfully');
+    } catch {
+      setError('Failed to save Pushover settings');
+    } finally {
+      setIsSavingNotifications(false);
+    }
+  };
+
+  const handleTestPushover = async () => {
+    clearMessages();
+    setIsTesting('pushover');
+    try {
+      await settingsApi.testPushover();
+      setSuccess('Test notification sent to Pushover!');
+    } catch {
+      setError('Failed to send test notification');
+    } finally {
+      setIsTesting(null);
+    }
+  };
+
+  const handleToggleTelegram = async (enabled: boolean) => {
+    setTelegramEnabled(enabled);
+    try {
+      const response = await settingsApi.updateNotifications({ telegram_enabled: enabled });
+      setNotificationSettings(response.data);
+    } catch {
+      setTelegramEnabled(!enabled);
+      setError('Failed to update Telegram status');
+    }
+  };
+
+  const handleToggleDiscord = async (enabled: boolean) => {
+    setDiscordEnabled(enabled);
+    try {
+      const response = await settingsApi.updateNotifications({ discord_enabled: enabled });
+      setNotificationSettings(response.data);
+    } catch {
+      setDiscordEnabled(!enabled);
+      setError('Failed to update Discord status');
+    }
+  };
+
+  const handleTogglePushover = async (enabled: boolean) => {
+    setPushoverEnabled(enabled);
+    try {
+      const response = await settingsApi.updateNotifications({ pushover_enabled: enabled });
+      setNotificationSettings(response.data);
+    } catch {
+      setPushoverEnabled(!enabled);
+      setError('Failed to update Pushover status');
+    }
+  };
+
+  const handleSaveNtfy = async () => {
+    clearMessages();
+    setIsSavingNotifications(true);
+    try {
+      const response = await settingsApi.updateNotifications({
+        ntfy_topic: ntfyTopic || null,
+        ntfy_server_url: ntfyServerUrl || null,
+        ntfy_username: ntfyUsername || null,
+        ntfy_password: ntfyPassword || null,
+      });
+      setNotificationSettings(response.data);
+      // Clear password field after save for security
+      setNtfyPassword('');
+      setSuccess('ntfy settings saved successfully');
+    } catch {
+      setError('Failed to save ntfy settings');
+    } finally {
+      setIsSavingNotifications(false);
+    }
+  };
+
+  const handleTestNtfy = async () => {
+    clearMessages();
+    setIsTesting('ntfy');
+    try {
+      await settingsApi.testNtfy();
+      setSuccess('Test notification sent to ntfy!');
+    } catch {
+      setError('Failed to send test notification');
+    } finally {
+      setIsTesting(null);
+    }
+  };
+
+  const handleToggleNtfy = async (enabled: boolean) => {
+    setNtfyEnabled(enabled);
+    try {
+      const response = await settingsApi.updateNotifications({ ntfy_enabled: enabled });
+      setNotificationSettings(response.data);
+    } catch {
+      setNtfyEnabled(!enabled);
+      setError('Failed to update ntfy status');
+    }
+  };
+
+  const handleTestGotifyConnection = async () => {
+    clearMessages();
+    if (!gotifyUrl || !gotifyAppToken) {
+      setError('Please enter both the Gotify server URL and app token');
+      return;
+    }
+    setIsTestingGotify(true);
+    try {
+      const response = await settingsApi.testGotifyConnection(gotifyUrl, gotifyAppToken);
+      if (response.data.success) {
+        setSuccess('Successfully connected to Gotify server!');
+      } else {
+        setError(response.data.error || 'Failed to connect to Gotify');
+      }
+    } catch {
+      setError('Failed to connect to Gotify. Make sure the server is running.');
+    } finally {
+      setIsTestingGotify(false);
+    }
+  };
+
+  const handleSaveGotify = async () => {
+    clearMessages();
+    setIsSavingNotifications(true);
+    try {
+      const response = await settingsApi.updateNotifications({
+        gotify_url: gotifyUrl || null,
+        gotify_app_token: gotifyAppToken || null,
+      });
+      setNotificationSettings(response.data);
+      setGotifyAppToken('');
+      setSuccess('Gotify settings saved successfully');
+    } catch {
+      setError('Failed to save Gotify settings');
+    } finally {
+      setIsSavingNotifications(false);
+    }
+  };
+
+  const handleTestGotify = async () => {
+    clearMessages();
+    setIsTesting('gotify');
+    try {
+      await settingsApi.testGotify();
+      setSuccess('Test notification sent to Gotify!');
+    } catch {
+      setError('Failed to send test notification');
+    } finally {
+      setIsTesting(null);
+    }
+  };
+
+  const handleToggleGotify = async (enabled: boolean) => {
+    setGotifyEnabled(enabled);
+    try {
+      const response = await settingsApi.updateNotifications({ gotify_enabled: enabled });
+      setNotificationSettings(response.data);
+    } catch {
+      setGotifyEnabled(!enabled);
+      setError('Failed to update Gotify status');
+    }
+  };
+
+  // AI handlers
+  const handleSaveAI = async () => {
+    clearMessages();
+    setIsSavingAI(true);
+    try {
+      const response = await settingsApi.updateAI({
+        ai_enabled: aiEnabled,
+        ai_verification_enabled: aiVerificationEnabled,
+        ai_provider: aiProvider,
+        anthropic_api_key: anthropicApiKey || undefined,
+        anthropic_model: aiProvider === 'anthropic' ? anthropicModel || null : undefined,
+        openai_api_key: openaiApiKey || undefined,
+        openai_model: aiProvider === 'openai' ? openaiModel || null : undefined,
+        ollama_base_url: aiProvider === 'ollama' ? ollamaBaseUrl || null : undefined,
+        ollama_model: aiProvider === 'ollama' ? ollamaModel || null : undefined,
+        gemini_api_key: geminiApiKey || undefined,
+        gemini_model: aiProvider === 'gemini' ? geminiModel || null : undefined,
+      });
+      setAISettings(response.data);
+      setAIVerificationEnabled(response.data.ai_verification_enabled ?? false);
+      setAnthropicModel(response.data.anthropic_model || '');
+      setOpenaiModel(response.data.openai_model || '');
+      setGeminiModel(response.data.gemini_model || '');
+      setAnthropicApiKey('');
+      setOpenaiApiKey('');
+      setGeminiApiKey('');
+      setSuccess('AI settings saved successfully');
+    } catch {
+      setError('Failed to save AI settings');
+    } finally {
+      setIsSavingAI(false);
+    }
+  };
+
+  const handleTestOllama = async () => {
+    clearMessages();
+    if (!ollamaBaseUrl) {
+      setError('Please enter the Ollama base URL');
+      return;
+    }
+    setIsTestingOllama(true);
+    try {
+      const response = await settingsApi.testOllama(ollamaBaseUrl);
+      if (response.data.success) {
+        setAvailableOllamaModels(response.data.models || []);
+        setSuccess(`Connected to Ollama! Found ${response.data.models?.length || 0} models.`);
+      } else {
+        setError(response.data.error || 'Failed to connect to Ollama');
+      }
+    } catch {
+      setError('Failed to connect to Ollama. Make sure it is running.');
+    } finally {
+      setIsTestingOllama(false);
+    }
+  };
+
+  const handleTestGemini = async () => {
+    clearMessages();
+    if (!geminiApiKey) {
+      setError('Please enter your Gemini API key');
+      return;
+    }
+    setIsTestingGemini(true);
+    try {
+      const response = await settingsApi.testGemini(geminiApiKey);
+      if (response.data.success) {
+        setSuccess('Successfully connected to Gemini API!');
+      } else {
+        setError(response.data.error || 'Failed to connect to Gemini');
+      }
+    } catch {
+      setError('Failed to connect to Gemini. Check your API key.');
+    } finally {
+      setIsTestingGemini(false);
+    }
+  };
+
+  const handleTestAI = async () => {
+    clearMessages();
+    if (!testUrl) {
+      setError('Please enter a URL to test');
+      return;
+    }
+    setIsTestingAI(true);
+    try {
+      const response = await settingsApi.testAI(testUrl);
+      if (response.data.success && response.data.price) {
+        setSuccess(
+          `AI extraction successful! Found: ${response.data.name || 'Unknown'} - ` +
+          `${response.data.price.currency} ${response.data.price.price.toFixed(2)} ` +
+          `(confidence: ${(response.data.confidence * 100).toFixed(0)}%)`
+        );
+      } else {
+        setError('AI could not extract price from this URL');
+      }
+    } catch {
+      setError('Failed to test AI extraction');
+    } finally {
+      setIsTestingAI(false);
+    }
+  };
+
+  // Admin handlers
+  const handleToggleRegistration = async () => {
+    clearMessages();
+    setIsSavingAdmin(true);
+    try {
+      const newValue = systemSettings?.registration_enabled !== 'true';
+      const response = await adminApi.updateSettings({ registration_enabled: newValue });
+      setSystemSettings(response.data);
+      setSuccess(`Registration ${newValue ? 'enabled' : 'disabled'}`);
+    } catch {
+      setError('Failed to update settings');
+    } finally {
+      setIsSavingAdmin(false);
+    }
+  };
+
+  const handleCreateUser = async () => {
+    clearMessages();
+    if (!newUserEmail || !newUserPassword) {
+      setError('Email and password are required');
+      return;
+    }
+    if (newUserPassword.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+    setIsCreatingUser(true);
+    try {
+      await adminApi.createUser(newUserEmail, newUserPassword, newUserRole === 'admin');
+      // Refresh users list
+      const usersRes = await adminApi.getUsers();
+      setUsers(usersRes.data);
+      setNewUserEmail('');
+      setNewUserPassword('');
+      setNewUserRole('user');
+      setShowAddUser(false);
+      setSuccess('User created successfully');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      setError(error.response?.data?.error || 'Failed to create user');
+    } finally {
+      setIsCreatingUser(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: number) => {
+    if (!confirm('Are you sure you want to delete this user? All their data will be lost.')) {
+      return;
+    }
+    clearMessages();
+    try {
+      await adminApi.deleteUser(userId);
+      setUsers(users.filter(u => u.id !== userId));
+      setSuccess('User deleted successfully');
+    } catch {
+      setError('Failed to delete user');
+    }
+  };
+
+  const handleRoleChange = async (userId: number, newRole: 'user' | 'admin') => {
+    clearMessages();
+    const isAdmin = newRole === 'admin';
+    try {
+      await adminApi.setUserAdmin(userId, isAdmin);
+      setUsers(users.map(u => u.id === userId ? { ...u, is_admin: isAdmin } : u));
+      setSuccess(`User role updated to ${newRole}`);
+    } catch {
+      setError('Failed to update user role');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
+          <span className="spinner" style={{ width: '3rem', height: '3rem' }} />
+        </div>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout>
+      <style>{`
+        .settings-container {
+          display: flex;
+          gap: 2rem;
+          min-height: calc(100vh - 200px);
+        }
+
+        .settings-sidebar {
+          width: 220px;
+          flex-shrink: 0;
+          display: flex;
+          flex-direction: column;
+          position: sticky;
+          top: 80px;
+          align-self: flex-start;
+          max-height: calc(100vh - 100px);
+        }
+
+        .settings-nav {
+          background: var(--surface);
+          border-radius: 0.75rem;
+          box-shadow: var(--shadow);
+          overflow: hidden;
+        }
+
+        .settings-nav-item {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 1rem 1.25rem;
+          color: var(--text);
+          text-decoration: none;
+          border: none;
+          background: none;
+          width: 100%;
+          text-align: left;
+          cursor: pointer;
+          transition: background 0.2s;
+          font-size: 0.9375rem;
+        }
+
+        .settings-nav-item:hover {
+          background: var(--background);
+        }
+
+        .settings-nav-item.active {
+          background: var(--primary);
+          color: white;
+        }
+
+        .settings-nav-item svg {
+          width: 20px;
+          height: 20px;
+          flex-shrink: 0;
+        }
+
+        .settings-content {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .settings-header {
+          margin-bottom: 1.5rem;
+        }
+
+        .settings-back {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: var(--text-muted);
+          margin-bottom: 1rem;
+          font-size: 0.875rem;
+        }
+
+        .settings-back:hover {
+          color: var(--primary);
+          text-decoration: none;
+        }
+
+        .settings-title {
+          font-size: 1.75rem;
+          font-weight: 700;
+          color: var(--text);
+        }
+
+        .settings-section {
+          background: var(--surface);
+          border-radius: 0.75rem;
+          box-shadow: var(--shadow);
+          padding: 1.5rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .settings-section-header {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          margin-bottom: 1rem;
+        }
+
+        .settings-section-icon {
+          font-size: 1.5rem;
+        }
+
+        .settings-section-title {
+          font-size: 1.125rem;
+          font-weight: 600;
+          color: var(--text);
+        }
+
+        .settings-section-status {
+          margin-left: auto;
+          padding: 0.25rem 0.75rem;
+          border-radius: 1rem;
+          font-size: 0.75rem;
+          font-weight: 600;
+        }
+
+        .settings-section-status.configured {
+          background: #f0fdf4;
+          color: #16a34a;
+        }
+
+        [data-theme="dark"] .settings-section-status.configured {
+          background: rgba(22, 163, 74, 0.2);
+          color: #4ade80;
+        }
+
+        .settings-section-status.not-configured {
+          background: #fef3c7;
+          color: #d97706;
+        }
+
+        [data-theme="dark"] .settings-section-status.not-configured {
+          background: rgba(217, 119, 6, 0.2);
+          color: #fbbf24;
+        }
+
+        .settings-section-description {
+          color: var(--text-muted);
+          font-size: 0.875rem;
+          margin-bottom: 1.5rem;
+          line-height: 1.5;
+        }
+
+        .settings-form-group {
+          margin-bottom: 1rem;
+        }
+
+        .settings-form-group label {
+          display: block;
+          font-size: 0.875rem;
+          font-weight: 500;
+          color: var(--text);
+          margin-bottom: 0.375rem;
+        }
+
+        .settings-form-group input {
+          width: 100%;
+          padding: 0.625rem 0.75rem;
+          border: 1px solid var(--border);
+          border-radius: 0.375rem;
+          background: var(--background);
+          color: var(--text);
+          font-size: 0.875rem;
+        }
+
+        .settings-form-group input:focus {
+          outline: none;
+          border-color: var(--primary);
+          box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+        }
+
+        .settings-form-group input:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .settings-form-group .hint {
+          font-size: 0.75rem;
+          color: var(--text-muted);
+          margin-top: 0.25rem;
+        }
+
+        .settings-form-actions {
+          display: flex;
+          gap: 0.75rem;
+          margin-top: 1.5rem;
+        }
+
+        .settings-toggle {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 1rem;
+          background: var(--background);
+          border-radius: 0.5rem;
+          margin-bottom: 1rem;
+        }
+
+        .settings-toggle-label {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+        }
+
+        .settings-toggle-title {
+          font-weight: 500;
+          color: var(--text);
+        }
+
+        .settings-toggle-description {
+          font-size: 0.75rem;
+          color: var(--text-muted);
+        }
+
+        .toggle-switch {
+          position: relative;
+          width: 48px;
+          height: 26px;
+          background: var(--border);
+          border-radius: 13px;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .toggle-switch.active {
+          background: var(--primary);
+        }
+
+        .toggle-switch::after {
+          content: '';
+          position: absolute;
+          top: 3px;
+          left: 3px;
+          width: 20px;
+          height: 20px;
+          background: white;
+          border-radius: 50%;
+          transition: transform 0.2s;
+        }
+
+        .toggle-switch.active::after {
+          transform: translateX(22px);
+        }
+
+        .users-table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+
+        .users-table th,
+        .users-table td {
+          text-align: left;
+          padding: 0.75rem;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .users-table th {
+          font-weight: 600;
+          font-size: 0.75rem;
+          text-transform: uppercase;
+          color: var(--text-muted);
+        }
+
+        .users-table td {
+          font-size: 0.875rem;
+        }
+
+        .users-table .user-email {
+          font-weight: 500;
+        }
+
+        .users-table .user-badge {
+          display: inline-block;
+          padding: 0.125rem 0.5rem;
+          border-radius: 1rem;
+          font-size: 0.6875rem;
+          font-weight: 600;
+          text-transform: uppercase;
+        }
+
+        .users-table .user-badge.admin {
+          background: #dbeafe;
+          color: #1d4ed8;
+        }
+
+        [data-theme="dark"] .users-table .user-badge.admin {
+          background: rgba(29, 78, 216, 0.2);
+          color: #60a5fa;
+        }
+
+        .users-table .actions {
+          display: flex;
+          gap: 0.5rem;
+        }
+
+        .users-table .btn-sm {
+          padding: 0.25rem 0.5rem;
+          font-size: 0.75rem;
+        }
+
+        .alert {
+          padding: 0.75rem 1rem;
+          border-radius: 0.5rem;
+          margin-bottom: 1rem;
+        }
+
+        .alert-error {
+          background: #fef2f2;
+          color: #dc2626;
+        }
+
+        [data-theme="dark"] .alert-error {
+          background: rgba(220, 38, 38, 0.2);
+          color: #f87171;
+        }
+
+        .alert-success {
+          background: #f0fdf4;
+          color: #16a34a;
+        }
+
+        [data-theme="dark"] .alert-success {
+          background: rgba(22, 163, 74, 0.2);
+          color: #4ade80;
+        }
+
+        @media (max-width: 768px) {
+          .settings-container {
+            flex-direction: column;
+          }
+
+          .settings-sidebar {
+            width: 100%;
+          }
+
+          .settings-nav {
+            position: static;
+            display: flex;
+            overflow-x: auto;
+          }
+
+          .settings-nav-item {
+            flex-shrink: 0;
+          }
+        }
+      `}</style>
+
+      <div className="settings-header">
+        <Link to="/" className="settings-back">
+          ← Back to Dashboard
+        </Link>
+        <h1 className="settings-title">Settings</h1>
+      </div>
+
+      {error && <div className="alert alert-error">{error}</div>}
+      {success && <div className="alert alert-success">{success}</div>}
+
+      <div className="settings-container">
+        <div className="settings-sidebar">
+          <nav className="settings-nav">
+            <button
+              className={`settings-nav-item ${activeSection === 'profile' ? 'active' : ''}`}
+              onClick={() => { setActiveSection('profile'); clearMessages(); }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+              Profile
+            </button>
+            <button
+              className={`settings-nav-item ${activeSection === 'notifications' ? 'active' : ''}`}
+              onClick={() => { setActiveSection('notifications'); clearMessages(); }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              Notifications
+            </button>
+            <button
+              className={`settings-nav-item ${activeSection === 'ai' ? 'active' : ''}`}
+              onClick={() => { setActiveSection('ai'); clearMessages(); }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z" />
+                <path d="M9 14v2" />
+                <path d="M15 14v2" />
+              </svg>
+              AI Extraction
+            </button>
+            {profile?.is_admin && (
+              <button
+                className={`settings-nav-item ${activeSection === 'admin' ? 'active' : ''}`}
+                onClick={() => { setActiveSection('admin'); clearMessages(); }}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                Admin
+              </button>
+            )}
+          </nav>
+
+          {/* Version Info */}
+          {versionInfo && (
+            <div style={{
+              marginTop: 'auto',
+              paddingTop: '1.5rem',
+              borderTop: '1px solid var(--border)',
+              color: 'var(--text-muted)',
+              fontSize: '0.75rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.25rem',
+            }}>
+              <span>PriceGhost v{versionInfo.version}</span>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <a
+                  href="https://github.com/clucraft/PriceGhost/blob/main/CHANGELOG.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                >
+                  Changelog
+                </a>
+                <span>•</span>
+                <a
+                  href="https://github.com/clucraft/PriceGhost"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                >
+                  GitHub
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="settings-content">
+          {activeSection === 'profile' && (
+            <>
+              <div className="settings-section">
+                <div className="settings-section-header">
+                  <span className="settings-section-icon">👤</span>
+                  <h2 className="settings-section-title">Profile Information</h2>
+                </div>
+                <p className="settings-section-description">
+                  Update your display name and email preferences.
+                </p>
+
+                <div className="settings-form-group">
+                  <label>Email</label>
+                  <input
+                    type="email"
+                    value={profile?.email || ''}
+                    disabled
+                  />
+                  <p className="hint">Email cannot be changed</p>
+                </div>
+
+                <div className="settings-form-group">
+                  <label>Display Name</label>
+                  <input
+                    type="text"
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    placeholder="Enter your name"
+                  />
+                </div>
+
+                <div className="settings-form-actions">
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleSaveProfile}
+                    disabled={isSavingProfile}
+                  >
+                    {isSavingProfile ? 'Saving...' : 'Save Profile'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="settings-section">
+                <div className="settings-section-header">
+                  <span className="settings-section-icon">🔒</span>
+                  <h2 className="settings-section-title">Change Password</h2>
+                </div>
+                <p className="settings-section-description">
+                  Update your password to keep your account secure.
+                </p>
+
+                <div className="settings-form-group">
+                  <label>Current Password</label>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter current password"
+                  />
+                </div>
+
+                <div className="settings-form-group">
+                  <label>New Password</label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter new password"
+                  />
+                </div>
+
+                <div className="settings-form-group">
+                  <label>Confirm New Password</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm new password"
+                  />
+                </div>
+
+                <div className="settings-form-actions">
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleChangePassword}
+                    disabled={isChangingPassword || !currentPassword || !newPassword}
+                  >
+                    {isChangingPassword ? 'Changing...' : 'Change Password'}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeSection === 'notifications' && (
+            <>
+              <div className="settings-section">
+                <div className="settings-section-header">
+                  <span className="settings-section-icon">📱</span>
+                  <h2 className="settings-section-title">Telegram Notifications</h2>
+                  <span className={`settings-section-status ${notificationSettings?.telegram_bot_token && notificationSettings?.telegram_chat_id ? 'configured' : 'not-configured'}`}>
+                    {notificationSettings?.telegram_bot_token && notificationSettings?.telegram_chat_id ? 'Configured' : 'Not configured'}
+                  </span>
+                </div>
+                <p className="settings-section-description">
+                  Receive price drop and back-in-stock alerts via Telegram. You'll need to create a Telegram bot
+                  and get your chat ID.
+                </p>
+
+                {notificationSettings?.telegram_bot_token && notificationSettings?.telegram_chat_id && (
+                  <div className="settings-toggle">
+                    <div className="settings-toggle-label">
+                      <span className="settings-toggle-title">Enable Telegram Notifications</span>
+                      <span className="settings-toggle-description">
+                        Toggle to enable or disable Telegram alerts
+                      </span>
+                    </div>
+                    <button
+                      className={`toggle-switch ${telegramEnabled ? 'active' : ''}`}
+                      onClick={() => handleToggleTelegram(!telegramEnabled)}
+                    />
+                  </div>
+                )}
+
+                <div className="settings-form-group">
+                  <label>Bot Token</label>
+                  <PasswordInput
+                    value={telegramBotToken}
+                    onChange={(e) => setTelegramBotToken(e.target.value)}
+                    placeholder="Enter your bot token"
+                  />
+                  <p className="hint">Create a bot via @BotFather on Telegram to get a token</p>
+                </div>
+
+                <div className="settings-form-group">
+                  <label>Chat ID</label>
+                  <input
+                    type="text"
+                    value={telegramChatId}
+                    onChange={(e) => setTelegramChatId(e.target.value)}
+                    placeholder="Enter your chat ID"
+                  />
+                  <p className="hint">Send /start to @userinfobot to get your chat ID</p>
+                </div>
+
+                <div className="settings-form-actions">
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleSaveTelegram}
+                    disabled={isSavingNotifications}
+                  >
+                    {isSavingNotifications ? 'Saving...' : 'Save Telegram Settings'}
+                  </button>
+                  {notificationSettings?.telegram_bot_token && notificationSettings?.telegram_chat_id && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handleTestTelegram}
+                      disabled={isTesting === 'telegram'}
+                    >
+                      {isTesting === 'telegram' ? 'Sending...' : 'Send Test'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="settings-section">
+                <div className="settings-section-header">
+                  <span className="settings-section-icon">💬</span>
+                  <h2 className="settings-section-title">Discord Notifications</h2>
+                  <span className={`settings-section-status ${notificationSettings?.discord_webhook_url ? 'configured' : 'not-configured'}`}>
+                    {notificationSettings?.discord_webhook_url ? 'Configured' : 'Not configured'}
+                  </span>
+                </div>
+                <p className="settings-section-description">
+                  Receive price drop and back-in-stock alerts in a Discord channel. Create a webhook in your
+                  Discord server settings.
+                </p>
+
+                {notificationSettings?.discord_webhook_url && (
+                  <div className="settings-toggle">
+                    <div className="settings-toggle-label">
+                      <span className="settings-toggle-title">Enable Discord Notifications</span>
+                      <span className="settings-toggle-description">
+                        Toggle to enable or disable Discord alerts
+                      </span>
+                    </div>
+                    <button
+                      className={`toggle-switch ${discordEnabled ? 'active' : ''}`}
+                      onClick={() => handleToggleDiscord(!discordEnabled)}
+                    />
+                  </div>
+                )}
+
+                <div className="settings-form-group">
+                  <label>Webhook URL</label>
+                  <PasswordInput
+                    value={discordWebhookUrl}
+                    onChange={(e) => setDiscordWebhookUrl(e.target.value)}
+                    placeholder="https://discord.com/api/webhooks/..."
+                  />
+                  <p className="hint">Server Settings → Integrations → Webhooks → New Webhook</p>
+                </div>
+
+                <div className="settings-form-actions">
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleSaveDiscord}
+                    disabled={isSavingNotifications}
+                  >
+                    {isSavingNotifications ? 'Saving...' : 'Save Discord Settings'}
+                  </button>
+                  {notificationSettings?.discord_webhook_url && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handleTestDiscord}
+                      disabled={isTesting === 'discord'}
+                    >
+                      {isTesting === 'discord' ? 'Sending...' : 'Send Test'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="settings-section">
+                <div className="settings-section-header">
+                  <span className="settings-section-icon">🔔</span>
+                  <h2 className="settings-section-title">Pushover Notifications</h2>
+                  <span className={`settings-section-status ${notificationSettings?.pushover_user_key && notificationSettings?.pushover_app_token ? 'configured' : 'not-configured'}`}>
+                    {notificationSettings?.pushover_user_key && notificationSettings?.pushover_app_token ? 'Configured' : 'Not configured'}
+                  </span>
+                </div>
+                <p className="settings-section-description">
+                  Receive price drop and back-in-stock alerts via Pushover. You'll need to create a Pushover account
+                  and an application to get your keys.
+                </p>
+
+                {notificationSettings?.pushover_user_key && notificationSettings?.pushover_app_token && (
+                  <div className="settings-toggle">
+                    <div className="settings-toggle-label">
+                      <span className="settings-toggle-title">Enable Pushover Notifications</span>
+                      <span className="settings-toggle-description">
+                        Toggle to enable or disable Pushover alerts
+                      </span>
+                    </div>
+                    <button
+                      className={`toggle-switch ${pushoverEnabled ? 'active' : ''}`}
+                      onClick={() => handleTogglePushover(!pushoverEnabled)}
+                    />
+                  </div>
+                )}
+
+                <div className="settings-form-group">
+                  <label>User Key</label>
+                  <PasswordInput
+                    value={pushoverUserKey}
+                    onChange={(e) => setPushoverUserKey(e.target.value)}
+                    placeholder="Enter your user key"
+                  />
+                  <p className="hint">Find your User Key on the Pushover dashboard after logging in</p>
+                </div>
+
+                <div className="settings-form-group">
+                  <label>Application API Token</label>
+                  <PasswordInput
+                    value={pushoverAppToken}
+                    onChange={(e) => setPushoverAppToken(e.target.value)}
+                    placeholder="Enter your app token"
+                  />
+                  <p className="hint">Create an application at pushover.net/apps to get an API token</p>
+                </div>
+
+                <div className="settings-form-actions">
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleSavePushover}
+                    disabled={isSavingNotifications}
+                  >
+                    {isSavingNotifications ? 'Saving...' : 'Save Pushover Settings'}
+                  </button>
+                  {notificationSettings?.pushover_user_key && notificationSettings?.pushover_app_token && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handleTestPushover}
+                      disabled={isTesting === 'pushover'}
+                    >
+                      {isTesting === 'pushover' ? 'Sending...' : 'Send Test'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="settings-section">
+                <div className="settings-section-header">
+                  <span className="settings-section-icon">📲</span>
+                  <h2 className="settings-section-title">ntfy Notifications</h2>
+                  <span className={`settings-section-status ${notificationSettings?.ntfy_topic ? 'configured' : 'not-configured'}`}>
+                    {notificationSettings?.ntfy_topic ? 'Configured' : 'Not configured'}
+                  </span>
+                </div>
+                <p className="settings-section-description">
+                  Receive push notifications via ntfy.sh - a simple, free notification service.
+                  No account required! Just pick a topic name and subscribe to it in the ntfy app.
+                </p>
+
+                {notificationSettings?.ntfy_topic && (
+                  <div className="settings-toggle">
+                    <div className="settings-toggle-label">
+                      <span className="settings-toggle-title">Enable ntfy Notifications</span>
+                      <span className="settings-toggle-description">
+                        Toggle to enable or disable ntfy alerts
+                      </span>
+                    </div>
+                    <button
+                      className={`toggle-switch ${ntfyEnabled ? 'active' : ''}`}
+                      onClick={() => handleToggleNtfy(!ntfyEnabled)}
+                    />
+                  </div>
+                )}
+
+                <div className="settings-form-group">
+                  <label>Server URL (optional)</label>
+                  <input
+                    type="text"
+                    value={ntfyServerUrl}
+                    onChange={(e) => setNtfyServerUrl(e.target.value)}
+                    placeholder="https://ntfy.sh"
+                  />
+                  <p className="hint">
+                    Leave blank to use ntfy.sh, or enter your self-hosted server URL
+                  </p>
+                </div>
+
+                <div className="settings-form-group">
+                  <label>Topic Name</label>
+                  <input
+                    type="text"
+                    value={ntfyTopic}
+                    onChange={(e) => setNtfyTopic(e.target.value)}
+                    placeholder="my-price-alerts"
+                  />
+                  <p className="hint">
+                    Pick a unique topic name (e.g., priceghost-myname-123). Then subscribe to it in the{' '}
+                    <a href="https://ntfy.sh" target="_blank" rel="noopener noreferrer">ntfy app</a>.
+                  </p>
+                </div>
+
+                {ntfyServerUrl && (
+                  <>
+                    <div className="settings-form-group">
+                      <label>Username (optional)</label>
+                      <input
+                        type="text"
+                        value={ntfyUsername}
+                        onChange={(e) => setNtfyUsername(e.target.value)}
+                        placeholder="username"
+                      />
+                    </div>
+
+                    <div className="settings-form-group">
+                      <label>Password (optional)</label>
+                      <PasswordInput
+                        value={ntfyPassword}
+                        onChange={(e) => setNtfyPassword(e.target.value)}
+                        placeholder={notificationSettings?.ntfy_password ? '••••••••' : 'password'}
+                      />
+                      <p className="hint">
+                        Only required if your self-hosted ntfy server has authentication enabled
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                <div className="settings-form-actions">
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleSaveNtfy}
+                    disabled={isSavingNotifications}
+                  >
+                    {isSavingNotifications ? 'Saving...' : 'Save ntfy Settings'}
+                  </button>
+                  {notificationSettings?.ntfy_topic && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handleTestNtfy}
+                      disabled={isTesting === 'ntfy'}
+                    >
+                      {isTesting === 'ntfy' ? 'Sending...' : 'Send Test'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="settings-section">
+                <div className="settings-section-header">
+                  <span className="settings-section-icon">🔔</span>
+                  <h2 className="settings-section-title">Gotify Notifications</h2>
+                  <span className={`settings-section-status ${notificationSettings?.gotify_url && notificationSettings?.gotify_app_token ? 'configured' : 'not-configured'}`}>
+                    {notificationSettings?.gotify_url && notificationSettings?.gotify_app_token ? 'Configured' : 'Not configured'}
+                  </span>
+                </div>
+                <p className="settings-section-description">
+                  Receive notifications via your self-hosted Gotify server. You'll need to create an application
+                  in Gotify to get an app token.
+                </p>
+
+                {notificationSettings?.gotify_url && notificationSettings?.gotify_app_token && (
+                  <div className="settings-toggle">
+                    <div className="settings-toggle-label">
+                      <span className="settings-toggle-title">Enable Gotify Notifications</span>
+                      <span className="settings-toggle-description">
+                        Toggle to enable or disable Gotify alerts
+                      </span>
+                    </div>
+                    <button
+                      className={`toggle-switch ${gotifyEnabled ? 'active' : ''}`}
+                      onClick={() => handleToggleGotify(!gotifyEnabled)}
+                    />
+                  </div>
+                )}
+
+                <div className="settings-form-group">
+                  <label>Server URL</label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input
+                      type="text"
+                      value={gotifyUrl}
+                      onChange={(e) => setGotifyUrl(e.target.value)}
+                      placeholder="https://gotify.example.com"
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handleTestGotifyConnection}
+                      disabled={isTestingGotify || !gotifyUrl || !gotifyAppToken}
+                      style={{ whiteSpace: 'nowrap' }}
+                    >
+                      {isTestingGotify ? 'Testing...' : 'Test Connection'}
+                    </button>
+                  </div>
+                  <p className="hint">The URL of your self-hosted Gotify server</p>
+                </div>
+
+                <div className="settings-form-group">
+                  <label>App Token</label>
+                  <PasswordInput
+                    value={gotifyAppToken}
+                    onChange={(e) => setGotifyAppToken(e.target.value)}
+                    placeholder="Enter your app token"
+                  />
+                  <p className="hint">
+                    Create an application in Gotify (Apps → Create Application) to get a token
+                  </p>
+                </div>
+
+                <div className="settings-form-actions">
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleSaveGotify}
+                    disabled={isSavingNotifications}
+                  >
+                    {isSavingNotifications ? 'Saving...' : 'Save Gotify Settings'}
+                  </button>
+                  {notificationSettings?.gotify_url && notificationSettings?.gotify_app_token && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handleTestGotify}
+                      disabled={isTesting === 'gotify'}
+                    >
+                      {isTesting === 'gotify' ? 'Sending...' : 'Send Test'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeSection === 'ai' && (
+            <>
+              <div className="settings-section">
+                <div className="settings-section-header">
+                  <span className="settings-section-icon">🤖</span>
+                  <h2 className="settings-section-title">AI-Powered Price Extraction</h2>
+                  <span className={`settings-section-status ${aiSettings?.ai_enabled ? 'configured' : 'not-configured'}`}>
+                    {aiSettings?.ai_enabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                </div>
+                <p className="settings-section-description">
+                  Enable AI-powered price extraction for better compatibility with websites that standard scraping can't handle.
+                  When enabled, AI will be used as a fallback when regular scraping fails to find a price.
+                </p>
+
+                <div className="settings-toggle">
+                  <div className="settings-toggle-label">
+                    <span className="settings-toggle-title">Enable AI Extraction</span>
+                    <span className="settings-toggle-description">
+                      Use AI as a fallback when standard scraping fails
+                    </span>
+                  </div>
+                  <button
+                    className={`toggle-switch ${aiEnabled ? 'active' : ''}`}
+                    onClick={() => setAIEnabled(!aiEnabled)}
+                  />
+                </div>
+
+                <div className="settings-toggle">
+                  <div className="settings-toggle-label">
+                    <span className="settings-toggle-title">Enable AI Verification</span>
+                    <span className="settings-toggle-description">
+                      Verify all scraped prices with AI to ensure accuracy
+                    </span>
+                  </div>
+                  <button
+                    className={`toggle-switch ${aiVerificationEnabled ? 'active' : ''}`}
+                    onClick={() => setAIVerificationEnabled(!aiVerificationEnabled)}
+                  />
+                </div>
+
+                {aiVerificationEnabled && (
+                  <div style={{
+                    marginTop: '0.5rem',
+                    padding: '0.75rem',
+                    background: 'var(--background)',
+                    borderRadius: '0.5rem',
+                    fontSize: '0.8125rem',
+                  }}>
+                    <div style={{ fontWeight: 500, marginBottom: '0.5rem', color: 'var(--text)' }}>
+                      Price badges explained:
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.2rem',
+                          fontSize: '0.75rem',
+                          padding: '0.15rem 0.4rem',
+                          borderRadius: '0.25rem',
+                          backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                          color: '#10b981',
+                          fontWeight: 500,
+                        }}>
+                          <span style={{ fontSize: '0.8rem' }}>✓</span> AI
+                        </span>
+                        <span style={{ color: 'var(--text-muted)' }}>
+                          AI verified the scraped price is correct
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.2rem',
+                          fontSize: '0.75rem',
+                          padding: '0.15rem 0.4rem',
+                          borderRadius: '0.25rem',
+                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                          color: '#f59e0b',
+                          fontWeight: 500,
+                        }}>
+                          <span style={{ fontSize: '0.8rem' }}>⚡</span> AI
+                        </span>
+                        <span style={{ color: 'var(--text-muted)' }}>
+                          AI corrected an incorrect price (e.g., scraped savings amount instead of actual price)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {(aiEnabled || aiVerificationEnabled) && (
+                  <>
+                    <div className="settings-form-group">
+                      <label>AI Provider</label>
+                      <select
+                        value={aiProvider}
+                        onChange={(e) => setAIProvider(e.target.value as 'anthropic' | 'openai' | 'ollama' | 'gemini')}
+                        style={{
+                          width: '100%',
+                          padding: '0.625rem 0.75rem',
+                          border: '1px solid var(--border)',
+                          borderRadius: '0.375rem',
+                          background: 'var(--background)',
+                          color: 'var(--text)',
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        <option value="anthropic">Anthropic (Claude)</option>
+                        <option value="openai">OpenAI (GPT)</option>
+                        <option value="gemini">Google (Gemini)</option>
+                        <option value="ollama">Ollama (Local)</option>
+                      </select>
+                    </div>
+
+                    {aiProvider === 'anthropic' && (
+                      <>
+                        <div className="settings-form-group">
+                          <label>Anthropic API Key</label>
+                          <PasswordInput
+                            value={anthropicApiKey}
+                            onChange={(e) => setAnthropicApiKey(e.target.value)}
+                            placeholder="sk-ant-..."
+                          />
+                          <p className="hint">
+                            Get your API key from{' '}
+                            <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer">
+                              console.anthropic.com
+                            </a>
+                          </p>
+                        </div>
+
+                        <div className="settings-form-group">
+                          <label>Model</label>
+                          <select
+                            value={anthropicModel}
+                            onChange={(e) => setAnthropicModel(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '0.625rem 0.75rem',
+                              border: '1px solid var(--border)',
+                              borderRadius: '0.375rem',
+                              background: 'var(--background)',
+                              color: 'var(--text)',
+                              fontSize: '0.875rem'
+                            }}
+                          >
+                            <option value="">Default (Claude Haiku 4.5)</option>
+                            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (Fast, cheap)</option>
+                            <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5 (Recommended)</option>
+                            <option value="claude-opus-4-5-20251101">Claude Opus 4.5 (Most capable)</option>
+                            <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                            <option value="claude-3-7-sonnet-20250219">Claude 3.7 Sonnet (Legacy)</option>
+                            <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku (Legacy)</option>
+                          </select>
+                          <p className="hint">
+                            Choose a model based on your cost/accuracy needs. Haiku is fastest and cheapest, Opus is most accurate but expensive.
+                            {aiSettings?.anthropic_model && ` (currently: ${aiSettings.anthropic_model})`}
+                          </p>
+                        </div>
+                      </>
+                    )}
+
+                    {aiProvider === 'openai' && (
+                      <>
+                        <div className="settings-form-group">
+                          <label>OpenAI API Key</label>
+                          <PasswordInput
+                            value={openaiApiKey}
+                            onChange={(e) => setOpenaiApiKey(e.target.value)}
+                            placeholder="sk-..."
+                          />
+                          <p className="hint">
+                            Get your API key from{' '}
+                            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">
+                              platform.openai.com
+                            </a>
+                          </p>
+                        </div>
+
+                        <div className="settings-form-group">
+                          <label>Model</label>
+                          <select
+                            value={openaiModel}
+                            onChange={(e) => setOpenaiModel(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '0.625rem 0.75rem',
+                              border: '1px solid var(--border)',
+                              borderRadius: '0.375rem',
+                              background: 'var(--background)',
+                              color: 'var(--text)',
+                              fontSize: '0.875rem'
+                            }}
+                          >
+                            <option value="">Default (GPT-4.1 Nano)</option>
+                            <option value="gpt-4.1-nano-2025-04-14">GPT-4.1 Nano (Fast, cheap)</option>
+                            <option value="gpt-4.1-mini-2025-04-14">GPT-4.1 Mini (Balanced)</option>
+                            <option value="gpt-4.1-2025-04-14">GPT-4.1 (High accuracy)</option>
+                            <option value="gpt-5.1-chat-latest">GPT-5.1 Chat (Latest)</option>
+                            <option value="gpt-4o-mini">GPT-4o Mini (Legacy)</option>
+                            <option value="gpt-4o">GPT-4o (Legacy, retiring Feb 2026)</option>
+                          </select>
+                          <p className="hint">
+                            Choose a model based on your cost/accuracy needs. GPT-4.1 Nano is fastest and cheapest.
+                            {aiSettings?.openai_model && ` (currently: ${aiSettings.openai_model})`}
+                          </p>
+                        </div>
+                      </>
+                    )}
+
+                    {aiProvider === 'ollama' && (
+                      <>
+                        <div className="settings-form-group">
+                          <label>Ollama Base URL</label>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <input
+                              type="text"
+                              value={ollamaBaseUrl}
+                              onChange={(e) => setOllamaBaseUrl(e.target.value)}
+                              placeholder="http://localhost:11434"
+                              style={{ flex: 1 }}
+                            />
+                            <button
+                              className="btn btn-secondary"
+                              onClick={handleTestOllama}
+                              disabled={isTestingOllama || !ollamaBaseUrl}
+                              style={{ whiteSpace: 'nowrap' }}
+                            >
+                              {isTestingOllama ? 'Testing...' : 'Test Connection'}
+                            </button>
+                          </div>
+                          <p className="hint">
+                            The URL where Ollama is running. Default is http://localhost:11434
+                          </p>
+                        </div>
+
+                        <div className="settings-form-group">
+                          <label>Model</label>
+                          {availableOllamaModels.length > 0 ? (
+                            <select
+                              value={ollamaModel}
+                              onChange={(e) => setOllamaModel(e.target.value)}
+                              style={{
+                                width: '100%',
+                                padding: '0.625rem 0.75rem',
+                                border: '1px solid var(--border)',
+                                borderRadius: '0.375rem',
+                                background: 'var(--background)',
+                                color: 'var(--text)',
+                                fontSize: '0.875rem'
+                              }}
+                            >
+                              <option value="">Select a model...</option>
+                              {availableOllamaModels.map((model) => (
+                                <option key={model} value={model}>{model}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={ollamaModel}
+                              onChange={(e) => setOllamaModel(e.target.value)}
+                              placeholder={aiSettings?.ollama_model || 'llama3.2, mistral, etc.'}
+                            />
+                          )}
+                          <p className="hint">
+                            {availableOllamaModels.length > 0
+                              ? 'Select from available models or test connection to refresh list'
+                              : 'Enter model name or test connection to see available models'
+                            }
+                            {aiSettings?.ollama_base_url && aiSettings?.ollama_model && ` (currently: ${aiSettings.ollama_model})`}
+                          </p>
+                        </div>
+                      </>
+                    )}
+
+                    {aiProvider === 'gemini' && (
+                      <>
+                        <div className="settings-form-group">
+                          <label>Gemini API Key</label>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <div style={{ flex: 1 }}>
+                              <PasswordInput
+                                value={geminiApiKey}
+                                onChange={(e) => setGeminiApiKey(e.target.value)}
+                                placeholder="AIza..."
+                              />
+                            </div>
+                            <button
+                              className="btn btn-secondary"
+                              onClick={handleTestGemini}
+                              disabled={isTestingGemini || !geminiApiKey}
+                              style={{ whiteSpace: 'nowrap' }}
+                            >
+                              {isTestingGemini ? 'Testing...' : 'Test Key'}
+                            </button>
+                          </div>
+                          <p className="hint">
+                            Get your API key from{' '}
+                            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">
+                              aistudio.google.com
+                            </a>
+                          </p>
+                        </div>
+
+                        <div className="settings-form-group">
+                          <label>Model</label>
+                          <select
+                            value={geminiModel}
+                            onChange={(e) => setGeminiModel(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '0.625rem 0.75rem',
+                              border: '1px solid var(--border)',
+                              borderRadius: '0.375rem',
+                              background: 'var(--background)',
+                              color: 'var(--text)',
+                              fontSize: '0.875rem'
+                            }}
+                          >
+                            <option value="">Default (Gemini 2.5 Flash Lite)</option>
+                            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Fast, cheap)</option>
+                            <option value="gemini-2.5-flash">Gemini 2.5 Flash (Balanced)</option>
+                            <option value="gemini-2.5-pro">Gemini 2.5 Pro (High accuracy)</option>
+                            <option value="gemini-3-flash-preview">Gemini 3 Flash Preview (Latest)</option>
+                          </select>
+                          <p className="hint">
+                            Choose a model based on your cost/accuracy needs. Flash Lite is fastest and cheapest.
+                            {aiSettings?.gemini_model && ` (currently: ${aiSettings.gemini_model})`}
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+
+                <div className="settings-form-actions">
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleSaveAI}
+                    disabled={isSavingAI}
+                  >
+                    {isSavingAI ? 'Saving...' : 'Save AI Settings'}
+                  </button>
+                </div>
+              </div>
+
+              {aiSettings?.ai_enabled && (aiSettings.anthropic_api_key || aiSettings.openai_api_key || (aiSettings.ollama_base_url && aiSettings.ollama_model) || aiSettings.gemini_api_key) && (
+                <div className="settings-section">
+                  <div className="settings-section-header">
+                    <span className="settings-section-icon">🧪</span>
+                    <h2 className="settings-section-title">Test AI Extraction</h2>
+                  </div>
+                  <p className="settings-section-description">
+                    Test AI extraction on a product URL to see if it can successfully extract the price.
+                  </p>
+
+                  <div className="settings-form-group">
+                    <label>Product URL</label>
+                    <input
+                      type="url"
+                      value={testUrl}
+                      onChange={(e) => setTestUrl(e.target.value)}
+                      placeholder="https://example.com/product"
+                    />
+                  </div>
+
+                  <div className="settings-form-actions">
+                    <button
+                      className="btn btn-secondary"
+                      onClick={handleTestAI}
+                      disabled={isTestingAI || !testUrl}
+                    >
+                      {isTestingAI ? 'Testing...' : 'Test Extraction'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {activeSection === 'admin' && profile?.is_admin && (
+            <>
+              <div className="settings-section">
+                <div className="settings-section-header">
+                  <span className="settings-section-icon">⚙️</span>
+                  <h2 className="settings-section-title">System Settings</h2>
+                </div>
+                <p className="settings-section-description">
+                  Configure system-wide settings for PriceGhost.
+                </p>
+
+                <div className="settings-toggle">
+                  <div className="settings-toggle-label">
+                    <span className="settings-toggle-title">User Registration</span>
+                    <span className="settings-toggle-description">
+                      Allow new users to register accounts
+                    </span>
+                  </div>
+                  <button
+                    className={`toggle-switch ${systemSettings?.registration_enabled === 'true' ? 'active' : ''}`}
+                    onClick={handleToggleRegistration}
+                    disabled={isSavingAdmin}
+                  />
+                </div>
+              </div>
+
+              <div className="settings-section">
+                <div className="settings-section-header">
+                  <span className="settings-section-icon">👥</span>
+                  <h2 className="settings-section-title">User Management</h2>
+                </div>
+                <p className="settings-section-description">
+                  Manage user accounts and permissions.
+                </p>
+
+                {!showAddUser ? (
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => setShowAddUser(true)}
+                    style={{ marginBottom: '1rem' }}
+                  >
+                    + Add User
+                  </button>
+                ) : (
+                  <div className="add-user-form" style={{
+                    background: 'var(--background)',
+                    padding: '1rem',
+                    borderRadius: '0.5rem',
+                    marginBottom: '1rem'
+                  }}>
+                    <h3 style={{ marginBottom: '1rem', fontSize: '1rem', fontWeight: 600 }}>Add New User</h3>
+                    <div className="settings-form-group">
+                      <label>Email</label>
+                      <input
+                        type="email"
+                        value={newUserEmail}
+                        onChange={(e) => setNewUserEmail(e.target.value)}
+                        placeholder="user@example.com"
+                      />
+                    </div>
+                    <div className="settings-form-group">
+                      <label>Password</label>
+                      <input
+                        type="password"
+                        value={newUserPassword}
+                        onChange={(e) => setNewUserPassword(e.target.value)}
+                        placeholder="Minimum 8 characters"
+                      />
+                    </div>
+                    <div className="settings-form-group">
+                      <label>Role</label>
+                      <select
+                        value={newUserRole}
+                        onChange={(e) => setNewUserRole(e.target.value as 'user' | 'admin')}
+                        style={{
+                          width: '100%',
+                          padding: '0.625rem 0.75rem',
+                          border: '1px solid var(--border)',
+                          borderRadius: '0.375rem',
+                          background: 'var(--surface)',
+                          color: 'var(--text)',
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                    <div className="settings-form-actions">
+                      <button
+                        className="btn btn-primary"
+                        onClick={handleCreateUser}
+                        disabled={isCreatingUser}
+                      >
+                        {isCreatingUser ? 'Creating...' : 'Create User'}
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          setShowAddUser(false);
+                          setNewUserEmail('');
+                          setNewUserPassword('');
+                          setNewUserRole('user');
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {isLoadingAdmin ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
+                    <span className="spinner" />
+                  </div>
+                ) : (
+                  <table className="users-table">
+                    <thead>
+                      <tr>
+                        <th>Email</th>
+                        <th>Name</th>
+                        <th>Role</th>
+                        <th>Joined</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((user) => (
+                        <tr key={user.id}>
+                          <td className="user-email">{user.email}</td>
+                          <td>{user.name || '-'}</td>
+                          <td>
+                            {user.id === profile?.id ? (
+                              <span className="user-badge admin">Admin (You)</span>
+                            ) : (
+                              <select
+                                value={user.is_admin ? 'admin' : 'user'}
+                                onChange={(e) => handleRoleChange(user.id, e.target.value as 'user' | 'admin')}
+                                style={{
+                                  padding: '0.25rem 0.5rem',
+                                  border: '1px solid var(--border)',
+                                  borderRadius: '0.25rem',
+                                  background: 'var(--surface)',
+                                  color: 'var(--text)',
+                                  fontSize: '0.75rem'
+                                }}
+                              >
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                              </select>
+                            )}
+                          </td>
+                          <td>{new Date(user.created_at).toLocaleDateString()}</td>
+                          <td className="actions">
+                            {user.id !== profile?.id && (
+                              <button
+                                className="btn btn-danger btn-sm"
+                                onClick={() => handleDeleteUser(user.id)}
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </Layout>
+  );
+}
