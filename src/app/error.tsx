@@ -1,58 +1,40 @@
 'use client';
 
-export default function Error({
+import { Button } from '@/components/ui/Button';
+import { Container } from '@/components/ui/Container';
+import { AlertTriangle } from 'lucide-react';
+import { useEffect } from 'react';
+
+export default function GlobalError({
   error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    // Centralised place to report errors to telemetry later.
+    // eslint-disable-next-line no-console
+    console.error('DerList: unhandled error', error);
+  }, [error]);
+
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>Something went wrong!</h1>
-
-      <p style={styles.text}>{error.digest ? `Error ID: ${error.digest}` : error.message}</p>
-
-      <button style={styles.button} onClick={() => reset()}>
+    <Container className="flex min-h-[60vh] flex-col items-center justify-center gap-4 py-16 text-center">
+      <div
+        aria-hidden
+        className="flex h-12 w-12 items-center justify-center rounded-full bg-danger/10 text-danger"
+      >
+        <AlertTriangle className="h-6 w-6" />
+      </div>
+      <h1 className="text-2xl font-semibold text-foreground">Something went wrong</h1>
+      <p className="max-w-md text-sm text-muted-foreground">
+        {error.digest
+          ? `An unexpected error occurred. Reference: ${error.digest}`
+          : error.message || 'An unexpected error occurred.'}
+      </p>
+      <Button onClick={() => reset()} className="mt-2">
         Try again
-      </button>
-    </div>
+      </Button>
+    </Container>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '100vh',
-    padding: '2rem',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    textAlign: 'center',
-    backgroundColor: '#fafafa',
-  },
-  title: {
-    fontSize: '2rem',
-    fontWeight: 600,
-    color: '#111',
-    marginBottom: '1rem',
-  },
-  text: {
-    fontSize: '1rem',
-    color: '#666',
-    marginBottom: '2rem',
-    maxWidth: '400px',
-  },
-  button: {
-    padding: '0.75rem 1.5rem',
-    fontSize: '1rem',
-    fontWeight: 500,
-    color: '#fff',
-    backgroundColor: '#111',
-    border: 'none',
-    borderRadius: '0.5rem',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s',
-  },
-};

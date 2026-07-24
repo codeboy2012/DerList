@@ -1,0 +1,28 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DerList Caddy Configuration
+#
+# Caddy automatically provisions and renews TLS certificates via Let's Encrypt.
+# Replace the domain below with your actual domain.
+# ─────────────────────────────────────────────────────────────────────────────
+
+{$DOMAIN:derlist.dpdns.org} {
+	reverse_proxy app:3000
+
+	# Security headers
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# Gzip compression
+	encode gzip
+
+	# Logs
+	log {
+		output stdout
+		format console
+	}
+}

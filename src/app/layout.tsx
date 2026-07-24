@@ -1,8 +1,9 @@
+import { siteConfig } from '@/lib/site-config';
+import { CommandPalette } from '@/components/ui/CommandPalette';
+import { ToastProvider } from '@/components/ui/Toast';
 import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
-import { Footer } from '@/components/layout/Footer';
-import { Header } from '@/components/layout/Header';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -17,81 +18,83 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteConfig.url),
   title: {
-    default: 'Derlist',
-    template: '%s | Derlist',
+    default: `${siteConfig.name} — ${siteConfig.tagline}`,
+    template: `%s | ${siteConfig.name}`,
   },
-  description: 'A modern, production-ready Next.js application.',
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
-  alternates: {
-    canonical: '/',
-  },
+  description: siteConfig.description,
+  applicationName: siteConfig.name,
+  keywords: [
+    'wishlist',
+    'shopping planner',
+    'price tracker',
+    'PC builder',
+    'open source',
+    siteConfig.name,
+  ],
+  authors: [{ name: 'CodeBoy2012' }],
+  creator: 'CodeBoy2012',
+  publisher: siteConfig.name,
+  alternates: { canonical: '/' },
   openGraph: {
     type: 'website',
-    locale: 'en_US',
-    url: '/',
-    siteName: 'Derlist',
-    title: 'Derlist',
-    description: 'A modern, production-ready Next.js application.',
-    images: [
-      {
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'Derlist',
-      },
-    ],
+    locale: siteConfig.locale,
+    url: siteConfig.url,
+    siteName: siteConfig.name,
+    title: `${siteConfig.name} — ${siteConfig.tagline}`,
+    description: siteConfig.description,
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Derlist',
-    description: 'A modern, production-ready Next.js application.',
-    images: ['/og-image.png'],
+    title: `${siteConfig.name} — ${siteConfig.tagline}`,
+    description: siteConfig.description,
   },
   robots: {
     index: true,
     follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
-    },
   },
   icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon-16x16.png',
-    apple: '/apple-touch-icon.png',
+    icon: [
+      { url: '/icons/favicon-16.ico', sizes: '16x16' },
+      { url: '/icons/favicon-32.ico', sizes: '32x32' },
+      { url: '/icons/favicon-48.ico', sizes: '48x48' },
+      { url: '/icons/favicon-64.ico', sizes: '64x64' },
+    ],
+    apple: '/icons/apple-touch-icon.png',
   },
-  manifest: '/site.webmanifest',
+  manifest: '/manifest.json',
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#0a0a0a' },
-  ],
+  themeColor: '#3b82f6',
+  colorScheme: 'dark',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 5,
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      </head>
-      <body className="bg-background text-foreground flex min-h-screen flex-col font-sans antialiased">
-        <Header />
-        <main className="flex-1">{children}</main>
-        <Footer />
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      suppressHydrationWarning
+    >
+      <body className="flex min-h-screen flex-col bg-background font-sans text-foreground antialiased">
+        <ToastProvider>
+          <CommandPalette />
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:text-foreground focus:shadow-lg"
+          >
+            Skip to main content
+          </a>
+          <main id="main-content" className="flex min-h-screen flex-col">
+            {children}
+          </main>
+        </ToastProvider>
       </body>
     </html>
   );

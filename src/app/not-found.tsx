@@ -1,54 +1,22 @@
+import { Button } from '@/components/ui/Button';
+import { Container } from '@/components/ui/Container';
 import Link from 'next/link';
 
+/**
+ * 404. The root layout provides <html>/<body>; this file MUST NOT.
+ */
 export default function NotFound() {
   return (
-    <html lang="en">
-      <body>
-        <div style={styles.container}>
-          <h1 style={styles.title}>404</h1>
-          <p style={styles.text}>Could not find requested resource</p>
-          <Link href="/" style={styles.link}>
-            Go back home
-          </Link>
-        </div>
-      </body>
-    </html>
+    <Container className="flex min-h-[60vh] flex-col items-center justify-center gap-4 py-16 text-center">
+      <p className="text-7xl font-bold tracking-tight text-foreground">404</p>
+      <h1 className="text-2xl font-semibold text-foreground">Page not found</h1>
+      <p className="max-w-md text-sm text-muted-foreground">
+        The page you&apos;re looking for doesn&apos;t exist or has been moved. It may arrive
+        in a future phase of the project.
+      </p>
+      <Button asChild className="mt-2">
+        <Link href="/">Go back home</Link>
+      </Button>
+    </Container>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '100vh',
-    padding: '2rem',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    textAlign: 'center',
-    backgroundColor: '#fafafa',
-  },
-  title: {
-    fontSize: '6rem',
-    fontWeight: 700,
-    color: '#111',
-    marginBottom: '1rem',
-    lineHeight: 1,
-  },
-  text: {
-    fontSize: '1.25rem',
-    color: '#666',
-    marginBottom: '2rem',
-    maxWidth: '400px',
-  },
-  link: {
-    padding: '0.75rem 1.5rem',
-    fontSize: '1rem',
-    fontWeight: 500,
-    color: '#fff',
-    backgroundColor: '#111',
-    borderRadius: '0.5rem',
-    textDecoration: 'none',
-    transition: 'background-color 0.2s',
-  },
-};

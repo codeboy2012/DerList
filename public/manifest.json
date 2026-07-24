@@ -1,0 +1,27 @@
+{
+  "name": "DerList",
+  "short_name": "DerList",
+  "description": "The modern, open-source universal wishlist, shopping planner and PC builder.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#050507",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512-mobile.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/maskable-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

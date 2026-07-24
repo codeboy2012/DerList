@@ -1,0 +1,729 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// DerList — Database Schema (Phase 1: Authentication & Waitlist Foundation)
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// System roles ordered by privilege level.
+/// OWNER: Highest permission level — single account that controls the instance.
+/// ADMIN: Can manage users, send invitations, approve waitlist entries.
+/// USER: Standard authenticated user.
+enum Role {
+  OWNER
+  ADMIN
+  USER
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Represents an authenticated DerList user.
+/// Users cannot self-register — accounts are created by administrators
+/// or accepted through the invitation flow.
+model User {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Unique email address used for login and communication.
+  email String @unique
+
+  /// Unique public username (URL-safe, lowercase).
+  username String @unique
+
+  /// User-facing display name (can contain spaces, emoji, etc.).
+  displayName String
+
+  /// Argon2/bcrypt hash of the user's password.
+  passwordHash String
+
+  /// URL to the user's avatar image. Nullable — not every user uploads one.
+  avatarUrl String?
+
+  /// Permission level for this user.
+  role Role @default(USER)
+
+  /// Whether the user has verified their email address.
+  emailVerified Boolean @default(false)
+
+  /// Timestamp of the user's most recent successful login. Nullable until first login.
+  lastLoginAt DateTime?
+
+  /// Soft-disable flag. Disabled users cannot authenticate.
+  disabled Boolean @default(false)
+
+  // ── Relations ──
+
+  /// Invitations this user has sent (as an admin).
+  invitations Invitation[]
+
+  /// Active sessions for this user.
+  sessions Session[]
+
+  /// OAuth linked accounts (GitHub, Google, etc.).
+  oauthAccounts OAuthAccount[]
+
+  /// Wishlists owned by this user.
+  wishlists Wishlist[]
+
+  /// Wishlist memberships (collaborative access).
+  wishlistMemberships WishlistMember[]
+
+  /// Uploaded media files.
+  uploads Media[]
+
+  @@index([email])
+  @@index([username])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Session
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A database-backed session. Tokens are stored as SHA-256 hashes so that
+/// a database leak does not directly expose valid session credentials.
+model Session {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// SHA-256 hash of the session token sent to the client cookie.
+  tokenHash String @unique
+
+  /// The user this session belongs to.
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  /// When this session expires.
+  expiresAt DateTime
+
+  /// IP address at session creation (optional, for audit).
+  ipAddress String?
+
+  /// User-Agent string at session creation (optional, for audit).
+  userAgent String?
+
+  @@index([tokenHash])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OAuth Account
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Links a user to an external OAuth provider. Enables "Sign in with GitHub"
+/// and "Sign in with Google". Provider-agnostic for easy future expansion.
+model OAuthAccount {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The user who owns this linked account.
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  /// OAuth provider name (e.g. "github", "google").
+  provider String
+
+  /// The user's unique ID at the provider.
+  providerAccountId String
+
+  /// OAuth access token.
+  accessToken String?
+
+  /// OAuth refresh token (Google provides these).
+  refreshToken String?
+
+  /// When the access token expires.
+  expiresAt DateTime?
+
+  /// Profile data captured at link time.
+  providerEmail  String?
+  providerName   String?
+  providerAvatar String?
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("oauth_accounts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Invitation
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// An invite-only registration token created by an admin.
+/// Recipients use the token to create their account before expiry.
+model Invitation {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Email address the invitation was sent to.
+  email String
+
+  /// Unique, cryptographically random token used in the invitation URL.
+  token String @unique
+
+  /// The admin/owner who created this invitation.
+  invitedBy   User   @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+  invitedById String
+
+  /// When the invitation expires and can no longer be accepted.
+  expiresAt DateTime
+
+  /// Timestamp when the recipient accepted the invitation. Null if pending.
+  acceptedAt DateTime?
+
+  @@index([token])
+  @@index([email])
+  @@index([invitedById])
+  @@map("invitations")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Waitlist
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A public waitlist signup. These do NOT automatically become users.
+/// Admins review and approve entries manually, then send an invitation.
+model Waitlist {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Full name provided by the person signing up.
+  name String
+
+  /// Email address — unique to prevent duplicate signups.
+  email String @unique
+
+  /// What feature the person is most excited about (e.g. "Universal Wishlists").
+  interest String
+
+  /// Whether they opted into the newsletter.
+  newsletter Boolean @default(false)
+
+  /// Timestamp when an admin approved this entry. Null if still pending.
+  approvedAt DateTime?
+
+  @@index([email])
+  @@map("waitlist")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit Log
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Records every significant administrative action for accountability.
+/// Nothing should ever be silently changed — every mutation is tracked here.
+model AuditLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  /// The action performed (e.g. "user.created", "invitation.revoked").
+  action String
+
+  /// The user who performed the action. Nullable for system-initiated actions.
+  actorId String?
+
+  /// Display name of the actor at the time of action (denormalized for history).
+  actorName String?
+
+  /// The entity type affected (e.g. "user", "invitation", "waitlist").
+  targetType String?
+
+  /// The ID of the affected entity.
+  targetId String?
+
+  /// Human-readable description of the target (e.g. email, username).
+  targetName String?
+
+  /// Additional metadata as JSON (e.g. old/new values for changes).
+  metadata String?
+
+  /// IP address of the actor at the time of action.
+  ipAddress String?
+
+  /// User-Agent of the actor at the time of action.
+  userAgent String?
+
+  @@index([action])
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wishlist Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Visibility level for a wishlist.
+enum WishlistVisibility {
+  PRIVATE
+  UNLISTED
+  PUBLIC
+}
+
+/// Role for a wishlist member (collaborative access).
+enum WishlistMemberRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+/// Priority level for a wishlist item.
+enum ItemPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wishlist
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A user's wishlist — a collection of desired products or items.
+model Wishlist {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The user who owns this wishlist.
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  ownerId String
+
+  /// Display title of the wishlist.
+  title String
+
+  /// Optional longer description.
+  description String?
+
+  /// Who can see this wishlist.
+  visibility WishlistVisibility @default(PRIVATE)
+
+  /// Optional emoji or icon identifier.
+  icon String?
+
+  /// Optional hex color for UI theming.
+  color String?
+
+  /// URL-friendly slug (unique per user for public sharing).
+  slug String
+
+  /// Whether this wishlist is archived (hidden from main view).
+  archived Boolean @default(false)
+
+  /// Display order for manual sorting.
+  sortOrder Int @default(0)
+
+  // ── Relations ──
+
+  /// Items in this wishlist.
+  items WishlistItem[]
+
+  /// Collaborative members.
+  members WishlistMember[]
+
+  @@unique([ownerId, slug])
+  @@index([ownerId])
+  @@index([visibility])
+  @@index([ownerId, archived])
+  @@map("wishlists")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wishlist Member
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Collaborative access to a wishlist. Supports future shared wishlists.
+model WishlistMember {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The wishlist being shared.
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  wishlistId String
+
+  /// The user who has access.
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  /// The level of access granted.
+  role WishlistMemberRole @default(VIEWER)
+
+  @@unique([wishlistId, userId])
+  @@index([userId])
+  @@index([wishlistId])
+  @@map("wishlist_members")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wishlist Item
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A single item within a wishlist. Can be manually entered or linked to a
+/// Product record (future import/price-tracking feature).
+model WishlistItem {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The wishlist this item belongs to.
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  wishlistId String
+
+  // ── Product information ──
+
+  /// Display name of the item.
+  title String
+
+  /// Optional description or notes about the product.
+  description String?
+
+  /// Source URL where the product can be purchased.
+  url String?
+
+  /// Image URL for display.
+  image String?
+
+  /// Brand name (e.g. "Apple", "Sony").
+  brand String?
+
+  /// Store or retailer name (e.g. "Amazon", "Best Buy").
+  retailer String?
+
+  // ── Pricing ──
+
+  /// Current price as a decimal value.
+  currentPrice Decimal? @db.Decimal(10, 2)
+
+  /// Currency code (e.g. "USD", "EUR", "GBP").
+  currency String @default("USD")
+
+  // ── Wishlist-specific info ──
+
+  /// How badly the user wants this item.
+  priority ItemPriority @default(MEDIUM)
+
+  /// Desired quantity.
+  quantity Int @default(1)
+
+  /// Whether this item has been purchased.
+  purchased Boolean @default(false)
+
+  /// When the item was marked as purchased.
+  purchasedAt DateTime?
+
+  /// Personal notes about this item.
+  notes String?
+
+  // ── Ordering ──
+
+  /// Position for manual drag-and-drop ordering within the wishlist.
+  position Int @default(0)
+
+  // ── Future-ready ──
+
+  /// Link to a shared Product record for price tracking and smart import.
+  /// Null for manually-entered items.
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productId String?
+
+  @@index([wishlistId])
+  @@index([wishlistId, position])
+  @@index([purchased])
+  @@index([productId])
+  @@map("wishlist_items")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Product Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// How this product record was created.
+enum ProductSource {
+  IMPORTED
+  MANUAL
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Product
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A shared product record. Multiple WishlistItems can reference the same
+/// Product, enabling deduplication, price tracking, and future features.
+model Product {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ── Identity ──
+
+  /// The canonical (cleaned) URL for this product. Unique to prevent duplicates.
+  canonicalUrl String? @unique
+
+  /// URL with tracking params removed, lowercased for matching.
+  normalizedUrl String?
+
+  /// Domain of the retailer (e.g. "amazon.com").
+  domain String?
+
+  /// Retailer display name (e.g. "Amazon", "Best Buy").
+  retailer String?
+
+  // ── Basic Info ──
+
+  /// Product title.
+  title String
+
+  /// Full product description.
+  description String?
+
+  /// Brand name.
+  brand String?
+
+  /// Retailer SKU.
+  sku String?
+
+  /// Manufacturer Part Number.
+  mpn String?
+
+  /// Global Trade Item Number (UPC/EAN/ISBN).
+  gtin String?
+
+  // ── Media ──
+
+  /// Primary image URL.
+  image String?
+
+  /// Gallery of additional image URLs (JSON array of strings).
+  gallery String?
+
+  // ── Pricing ──
+
+  /// Most recently fetched price.
+  currentPrice Decimal? @db.Decimal(10, 2)
+
+  /// Currency code.
+  currency String @default("USD")
+
+  // ── Availability ──
+
+  /// Whether the product is currently in stock.
+  inStock Boolean?
+
+  /// Availability text (e.g. "In Stock", "Ships in 2-3 days").
+  availability String?
+
+  // ── Metadata ──
+
+  /// Product specifications as JSON (key-value pairs).
+  specifications String?
+
+  /// Additional attributes as JSON.
+  attributes String?
+
+  // ── Tracking ──
+
+  /// How this product was created.
+  source ProductSource @default(IMPORTED)
+
+  /// When the product data was last fetched/refreshed.
+  lastFetchedAt DateTime?
+
+  // ── Relations ──
+
+  /// WishlistItems that reference this product.
+  wishlistItems WishlistItem[]
+
+  /// Price history records for this product.
+  priceHistory PriceHistory[]
+
+  /// Fetch job records for this product.
+  fetchJobs ProductFetchJob[]
+
+  /// Change records for this product.
+  changes ProductChange[]
+
+  @@index([domain])
+  @@index([canonicalUrl])
+  @@index([normalizedUrl])
+  @@index([brand])
+  @@map("products")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Price History & Job Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Status of a product fetch job.
+enum FetchJobStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+/// Type of tracked product change.
+enum ProductChangeType {
+  PRICE
+  STOCK
+  IMAGE
+  TITLE
+  DESCRIPTION
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Price History
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A historical price record for a product. One record per successful fetch
+/// that observes a price. Enables price charts, lowest/highest tracking.
+model PriceHistory {
+  id         String   @id @default(cuid())
+  recordedAt DateTime @default(now())
+
+  /// The product this price belongs to.
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+
+  /// The observed price.
+  price Decimal @db.Decimal(10, 2)
+
+  /// Currency code at the time of recording.
+  currency String @default("USD")
+
+  /// Stock availability at the time of recording.
+  availability String?
+
+  @@index([productId, recordedAt])
+  @@index([productId])
+  @@map("price_history")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Product Fetch Job
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Tracks individual crawl/refresh jobs for products. Supports retries,
+/// scheduling, and distributed workers.
+model ProductFetchJob {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  /// The product to fetch.
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+
+  /// Current job status.
+  status FetchJobStatus @default(PENDING)
+
+  /// Number of attempts made.
+  attempts Int @default(0)
+
+  /// When the job started executing.
+  startedAt DateTime?
+
+  /// When the job finished (success or final failure).
+  finishedAt DateTime?
+
+  /// Error message if the job failed.
+  error String?
+
+  /// When this job should next be picked up by the scheduler.
+  nextRunAt DateTime @default(now())
+
+  @@index([status, nextRunAt])
+  @@index([productId])
+  @@index([nextRunAt])
+  @@map("product_fetch_jobs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Product Change
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Records meaningful changes detected during product syncs.
+/// Enables change notifications and audit trail.
+model ProductChange {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  /// The product that changed.
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+
+  /// What type of change was detected.
+  changeType ProductChangeType
+
+  /// The previous value (as string for comparison).
+  oldValue String?
+
+  /// The new value.
+  newValue String?
+
+  @@index([productId, createdAt])
+  @@index([productId])
+  @@index([changeType])
+  @@map("product_changes")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Media
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Uploaded media files — avatars, wishlist icons, product image overrides.
+/// Supports future expansion to videos, documents, etc.
+model Media {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  /// Original filename as uploaded by the user.
+  originalName String
+
+  /// Generated unique filename on disk/storage.
+  filename String
+
+  /// MIME type (e.g. "image/png", "image/webp").
+  mimeType String
+
+  /// File size in bytes.
+  size Int
+
+  /// Image width in pixels (null for non-images).
+  width Int?
+
+  /// Image height in pixels (null for non-images).
+  height Int?
+
+  /// Storage path relative to the uploads directory.
+  storagePath String
+
+  /// The user who uploaded this file.
+  uploadedBy   User   @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  uploadedById String
+
+  /// Optional context: what this media is used for (avatar, wishlist_icon, product_override).
+  purpose String?
+
+  @@index([uploadedById])
+  @@index([purpose])
+  @@map("media")
+}
