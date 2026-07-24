@@ -18,7 +18,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_ENV: production
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/derlist_test
   NEXT_PUBLIC_APP_URL: http://localhost:3000
 
@@ -70,3 +69,5 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          NODE_ENV: production
