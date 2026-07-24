@@ -72,6 +72,8 @@ export async function syncProduct(productId: string): Promise<SyncResult> {
         price: metadata.price,
         currency: metadata.currency ?? product.currency,
         availability: metadata.availability ?? null,
+        extractionMethod: metadata.priceSource ?? null,
+        extractionConfidence: metadata.confidence ?? null,
       },
     });
 

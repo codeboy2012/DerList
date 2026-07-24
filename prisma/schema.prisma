@@ -622,6 +622,12 @@ model PriceHistory {
   /// Stock availability at the time of recording.
   availability String?
 
+  /// Which extraction method produced this price (e.g., "json-ld", "amazon-parser").
+  extractionMethod String?
+
+  /// Confidence score (0-100) of the price extraction.
+  extractionConfidence Int?
+
   @@index([productId, recordedAt])
   @@index([productId])
   @@map("price_history")
