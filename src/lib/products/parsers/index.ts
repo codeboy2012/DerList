@@ -7,6 +7,11 @@
 
 import type { RetailerParser } from '../engine/types';
 import { amazonParser } from './amazon';
+import { bestbuyParser } from './bestbuy';
+import { neweggParser } from './newegg';
+import { walmartParser } from './walmart';
+import { targetParser } from './target';
+import { microcenterParser } from './microcenter';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Registry
@@ -18,11 +23,11 @@ import { amazonParser } from './amazon';
  */
 const parsers: RetailerParser[] = [
   amazonParser,
-  // bestbuyParser,     // TODO: Task 8
-  // neweggParser,      // TODO: Task 8
-  // walmartParser,     // TODO: Task 8
-  // targetParser,      // TODO: Task 8
-  // microcenterParser, // TODO: Task 8
+  bestbuyParser,
+  neweggParser,
+  walmartParser,
+  targetParser,
+  microcenterParser,
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
