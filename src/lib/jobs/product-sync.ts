@@ -4,7 +4,8 @@
  */
 
 import { fetchProductPage } from '@/lib/products/fetch';
-import { extractMetadata } from '@/lib/products/metadata';
+import { runExtractionPipeline } from '@/lib/products/engine';
+import { extractDomain } from '@/lib/products/normalize';
 import { prisma } from '@/lib/prisma';
 
 export interface SyncResult {
@@ -53,8 +54,9 @@ export async function syncProduct(productId: string): Promise<SyncResult> {
     return { success: false, error: message };
   }
 
-  // Extract metadata
-  const metadata = extractMetadata(html);
+  // Extract metadata via pipeline
+  const domain = extractDomain(product.canonicalUrl);
+  const metadata = await runExtractionPipeline({ html, url: product.canonicalUrl, domain });
   if (!metadata.title) {
     return { success: false, error: 'Could not extract product data.' };
   }

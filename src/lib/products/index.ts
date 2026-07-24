@@ -8,10 +8,10 @@
 import { prisma } from '@/lib/prisma';
 
 import { fetchProductPage } from './fetch';
-import { extractMetadata } from './metadata';
+import { runExtractionPipeline } from './engine';
 import { extractDomain, getRetailerName, normalizeUrl } from './normalize';
 
-export type { ExtractedMetadata } from './metadata';
+export type { PipelineResult } from './engine';
 export type { PriceCandidate, PriceResult } from './price';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -143,11 +143,11 @@ export async function importProductFromUrl(rawUrl: string): Promise<ImportOutcom
     return { success: false, error: `Could not fetch page: ${message}` };
   }
 
-  // 4. Extract metadata (pass domain for retailer-specific price parsing)
-  const metadata = extractMetadata(html, domain);
+  // 4. Extract metadata via pipeline (parallel extractors + consensus)
+  const pipelineResult = await runExtractionPipeline({ html, url: normalizedUrl, domain });
 
   // Must have at least a title
-  if (!metadata.title) {
+  if (!pipelineResult.title) {
     return {
       success: false,
       error:
@@ -163,19 +163,19 @@ export async function importProductFromUrl(rawUrl: string): Promise<ImportOutcom
     canonicalUrl,
     normalizedUrl: canonicalUrl.toLowerCase(),
     domain,
-    retailer: metadata.retailer ?? retailerFromDomain ?? domain,
-    title: metadata.title,
-    description: metadata.description,
-    brand: metadata.brand,
-    sku: metadata.sku,
-    mpn: metadata.mpn,
-    gtin: metadata.gtin,
-    image: metadata.image,
-    gallery: metadata.gallery,
-    currentPrice: metadata.price,
-    currency: metadata.currency ?? 'USD',
-    inStock: metadata.inStock,
-    availability: metadata.availability,
+    retailer: pipelineResult.retailer ?? retailerFromDomain ?? domain,
+    title: pipelineResult.title,
+    description: pipelineResult.description,
+    brand: pipelineResult.brand,
+    sku: pipelineResult.sku,
+    mpn: pipelineResult.mpn,
+    gtin: pipelineResult.gtin,
+    image: pipelineResult.image,
+    gallery: pipelineResult.gallery,
+    currentPrice: pipelineResult.price,
+    currency: pipelineResult.currency ?? 'USD',
+    inStock: pipelineResult.inStock,
+    availability: pipelineResult.availability,
   };
 
   return { success: true, data };
