@@ -75,10 +75,30 @@ export function buildConsensus(results: VotableResult[]): ConsensusResult {
   const brand = sorted.find((r) => r.brand)?.brand ?? null;
   const currency = winningCurrency ?? sorted.find((r) => r.currency)?.currency ?? null;
 
-  // ── Overall confidence ──
+  // ── Smart Confidence Scoring ──
   const maxConf = Math.max(...results.map((r) => r.confidence));
   const priceConf = priceResults.length > 0 ? Math.max(...priceResults.map((r) => r.confidence)) : 0;
-  const overallConfidence = Math.round((maxConf * 0.4 + priceConf * 0.4 + agreement * 100 * 0.2));
+  
+  let baseConfidence = Math.round(maxConf * 0.35 + priceConf * 0.35 + agreement * 100 * 0.3);
+  
+  // Boost: multiple extractors agree
+  if (priceResults.length >= 3 && agreement >= 0.8) baseConfidence += 5;
+  // Boost: retailer-specific parser found price
+  if (priceResults.some((r) => r.source.includes('parser'))) baseConfidence += 3;
+  
+  // Reduce: possible financing/coupon noise
+  const hasSuspiciousLowPrice = priceResults.some((r) => r.price != null && r.price < 10 && r.confidence < 50);
+  if (hasSuspiciousLowPrice) baseConfidence -= 5;
+  
+  // Reduce: wide price disagreement (prices differ by >50%)
+  if (priceResults.length >= 2) {
+    const allPrices = priceResults.map((r) => r.price!);
+    const maxP = Math.max(...allPrices);
+    const minP = Math.min(...allPrices);
+    if (maxP > 0 && (maxP - minP) / maxP > 0.5) baseConfidence -= 10;
+  }
+  
+  const overallConfidence = Math.min(Math.max(baseConfidence, 0), 100);
 
   const needsReview = overallConfidence < 60 || (priceResults.length > 1 && agreement < 0.5);
 
@@ -88,7 +108,7 @@ export function buildConsensus(results: VotableResult[]): ConsensusResult {
     title,
     image,
     brand,
-    overallConfidence: Math.min(overallConfidence, 100),
+    overallConfidence,
     priceSource,
     agreement,
     needsReview,
