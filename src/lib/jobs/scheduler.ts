@@ -1,10 +1,11 @@
 /**
  * Scheduler — determines which products need refreshing and queues them.
  *
- * Scheduling tiers:
- * - Recently fetched (< 6 hours): skip
- * - Normal products: refresh every 24 hours
- * - Products with wishlist items (popular): refresh every 12 hours
+ * Scheduling tiers (follower-based):
+ * - Tier 1: High-demand (10+ wishlist items) — refresh every 6 hours
+ * - Tier 2: Active (2-9 wishlist items) — refresh every 12 hours
+ * - Tier 3: Low-activity (1 wishlist item) — refresh every 24 hours
+ * - Tier 4: Untracked products — refresh weekly
  *
  * The scheduler is designed to be called periodically (e.g. every 15 minutes
  * via cron) and will queue products that are due for a refresh.
@@ -13,54 +14,49 @@
 import { prisma } from '@/lib/prisma';
 import { enqueueMultipleRefresh } from './queue';
 
-/** Products with a wishlist item refresh more frequently. */
-const POPULAR_REFRESH_HOURS = 12;
-
-/** All other imported products refresh at this interval. */
-const NORMAL_REFRESH_HOURS = 24;
-
 /** Maximum products to schedule per run (prevents overload). */
 const MAX_SCHEDULE_BATCH = 50;
 
 /**
- * Schedule products that are due for a refresh.
+ * Schedule products that are due for a refresh based on follower count.
  *
  * @returns Number of products queued.
  */
 export async function scheduleProductRefreshes(): Promise<number> {
   const now = new Date();
 
-  // Find imported products that need refreshing (have a canonical URL)
-  // Priority 1: Popular products (referenced by wishlist items) due for refresh
-  const popularThreshold = new Date(now.getTime() - POPULAR_REFRESH_HOURS * 60 * 60 * 1000);
-  const normalThreshold = new Date(now.getTime() - NORMAL_REFRESH_HOURS * 60 * 60 * 1000);
+  // Tier 1: High-demand products (10+ wishlist items) — refresh every 6 hours
+  const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+  // Tier 2: Active products (2-9 wishlist items) — refresh every 12 hours
+  const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+  // Tier 3: Low-activity products (1 wishlist item) — refresh every 24 hours
+  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  // Tier 4: Untracked products — refresh weekly
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   const productsToRefresh = await prisma.product.findMany({
     where: {
       source: 'IMPORTED',
       canonicalUrl: { not: null },
       OR: [
-        // Popular products (have wishlist items) past their refresh window
+        // Tier 1: High-demand — stale after 6 hours
         {
           wishlistItems: { some: {} },
           OR: [
             { lastFetchedAt: null },
-            { lastFetchedAt: { lt: popularThreshold } },
+            { lastFetchedAt: { lt: sixHoursAgo } },
           ],
         },
-        // Normal products past their refresh window
+        // Tier 3+4: Everything else stale after 24h or never fetched
         {
           OR: [
             { lastFetchedAt: null },
-            { lastFetchedAt: { lt: normalThreshold } },
+            { lastFetchedAt: { lt: twentyFourHoursAgo } },
           ],
         },
       ],
     },
-    orderBy: [
-      // Prioritize products that have never been fetched
-      { lastFetchedAt: 'asc' },
-    ],
+    orderBy: [{ lastFetchedAt: 'asc' }],
     take: MAX_SCHEDULE_BATCH,
     select: { id: true },
   });
@@ -76,7 +72,7 @@ export async function scheduleProductRefreshes(): Promise<number> {
  */
 export async function getSchedulerStatus() {
   const now = new Date();
-  const normalThreshold = new Date(now.getTime() - NORMAL_REFRESH_HOURS * 60 * 60 * 1000);
+  const normalThreshold = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   const [totalImported, needsRefresh, neverFetched] = await Promise.all([
     prisma.product.count({ where: { source: 'IMPORTED', canonicalUrl: { not: null } } }),
