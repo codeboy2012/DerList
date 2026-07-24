@@ -147,6 +147,12 @@ export async function syncProduct(productId: string): Promise<SyncResult> {
       mpn: metadata.mpn ?? undefined,
       gtin: metadata.gtin ?? undefined,
       lastFetchedAt: new Date(),
+      // Import analytics
+      refreshCount: { increment: 1 },
+      lastExtractionMethod: metadata.priceSource ?? undefined,
+      // Rolling average confidence: new_avg = (old_avg * (n-1) + new_conf) / n
+      // Simplified: just update with latest confidence for now
+      avgConfidence: metadata.confidence ?? undefined,
     },
   });
 

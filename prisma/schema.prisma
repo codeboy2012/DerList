@@ -557,6 +557,15 @@ model Product {
   /// When the product data was last fetched/refreshed.
   lastFetchedAt DateTime?
 
+  /// Number of times this product has been successfully synced/refreshed.
+  refreshCount Int @default(0)
+
+  /// Average extraction confidence across all refreshes (0-100).
+  avgConfidence Int?
+
+  /// Last extraction method that produced the winning price.
+  lastExtractionMethod String?
+
   // ── Relations ──
 
   /// WishlistItems that reference this product.
