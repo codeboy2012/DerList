@@ -12,6 +12,8 @@
  * Priority: JSON-LD > OpenGraph > Twitter > meta > HTML fallback
  */
 
+import { extractBestPrice } from './price';
+
 export interface ExtractedMetadata {
   title: string | null;
   description: string | null;
@@ -30,8 +32,11 @@ export interface ExtractedMetadata {
 
 /**
  * Extract product metadata from HTML content.
+ *
+ * @param html - The raw HTML of the product page
+ * @param domain - Optional domain (e.g., "amazon.com") for retailer-specific price parsing
  */
-export function extractMetadata(html: string): ExtractedMetadata {
+export function extractMetadata(html: string, domain?: string | null): ExtractedMetadata {
   const result: ExtractedMetadata = {
     title: null,
     description: null,
@@ -78,12 +83,12 @@ export function extractMetadata(html: string): ExtractedMetadata {
     result.image = extractFallbackImage(html);
   }
 
-  // 7. Price fallbacks — try HTML patterns
+  // 7. Price fallbacks — use confidence-based price extraction engine
   if (result.price == null) {
-    const htmlPrice = extractPriceFromHtml(html);
-    if (htmlPrice) {
-      result.price = htmlPrice.price;
-      if (!result.currency) result.currency = htmlPrice.currency;
+    const priceResult = extractBestPrice(html, domain ?? null);
+    if (priceResult) {
+      result.price = priceResult.price;
+      if (!result.currency) result.currency = priceResult.currency;
     }
   }
 
@@ -386,50 +391,6 @@ function extractFallbackImage(html: string): string | null {
   if (candidates.length > 0) {
     candidates.sort((a, b) => b.score - a.score);
     return candidates[0].url;
-  }
-
-  return null;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Fallback Price Extraction from HTML
-// ─────────────────────────────────────────────────────────────────────────────
-
-function extractPriceFromHtml(html: string): { price: number; currency: string | null } | null {
-  // Common price patterns in HTML (looking for elements with price-related classes/attributes)
-  const pricePatterns = [
-    // data-price attributes
-    /data-price=["']([0-9]+\.?[0-9]*)["']/i,
-    // Microdata itemprop="price"
-    /itemprop=["']price["'][^>]*content=["']([0-9]+\.?[0-9]*)["']/i,
-    /content=["']([0-9]+\.?[0-9]*)["'][^>]*itemprop=["']price["']/i,
-    // Common price class patterns with currency symbol
-    /class=["'][^"']*price[^"']*["'][^>]*>\s*\$([0-9,]+\.?[0-9]*)/i,
-    /class=["'][^"']*price[^"']*["'][^>]*>\s*([0-9,]+\.?[0-9]*)/i,
-    // Amazon specific
-    /class=["']a-price-whole["'][^>]*>([0-9,]+)/i,
-  ];
-
-  for (const pattern of pricePatterns) {
-    const match = html.match(pattern);
-    if (match) {
-      const price = parseFloat(match[1].replace(/,/g, ''));
-      if (!isNaN(price) && price > 0 && price < 1_000_000) {
-        return { price, currency: null };
-      }
-    }
-  }
-
-  // Currency detection
-  const currencyMatch = html.match(/itemprop=["']priceCurrency["'][^>]*content=["']([A-Z]{3})["']/i);
-
-  // Try broader price pattern: $XX.XX near price-related context
-  const broadMatch = html.match(/(?:price|cost|sale)[^>]{0,100}?\$([0-9,]+\.[0-9]{2})/i);
-  if (broadMatch) {
-    const price = parseFloat(broadMatch[1].replace(/,/g, ''));
-    if (!isNaN(price) && price > 0 && price < 1_000_000) {
-      return { price, currency: currencyMatch?.[1] ?? 'USD' };
-    }
   }
 
   return null;

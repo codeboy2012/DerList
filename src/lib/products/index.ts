@@ -10,6 +10,7 @@ import { extractMetadata } from './metadata';
 import { extractDomain, getRetailerName, normalizeUrl } from './normalize';
 
 export type { ExtractedMetadata } from './metadata';
+export type { PriceCandidate, PriceResult } from './price';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -82,8 +83,8 @@ export async function importProductFromUrl(rawUrl: string): Promise<ImportOutcom
     return { success: false, error: `Could not fetch page: ${message}` };
   }
 
-  // 3. Extract metadata
-  const metadata = extractMetadata(html);
+  // 3. Extract metadata (pass domain for retailer-specific price parsing)
+  const metadata = extractMetadata(html, domain);
 
   // Must have at least a title
   if (!metadata.title) {
