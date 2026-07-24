@@ -83,6 +83,42 @@ export function ImportTab({ wishlistId }: ImportTabProps) {
           </div>
         </div>
 
+        {/* Extraction confidence */}
+        <div className="flex items-center gap-2">
+          <ConfidenceBadge confidence={p.confidence} />
+          <span className="text-[11px] text-muted-foreground">
+            via {p.priceSource}
+          </span>
+          {p.needsReview && (
+            <Badge variant="warning" className="text-[9px]">Needs Review</Badge>
+          )}
+        </div>
+
+        {/* Price candidates (show if multiple exist and not 100% confident) */}
+        {p.priceCandidates.length > 1 && p.confidence < 95 && (
+          <details className="rounded-lg border border-border bg-surface p-3">
+            <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+              {p.priceCandidates.length} price candidates detected
+            </summary>
+            <div className="mt-2 space-y-1.5">
+              {p.priceCandidates.map((candidate, i) => (
+                <div key={i} className="flex items-center justify-between rounded-md bg-card px-3 py-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-semibold ${candidate.confidence >= 80 ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      ${candidate.price.toFixed(2)}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">{candidate.method}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground">{candidate.reason}</span>
+                    <ConfidenceDot confidence={candidate.confidence} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+
         {/* Confirm form */}
         <form action={confirmImport} className="flex flex-col gap-3">
           <input type="hidden" name="wishlistId" value={wishlistId} />
@@ -159,4 +195,19 @@ export function ImportTab({ wishlistId }: ImportTabProps) {
       </p>
     </form>
   );
+}
+
+function ConfidenceBadge({ confidence }: { confidence: number }) {
+  const color = confidence >= 90 ? 'text-success' : confidence >= 70 ? 'text-warning' : 'text-danger';
+  const bg = confidence >= 90 ? 'bg-success/10' : confidence >= 70 ? 'bg-warning/10' : 'bg-danger/10';
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${color} ${bg}`}>
+      {confidence}% confidence
+    </span>
+  );
+}
+
+function ConfidenceDot({ confidence }: { confidence: number }) {
+  const color = confidence >= 80 ? 'bg-success' : confidence >= 50 ? 'bg-warning' : 'bg-danger';
+  return <span className={`h-1.5 w-1.5 rounded-full ${color}`} title={`${confidence}%`} />;
 }
