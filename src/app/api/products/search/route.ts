@@ -4,8 +4,10 @@ import { prisma } from '@/lib/prisma';
 /**
  * GET /api/products/search?q=<query>
  *
- * Search the existing product database by title, brand, retailer, SKU.
- * Returns up to 20 results. Used by the Product Finder UI.
+ * Search the existing product database by title, brand, retailer, SKU, GTIN,
+ * MPN, domain, and description.
+ * Returns up to 20 results ordered by relevance (exact title matches first).
+ * Used by the Product Finder UI.
  * Searches globally (not scoped to user) since products are shared entities.
  */
 export async function GET(request: Request) {
@@ -27,7 +29,10 @@ export async function GET(request: Request) {
         { brand: { contains: query, mode: 'insensitive' } },
         { retailer: { contains: query, mode: 'insensitive' } },
         { sku: { contains: query, mode: 'insensitive' } },
+        { gtin: { contains: query, mode: 'insensitive' } },
+        { mpn: { contains: query, mode: 'insensitive' } },
         { domain: { contains: query, mode: 'insensitive' } },
+        { description: { contains: query, mode: 'insensitive' } },
       ],
     },
     orderBy: { updatedAt: 'desc' },
@@ -43,10 +48,30 @@ export async function GET(request: Request) {
       inStock: true,
       canonicalUrl: true,
       domain: true,
+      sku: true,
+      gtin: true,
+      source: true,
+      lastFetchedAt: true,
     },
   });
 
-  const results = products.map((p) => ({
+  // Sort by relevance: exact title matches first, then contains matches
+  const queryLower = query.toLowerCase();
+  const sorted = products.sort((a, b) => {
+    const aExact = a.title.toLowerCase() === queryLower;
+    const bExact = b.title.toLowerCase() === queryLower;
+    if (aExact && !bExact) return -1;
+    if (!aExact && bExact) return 1;
+
+    const aStartsWith = a.title.toLowerCase().startsWith(queryLower);
+    const bStartsWith = b.title.toLowerCase().startsWith(queryLower);
+    if (aStartsWith && !bStartsWith) return -1;
+    if (!aStartsWith && bStartsWith) return 1;
+
+    return 0;
+  });
+
+  const results = sorted.map((p) => ({
     id: p.id,
     title: p.title,
     brand: p.brand,
@@ -57,6 +82,10 @@ export async function GET(request: Request) {
     inStock: p.inStock,
     url: p.canonicalUrl,
     domain: p.domain,
+    sku: p.sku,
+    gtin: p.gtin,
+    source: p.source,
+    lastFetchedAt: p.lastFetchedAt,
   }));
 
   return Response.json({ results });
