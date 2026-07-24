@@ -5,7 +5,16 @@ import { Star, Sparkles } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Tooltip } from '@/components/ui/Tooltip';
 
+/** Short labels shown inline next to stars */
 const PRIORITY_LABELS: Record<number, string> = {
+  1: 'Want',
+  2: 'Really Want',
+  3: 'Need This',
+  4: 'Must Have!',
+};
+
+/** Playful labels shown in tooltips only */
+const PRIORITY_TOOLTIP_LABELS: Record<number, string> = {
   1: 'Want',
   2: 'Really Want',
   3: 'I NEED This',
@@ -81,7 +90,7 @@ export function WishlistPriority({
           const filled = star <= displayValue;
           const isPopping = justSelected !== null && star <= justSelected;
           return (
-            <Tooltip key={star} content={`${'\u2B50'.repeat(star)} ${PRIORITY_LABELS[star]}`} side="top">
+            <Tooltip key={star} content={`${'\u2B50'.repeat(star)} ${PRIORITY_TOOLTIP_LABELS[star]}`} side="top">
               <button
                 type="button"
                 role="radio"
@@ -169,4 +178,4 @@ export function WishlistPriorityDisplay({ value, showLabel = true }: { value: nu
   );
 }
 
-export { PRIORITY_LABELS };
+export { PRIORITY_LABELS, PRIORITY_TOOLTIP_LABELS };

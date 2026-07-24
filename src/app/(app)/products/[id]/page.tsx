@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import { WishlistPriorityDisplay } from '@/components/ui/WishlistPriority';
 import { requireUser } from '@/lib/auth';
 import { formatDate } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
@@ -56,6 +57,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
         where: { wishlist: { ownerId: user.id } },
         select: {
           id: true,
+          starPriority: true,
           wishlist: { select: { id: true, title: true, icon: true } },
         },
       },
@@ -374,6 +376,9 @@ export default async function ProductDetailPage({ params }: PageProps) {
                 <Link key={wi.id} href={`/wishlists/${wi.wishlist.id}`} className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-surface">
                   <span className="text-base">{wi.wishlist.icon || '📋'}</span>
                   <span className="text-sm font-medium text-foreground">{wi.wishlist.title}</span>
+                  {wi.starPriority > 1 && (
+                    <WishlistPriorityDisplay value={wi.starPriority} />
+                  )}
                 </Link>
               ))}
             </div>

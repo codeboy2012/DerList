@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 
 import { notFound } from 'next/navigation';
 
-import { Badge } from '@/components/ui/Badge';
 import { Container } from '@/components/ui/Container';
+import { WishlistPriorityDisplay } from '@/components/ui/WishlistPriority';
 import { formatDate } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
 import { siteConfig } from '@/lib/site-config';
@@ -163,7 +163,7 @@ export default async function PublicWishlistPage({ params }: PageProps) {
 // Sub-components
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PublicItemCard({ item }: { item: { id: string; title: string; description: string | null; url: string | null; image: string | null; brand: string | null; retailer: string | null; currentPrice: unknown; currency: string; priority: string; quantity: number; purchased: boolean; notes: string | null } }) {
+function PublicItemCard({ item }: { item: { id: string; title: string; description: string | null; url: string | null; image: string | null; brand: string | null; retailer: string | null; currentPrice: unknown; currency: string; priority: string; starPriority: number; quantity: number; purchased: boolean; notes: string | null } }) {
   return (
     <div className="flex gap-3 rounded-xl border border-border bg-card p-4">
       {/* Image */}
@@ -196,8 +196,8 @@ function PublicItemCard({ item }: { item: { id: string; title: string; descripti
               {item.currency} {Number(item.currentPrice).toFixed(2)}
             </span>
           )}
-          {item.priority !== 'MEDIUM' && (
-            <PriorityBadge priority={item.priority} />
+          {item.starPriority > 1 && (
+            <WishlistPriorityDisplay value={item.starPriority} />
           )}
         </div>
         {item.url && (
@@ -214,15 +214,4 @@ function PublicItemCard({ item }: { item: { id: string; title: string; descripti
       </div>
     </div>
   );
-}
-
-function PriorityBadge({ priority }: { priority: string }) {
-  const map: Record<string, { variant: 'default' | 'warning' | 'danger'; label: string }> = {
-    LOW: { variant: 'default', label: 'Low' },
-    HIGH: { variant: 'warning', label: 'High' },
-    CRITICAL: { variant: 'danger', label: 'Must Have' },
-  };
-  const config = map[priority];
-  if (!config) return null;
-  return <Badge variant={config.variant} className="text-[9px]">{config.label}</Badge>;
 }
