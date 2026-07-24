@@ -78,8 +78,7 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
       sortedItems.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       break;
     case 'priority':
-      const priorityOrder: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-      sortedItems.sort((a, b) => (priorityOrder[a.priority] ?? 2) - (priorityOrder[b.priority] ?? 2));
+      sortedItems.sort((a, b) => (b.starPriority ?? 1) - (a.starPriority ?? 1));
       break;
     default: // 'position' — keep DB order
       break;
@@ -182,7 +181,7 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
               <SortLink id={id} current={sort} value="price-desc" label="Price ↓" filter={filter} />
               <SortLink id={id} current={sort} value="price-asc" label="Price ↑" filter={filter} />
               <SortLink id={id} current={sort} value="name" label="Name" filter={filter} />
-              <SortLink id={id} current={sort} value="priority" label="Priority" filter={filter} />
+              <SortLink id={id} current={sort} value="priority" label="Priority ⭐" filter={filter} />
               <SortLink id={id} current={sort} value="newest" label="Newest" filter={filter} />
             </div>
           </div>

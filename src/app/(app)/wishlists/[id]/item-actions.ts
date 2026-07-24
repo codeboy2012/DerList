@@ -215,6 +215,8 @@ export async function quickEditItemAction(
   const notes = formData.get('notes') as string | null;
   const priority = formData.get('priority') as string;
   const quantity = parseInt(formData.get('quantity') as string, 10);
+  const starPriorityRaw = formData.get('starPriority');
+  const starPriority = starPriorityRaw ? parseInt(starPriorityRaw as string, 10) : null;
 
   if (!title || title.length === 0) {
     return { success: false, error: 'Title is required.' };
@@ -223,6 +225,7 @@ export async function quickEditItemAction(
   const validPriorities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
   const safePriority = validPriorities.includes(priority) ? priority : 'MEDIUM';
   const safeQuantity = isNaN(quantity) || quantity < 1 ? 1 : Math.min(quantity, 999);
+  const safeStarPriority = starPriority && starPriority >= 1 && starPriority <= 4 ? starPriority : undefined;
 
   await prisma.wishlistItem.update({
     where: { id: itemId },
@@ -231,6 +234,7 @@ export async function quickEditItemAction(
       notes: notes || null,
       priority: safePriority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
       quantity: safeQuantity,
+      ...(safeStarPriority !== undefined && { starPriority: safeStarPriority }),
     },
   });
 

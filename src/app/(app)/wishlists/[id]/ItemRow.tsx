@@ -5,9 +5,8 @@ import { useActionState, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
-import { WishlistPriorityDisplay } from '@/components/ui/WishlistPriority';
+import { WishlistPriority } from '@/components/ui/WishlistPriority';
 import {
   Check,
   CheckCircle2,
@@ -22,6 +21,7 @@ import {
 
 import type { ActionState } from '../../../(auth)/actions';
 import { deleteItemAction, quickEditItemAction, togglePurchasedAction } from './item-actions';
+import { updateStarPriorityAction } from './priority-action';
 
 interface ItemRowProps {
   item: {
@@ -133,7 +133,7 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
                   {item.brand && (
                     <span className="text-[11px] text-muted-foreground">{item.brand}</span>
                   )}
-                  {item.starPriority > 1 && <WishlistPriorityDisplay value={item.starPriority} />}
+                  <InlineStarPriority item={item} wishlistId={wishlistId} />
                   {item.quantity > 1 && (
                     <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                       ×{item.quantity}
@@ -243,9 +243,27 @@ function PriorityBadge({ priority }: { priority: string }) {
   return <Badge variant={c.variant} className="text-[9px] leading-none">{c.label}</Badge>;
 }
 
+function InlineStarPriority({ item, wishlistId }: { item: ItemRowProps['item']; wishlistId: string }) {
+  const [optimistic, setOptimistic] = useState(item.starPriority);
+
+  const handleChange = async (newValue: number) => {
+    setOptimistic(newValue); // Optimistic update
+    const fd = new FormData();
+    fd.set('itemId', item.id);
+    fd.set('wishlistId', wishlistId);
+    fd.set('starPriority', String(newValue));
+    await updateStarPriorityAction(fd);
+  };
+
+  return (
+    <WishlistPriority value={optimistic} onChange={handleChange} showLabel={false} size="sm" />
+  );
+}
+
 function InlineEditForm({ item, wishlistId, onDone }: { item: ItemRowProps['item']; wishlistId: string; onDone: () => void }) {
   const initialState: ActionState = { success: false };
   const [state, formAction, pending] = useActionState(quickEditItemAction, initialState);
+  const [starPriority, setStarPriority] = useState(item.starPriority);
 
   if (state.success) onDone();
 
@@ -253,6 +271,8 @@ function InlineEditForm({ item, wishlistId, onDone }: { item: ItemRowProps['item
     <form action={formAction} className="rounded-xl border border-accent/20 bg-card-hover p-4 animate-fade-up" noValidate>
       <input type="hidden" name="itemId" value={item.id} />
       <input type="hidden" name="wishlistId" value={wishlistId} />
+      <input type="hidden" name="priority" value={item.priority} />
+      <input type="hidden" name="starPriority" value={starPriority} />
       {state.error && <p className="mb-3 text-xs text-danger">{state.error}</p>}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1 sm:col-span-2">
@@ -261,12 +281,7 @@ function InlineEditForm({ item, wishlistId, onDone }: { item: ItemRowProps['item
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-[11px] font-medium text-muted-foreground">Priority</label>
-          <Select name="priority" defaultValue={item.priority} className="h-8 text-xs">
-            <option value="LOW">Low</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="HIGH">High</option>
-            <option value="CRITICAL">Critical</option>
-          </Select>
+          <WishlistPriority value={starPriority} onChange={setStarPriority} size="md" />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-[11px] font-medium text-muted-foreground">Quantity</label>
