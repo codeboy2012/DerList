@@ -10,7 +10,7 @@
  * DerList remains the source of truth for all product data.
  */
 
-import { getPuter } from './puter';
+import { puterChat, isPuterAvailable, type AIMessage } from './puter';
 import { SHOPPING_AI_TOOLS } from './tool-definitions';
 import * as tools from './tools';
 
@@ -129,8 +129,7 @@ export async function chat(
   userId: string,
   model = 'gpt-4o',
 ): Promise<ShoppingAIResponse> {
-  const puter = getPuter();
-  if (!puter) {
+  if (!isPuterAvailable()) {
     return {
       success: false,
       message: '',
@@ -151,7 +150,7 @@ export async function chat(
 
   for (let round = 0; round < maxToolRounds; round++) {
     try {
-      const response = await puter.ai.chat(currentMessages, {
+      const response = await puterChat(currentMessages as AIMessage[], {
         model,
         tools: SHOPPING_AI_TOOLS as unknown as unknown[],
       });
@@ -175,9 +174,15 @@ export async function chat(
       }
 
       // AI wants to call tools — execute them
+      const toolMsgContent = typeof assistantMessage.content === 'string'
+        ? assistantMessage.content
+        : Array.isArray(assistantMessage.content)
+          ? assistantMessage.content.map((c) => c.text ?? '').join('')
+          : '';
+
       currentMessages.push({
         role: 'assistant',
-        content: assistantMessage.content ?? '',
+        content: toolMsgContent,
         tool_calls: assistantMessage.tool_calls,
       });
 

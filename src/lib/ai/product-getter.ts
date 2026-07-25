@@ -11,7 +11,7 @@
  * handles matching, deduplication, pricing, and persistence.
  */
 
-import { getPuter } from './puter';
+import { puterChat, puterChatWithMedia, isPuterAvailable } from './puter';
 import { prisma } from '@/lib/prisma';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,8 +121,7 @@ Rules:
  * Supports: product names, shopping lists, component lists, descriptions, URLs.
  */
 export async function parseProducts(input: string, model = 'gpt-4o'): Promise<ProductGetterResult> {
-  const puter = getPuter();
-  if (!puter) {
+  if (!isPuterAvailable()) {
     return { success: false, parsed: [], matched: [], unmatched: [], error: 'AI not configured.' };
   }
 
@@ -131,7 +130,7 @@ export async function parseProducts(input: string, model = 'gpt-4o'): Promise<Pr
   }
 
   try {
-    const response = await puter.ai.chat(
+    const response = await puterChat(
       [
         { role: 'system', content: PARSER_PROMPT },
         { role: 'user', content: input },
@@ -174,16 +173,14 @@ export async function parseProducts(input: string, model = 'gpt-4o'): Promise<Pr
  * This is candidate identification — products must still be verified via DerList.
  */
 export async function parseImage(imageUrl: string, model = 'gpt-4o'): Promise<ProductGetterResult> {
-  const puter = getPuter();
-  if (!puter) {
+  if (!isPuterAvailable()) {
     return { success: false, parsed: [], matched: [], unmatched: [], error: 'AI not configured.' };
   }
 
   try {
-    const response = await puter.ai.chat(
+    const response = await puterChatWithMedia(
       IMAGE_PARSER_PROMPT,
       imageUrl,
-      false,
       { model },
     );
 

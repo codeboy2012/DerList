@@ -7,4 +7,4 @@
 
 export { chat, ask, type ChatMessage, type ShoppingAIResponse } from './shopping-ai';
 export { parseProducts, parseImage, type ParsedProduct, type ProductGetterResult, type MatchedProduct } from './product-getter';
-export { isPuterAvailable } from './puter';
+export { isPuterAvailable, puterChat, puterChatWithMedia, type AIMessage, type AIChatOptions, type AIChatResponse } from './puter';
