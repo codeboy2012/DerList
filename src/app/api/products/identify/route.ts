@@ -119,7 +119,7 @@ export async function POST(request: Request) {
       );
   }
 
-  const result = await identifyProducts(input);
+  const result = await identifyProducts(input, user.id);
 
   return Response.json(result);
 }

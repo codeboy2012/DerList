@@ -9,8 +9,14 @@
  */
 
 import { importProductFromUrl, type ImportedProductData } from './index';
-import { parseProducts, parseImage, type ParsedProduct, type MatchedProduct } from '@/lib/ai/product-getter';
-import { isPuterAvailable } from '@/lib/ai/puter';
+import { 
+  parseProducts, 
+  parseImage,
+  searchProducts,
+  type ParsedProduct, 
+  type MatchedProduct 
+} from '@/lib/ai/services/product-getter';
+import { isAnyProviderAvailable } from '@/lib/ai/providers';
 import { prisma } from '@/lib/prisma';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -81,18 +87,21 @@ export interface ProductGetterResponse {
  * Identify products from any input type.
  * Routes through the appropriate pipeline and returns verified candidates.
  */
-export async function identifyProducts(input: ProductGetterInput): Promise<ProductGetterResponse> {
+export async function identifyProducts(
+  input: ProductGetterInput, 
+  userId: string
+): Promise<ProductGetterResponse> {
   switch (input.type) {
     case 'url':
       return handleUrlInput(input.url);
     case 'text':
-      return handleTextInput(input.text);
+      return handleTextInput(input.text, userId);
     case 'image':
-      return handleImageInput(input.image);
+      return handleImageInput(input.image, userId);
     case 'search':
-      return handleSearchInput(input.query);
+      return handleSearchInput(input.query, userId);
     case 'manual':
-      return handleManualInput(input.data);
+      return handleManualInput(input.data, userId);
     default:
       return { success: false, candidates: [], error: 'Unknown input type.' };
   }
@@ -119,22 +128,22 @@ async function handleUrlInput(url: string): Promise<ProductGetterResponse> {
 // Text Handler
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function handleTextInput(text: string): Promise<ProductGetterResponse> {
+async function handleTextInput(text: string, userId: string): Promise<ProductGetterResponse> {
   // Check if the text is actually a URL
   if (isUrl(text.trim())) {
     return handleUrlInput(text.trim());
   }
 
   // If AI is not available, fall back to direct database search
-  if (!isPuterAvailable()) {
-    return handleSearchInput(text);
+  if (!(await isAnyProviderAvailable())) {
+    return handleSearchInput(text, userId);
   }
 
-  const result = await parseProducts(text);
+  const result = await parseProducts(text, userId);
 
   if (!result.success) {
     // Fall back to database search if AI fails
-    return handleSearchInput(text);
+    return handleSearchInput(text, userId);
   }
 
   const candidates: ProductCandidate[] = [];
@@ -164,12 +173,12 @@ async function handleTextInput(text: string): Promise<ProductGetterResponse> {
 // Image Handler
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function handleImageInput(imageUrl: string): Promise<ProductGetterResponse> {
-  if (!isPuterAvailable()) {
+async function handleImageInput(imageUrl: string, userId: string): Promise<ProductGetterResponse> {
+  if (!(await isAnyProviderAvailable())) {
     return { success: false, candidates: [], error: 'AI image analysis is not configured.' };
   }
 
-  const result = await parseImage(imageUrl);
+  const result = await parseImage(imageUrl, userId);
 
   if (!result.success) {
     return { success: false, candidates: [], error: result.error };
@@ -200,7 +209,7 @@ async function handleImageInput(imageUrl: string): Promise<ProductGetterResponse
 // Search Handler (database search with optional AI interpretation)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function handleSearchInput(query: string): Promise<ProductGetterResponse> {
+async function handleSearchInput(query: string, userId: string): Promise<ProductGetterResponse> {
   if (!query || query.trim().length < 2) {
     return { success: false, candidates: [], error: 'Search query too short.' };
   }
@@ -288,10 +297,10 @@ async function handleSearchInput(query: string): Promise<ProductGetterResponse> 
 // Manual Handler (AI auto-fill for partial data)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function handleManualInput(data: ManualProductInput): Promise<ProductGetterResponse> {
+async function handleManualInput(data: ManualProductInput, userId: string): Promise<ProductGetterResponse> {
   // First, try to match against existing products using the title
   if (data.title) {
-    const searchResult = await handleSearchInput(data.title);
+    const searchResult = await handleSearchInput(data.title, userId);
     if (searchResult.candidates.length > 0) {
       // Merge user-provided data with search results
       const topMatch = searchResult.candidates[0];
@@ -315,8 +324,8 @@ async function handleManualInput(data: ManualProductInput): Promise<ProductGette
   }
 
   // If no match, use AI to identify and enrich if available
-  if (isPuterAvailable() && data.title) {
-    const aiResult = await parseProducts(data.title);
+  if ((await isAnyProviderAvailable()) && data.title) {
+    const aiResult = await parseProducts(data.title, userId);
     if (aiResult.success && aiResult.matched.length > 0) {
       const candidates: ProductCandidate[] = aiResult.matched.map(matchedToCandidate);
       // Merge user data into top candidate
@@ -408,7 +417,7 @@ function matchedToCandidate(match: MatchedProduct): ProductCandidate {
     upc: null,
     asin: match.parsed.asin,
     url: match.product.url,
-    image: match.product.image,
+    image: match.product.images?.[0] || null,
     retailer: match.product.retailer,
     category: match.parsed.category,
     description: null,
@@ -416,8 +425,8 @@ function matchedToCandidate(match: MatchedProduct): ProductCandidate {
     originalPrice: match.parsed.estimatedPrice !== match.product.price ? match.parsed.estimatedPrice : null,
     currency: match.product.currency,
     dealInfo: null,
-    confidence: match.matchConfidence,
-    matchType: confidenceToMatchType(match.matchConfidence),
+    confidence: match.confidence,
+    matchType: confidenceToMatchType(match.confidence),
     productId: match.product.id,
     verified: true,
   };
