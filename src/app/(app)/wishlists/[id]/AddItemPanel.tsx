@@ -4,8 +4,9 @@ import { useState } from 'react';
 
 import { Card, CardContent } from '@/components/ui/Card';
 import { cn } from '@/utils/cn';
-import { Link2, PenLine, Search } from 'lucide-react';
+import { Link2, PenLine, Search, Sparkles } from 'lucide-react';
 
+import { AITab } from './AITab';
 import { ImportTab } from './ImportTab';
 import { ManualTab } from './ManualTab';
 import { SearchTab } from './SearchTab';
@@ -18,21 +19,24 @@ interface AddItemPanelProps {
  * Tabbed panel for adding items:
  * - Import Product (paste URL)
  * - Search Database (find existing products)
+ * - AI (paste anything, natural language)
  * - Manual Entry (type details)
  */
 export function AddItemPanel({ wishlistId }: AddItemPanelProps) {
-  const [tab, setTab] = useState<'import' | 'search' | 'manual'>('import');
+  const [tab, setTab] = useState<'import' | 'search' | 'ai' | 'manual'>('ai');
 
   return (
     <Card className="max-w-2xl">
       {/* Tab bar */}
       <div className="flex border-b border-border overflow-x-auto">
+        <TabButton active={tab === 'ai'} onClick={() => setTab('ai')} icon={<Sparkles className="h-4 w-4" />} label="✨ AI" />
         <TabButton active={tab === 'import'} onClick={() => setTab('import')} icon={<Link2 className="h-4 w-4" />} label="Import URL" />
-        <TabButton active={tab === 'search'} onClick={() => setTab('search')} icon={<Search className="h-4 w-4" />} label="Search Database" />
+        <TabButton active={tab === 'search'} onClick={() => setTab('search')} icon={<Search className="h-4 w-4" />} label="Search" />
         <TabButton active={tab === 'manual'} onClick={() => setTab('manual')} icon={<PenLine className="h-4 w-4" />} label="Manual" />
       </div>
 
       <CardContent className="pt-6">
+        {tab === 'ai' && <AITab wishlistId={wishlistId} />}
         {tab === 'import' && <ImportTab wishlistId={wishlistId} />}
         {tab === 'search' && <SearchTab wishlistId={wishlistId} />}
         {tab === 'manual' && <ManualTab wishlistId={wishlistId} />}
