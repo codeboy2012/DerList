@@ -217,6 +217,7 @@ export async function quickEditItemAction(
   const quantity = parseInt(formData.get('quantity') as string, 10);
   const starPriorityRaw = formData.get('starPriority');
   const starPriority = starPriorityRaw ? parseInt(starPriorityRaw as string, 10) : null;
+  const category = (formData.get('category') as string | null)?.trim() || null;
 
   if (!title || title.length === 0) {
     return { success: false, error: 'Title is required.' };
@@ -234,6 +235,7 @@ export async function quickEditItemAction(
       notes: notes || null,
       priority: safePriority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
       quantity: safeQuantity,
+      category,
       ...(safeStarPriority !== undefined && { starPriority: safeStarPriority }),
     },
   });

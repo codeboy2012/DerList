@@ -333,6 +333,12 @@ export async function createManualProductAction(
 
   const data = parsed.data;
 
+  // Extra wishlist-item-level fields (not part of the Product record)
+  const category = (formData.get('category') as string | null)?.trim() || null;
+  const originalPriceRaw = formData.get('originalPrice') as string | null;
+  const originalPrice = originalPriceRaw ? parseFloat(originalPriceRaw) : null;
+  const dealInfo = (formData.get('dealInfo') as string | null)?.trim() || null;
+
   // Create product record (MANUAL source)
   const product = await prisma.product.create({
     data: {
@@ -396,6 +402,9 @@ export async function createManualProductAction(
       retailer: data.retailer || null,
       currentPrice: data.currentPrice,
       currency: data.currency,
+      category,
+      originalPrice: originalPrice != null && !isNaN(originalPrice) ? originalPrice : null,
+      dealInfo,
       position,
     },
   });

@@ -10,6 +10,7 @@ import { WishlistPriority } from '@/components/ui/WishlistPriority';
 import {
   Check,
   CheckCircle2,
+  ChevronRight,
   Circle,
   Copy,
   ExternalLink,
@@ -33,12 +34,15 @@ interface ItemRowProps {
     brand: string | null;
     retailer: string | null;
     currentPrice: unknown;
+    originalPrice?: unknown;
+    dealInfo?: string | null;
     currency: string;
     priority: string;
     starPriority: number;
     quantity: number;
     purchased: boolean;
     notes: string | null;
+    category?: string | null;
   };
   wishlistId: string;
 }
@@ -150,14 +154,26 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
                   }`}>
                     ${price.toFixed(2)}
                   </span>
-                  <span className="block text-[10px] text-muted-foreground">{item.currency}</span>
+                  {item.originalPrice != null && Number(item.originalPrice) > price && (
+                    <span className="block text-[10px] text-muted-foreground line-through">
+                      ${Number(item.originalPrice).toFixed(2)}
+                    </span>
+                  )}
+                  {!(item.originalPrice != null && Number(item.originalPrice) > price) && (
+                    <span className="block text-[10px] text-muted-foreground">{item.currency}</span>
+                  )}
+                  {item.dealInfo && (
+                    <span className="mt-0.5 inline-block rounded-full bg-green-500/10 px-1.5 py-0.5 text-[9px] font-medium text-green-400">
+                      {item.dealInfo}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Notes */}
+            {/* Notes — expandable */}
             {item.notes && (
-              <p className="line-clamp-1 text-[11px] italic text-muted-foreground">{item.notes}</p>
+              <ItemNotes notes={item.notes} />
             )}
 
             {/* Actions row */}
@@ -288,8 +304,12 @@ function InlineEditForm({ item, wishlistId, onDone }: { item: ItemRowProps['item
           <Input name="quantity" type="number" min={1} max={999} defaultValue={item.quantity} className="h-8 text-xs" />
         </div>
         <div className="flex flex-col gap-1 sm:col-span-2">
+          <label className="text-[11px] font-medium text-muted-foreground">Category</label>
+          <Input name="category" defaultValue={item.category ?? ''} className="h-8 text-xs" placeholder="e.g. PC Upgrades, Smart Home" />
+        </div>
+        <div className="flex flex-col gap-1 sm:col-span-2">
           <label className="text-[11px] font-medium text-muted-foreground">Notes</label>
-          <Textarea name="notes" defaultValue={item.notes ?? ''} rows={2} className="text-xs" placeholder="Personal notes..." />
+          <Textarea name="notes" defaultValue={item.notes ?? ''} rows={2} className="text-xs" placeholder="Personal notes, specs, reasons..." />
         </div>
       </div>
       <div className="mt-3 flex gap-2">
@@ -297,5 +317,27 @@ function InlineEditForm({ item, wishlistId, onDone }: { item: ItemRowProps['item
         <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={onDone}>Cancel</Button>
       </div>
     </form>
+  );
+}
+
+function ItemNotes({ notes }: { notes: string }) {
+  const isLong = notes.length > 80;
+
+  if (!isLong) {
+    return (
+      <p className="text-[11px] italic text-muted-foreground">{notes}</p>
+    );
+  }
+
+  return (
+    <details className="group">
+      <summary className="flex cursor-pointer items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground">
+        <ChevronRight className="h-3 w-3 transition-transform duration-150 group-open:rotate-90" />
+        <span className="italic">{notes.slice(0, 60)}...</span>
+      </summary>
+      <div className="mt-1.5 rounded-lg border border-border/50 bg-surface/50 p-2.5 text-[11px] leading-relaxed text-muted-foreground whitespace-pre-wrap">
+        {notes}
+      </div>
+    </details>
   );
 }

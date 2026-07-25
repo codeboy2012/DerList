@@ -84,6 +84,18 @@ export function ManualTab({ wishlistId }: ManualTabProps) {
           <label htmlFor="manual-sku" className="text-sm font-medium text-foreground">SKU</label>
           <Input id="manual-sku" name="sku" placeholder="Optional" />
         </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="manual-category" className="text-sm font-medium text-foreground">Category</label>
+          <Input id="manual-category" name="category" placeholder="e.g. PC Upgrades, Smart Home" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="manual-originalPrice" className="text-sm font-medium text-foreground">Original Price</label>
+          <Input id="manual-originalPrice" name="originalPrice" type="number" step="0.01" min="0" placeholder="List/MSRP price" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="manual-dealInfo" className="text-sm font-medium text-foreground">Deal Info</label>
+          <Input id="manual-dealInfo" name="dealInfo" placeholder="e.g. $50 off coupon" />
+        </div>
       </div>
 
       <div className="flex flex-col gap-1.5">

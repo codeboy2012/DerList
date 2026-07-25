@@ -329,6 +329,9 @@ model Wishlist {
   /// Whether this wishlist is archived (hidden from main view).
   archived Boolean @default(false)
 
+  /// Optional notice/disclaimer shown at the top (e.g. early-access product notice).
+  notice String?
+
   /// Display order for manual sorting.
   sortOrder Int @default(0)
 
@@ -336,6 +339,9 @@ model Wishlist {
 
   /// Items in this wishlist.
   items WishlistItem[]
+
+  /// Category definitions with metadata (links, descriptions).
+  categories WishlistCategory[]
 
   /// Collaborative members.
   members WishlistMember[]
@@ -417,6 +423,14 @@ model WishlistItem {
   /// Currency code (e.g. "USD", "EUR", "GBP").
   currency String @default("USD")
 
+  // ── Pricing extras ──
+
+  /// Original/list price before any sale or discount.
+  originalPrice Decimal? @db.Decimal(10, 2)
+
+  /// Deal or sale information (e.g. "Lightning Deal", "$50 off with coupon").
+  dealInfo String?
+
   // ── Wishlist-specific info ──
 
   /// How badly the user wants this item.
@@ -437,6 +451,9 @@ model WishlistItem {
   /// Personal notes about this item.
   notes String?
 
+  /// Category name for grouping items (e.g. "PC Upgrades", "Smart Home").
+  category String?
+
   // ── Ordering ──
 
   /// Position for manual drag-and-drop ordering within the wishlist.
@@ -449,11 +466,63 @@ model WishlistItem {
   product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   productId String?
 
+  /// Link to a category record (optional, for category-level metadata).
+  wishlistCategory   WishlistCategory? @relation(fields: [wishlistCategoryId], references: [id], onDelete: SetNull)
+  wishlistCategoryId String?
+
   @@index([wishlistId])
   @@index([wishlistId, position])
+  @@index([wishlistId, category])
   @@index([purchased])
   @@index([productId])
   @@map("wishlist_items")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wishlist Category
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Optional category metadata for grouped wishlist items.
+/// Stores per-category description, links (e.g. PCPartPicker builds), and notes.
+model WishlistCategory {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The wishlist this category belongs to.
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  wishlistId String
+
+  /// Category name (e.g. "PC Upgrades", "Smart Home").
+  name String
+
+  /// Optional description of the category.
+  description String?
+
+  /// Optional external link (e.g. PCPartPicker build URL).
+  externalLink String?
+
+  /// Optional label for the external link.
+  externalLinkLabel String?
+
+  /// Long-form notes for the category.
+  notes String?
+
+  /// Display order for sorting categories.
+  sortOrder Int @default(0)
+
+  /// Optional emoji/icon for the category.
+  icon String?
+
+  // ── Relations ──
+
+  /// Items assigned to this category.
+  items WishlistItem[]
+
+  @@unique([wishlistId, name])
+  @@index([wishlistId])
+  @@index([wishlistId, sortOrder])
+  @@map("wishlist_categories")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
