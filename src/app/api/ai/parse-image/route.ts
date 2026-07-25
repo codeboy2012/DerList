@@ -9,8 +9,7 @@
  */
 
 import { getCurrentUser } from '@/lib/auth';
-import { parseImage } from '@/lib/ai/product-getter';
-import { isPuterAvailable } from '@/lib/ai/puter';
+import { parseImage, isProductGetterAvailable } from '@/lib/ai';
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -18,9 +17,9 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: 'Authentication required.' }, { status: 401 });
   }
 
-  if (!isPuterAvailable()) {
+  if (!(await isProductGetterAvailable(user.id))) {
     return Response.json(
-      { success: false, error: 'Image analysis AI is not configured. Contact the administrator.' },
+      { success: false, error: 'Image analysis AI is not configured. Please configure an AI provider in Settings.' },
       { status: 503 },
     );
   }
@@ -45,7 +44,7 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: 'Invalid image URL.' }, { status: 400 });
   }
 
-  const result = await parseImage(imageUrl, model);
+  const result = await parseImage(imageUrl, user.id, model);
 
   return Response.json(result);
 }

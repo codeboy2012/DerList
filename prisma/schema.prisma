@@ -63,6 +63,14 @@ model User {
   /// Soft-disable flag. Disabled users cannot authenticate.
   disabled Boolean @default(false)
 
+  /// AI Provider Configuration
+  /// User's preferred AI provider (serpapi, openai, anthropic, etc.)
+  aiProviderId String?
+
+  /// JSON configuration for the selected AI provider (API keys, models, etc.)
+  /// Stored as encrypted JSON in production
+  aiProviderConfig Json?
+
   // ── Relations ──
 
   /// Invitations this user has sent (as an admin).

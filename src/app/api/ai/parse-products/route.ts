@@ -9,8 +9,7 @@
  */
 
 import { getCurrentUser } from '@/lib/auth';
-import { parseProducts } from '@/lib/ai/product-getter';
-import { isPuterAvailable } from '@/lib/ai/puter';
+import { parseProducts, isProductGetterAvailable } from '@/lib/ai';
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -18,9 +17,9 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: 'Authentication required.' }, { status: 401 });
   }
 
-  if (!isPuterAvailable()) {
+  if (!(await isProductGetterAvailable(user.id))) {
     return Response.json(
-      { success: false, error: 'Product Getter AI is not configured. Contact the administrator.' },
+      { success: false, error: 'Product Getter AI is not configured. Please configure an AI provider in Settings.' },
       { status: 503 },
     );
   }
@@ -42,7 +41,7 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: 'Input too long (max 5000 characters).' }, { status: 400 });
   }
 
-  const result = await parseProducts(input.trim(), model);
+  const result = await parseProducts(input.trim(), user.id, model);
 
   return Response.json(result);
 }

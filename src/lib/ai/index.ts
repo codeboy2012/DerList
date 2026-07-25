@@ -1,30 +1,27 @@
 /**
  * DerList AI Module — Public API
  *
- * Exports the Shopping AI and Product Getter services for use
- * in server actions and API routes.
- * 
- * This module provides both the new multi-provider AI services
- * and backward compatibility with the old Puter.js-based services.
+ * Multi-provider AI system supporting SerpApi, OpenAI, Anthropic, and more.
+ * Provides Shopping AI, Product Getter, and provider management capabilities.
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// New Multi-Provider AI Services (Recommended)
+// AI Services
 // ─────────────────────────────────────────────────────────────────────────────
 
 export {
-  chat as shoppingChat,
-  ask as shoppingAsk,
+  chat,
+  ask,
   isShoppingAIAvailable,
   type ChatMessage,
   type ShoppingAIResponse,
 } from './services/shopping-ai';
 
 export {
-  parseProducts as parseProductsWithProvider,
-  parseImage as parseImageWithProvider,
-  searchProducts as searchProductsWithProvider,
-  normalizeProduct as normalizeProductWithProvider,
+  parseProducts,
+  parseImage,
+  searchProducts,
+  normalizeProduct,
   isProductGetterAvailable,
   type ParsedProduct,
   type ProductGetterResult,
@@ -51,10 +48,15 @@ export {
   type AIMessage,
 } from './providers';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Legacy Puter.js Services (Deprecated - use provider services above)
-// ─────────────────────────────────────────────────────────────────────────────
-
-export { chat, ask } from './shopping-ai';
-export { parseProducts, parseImage } from './product-getter';
-export { isPuterAvailable } from './puter';
+/**
+ * @deprecated Use isAnyProviderAvailable() instead
+ */
+export async function isPuterAvailable(): Promise<boolean> {
+  try {
+    // Import dynamically to avoid circular dependencies
+    const { isAnyProviderAvailable } = await import('./providers');
+    return await isAnyProviderAvailable();
+  } catch {
+    return false;
+  }
+}

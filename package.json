@@ -16,7 +16,6 @@
     "prepare": "husky || true"
   },
   "dependencies": {
-    "@heyputer/puter.js": "^2.5.4",
     "@prisma/adapter-pg": "^7.9.0",
     "@prisma/client": "^7.9.0",
     "arctic": "^3.7.0",

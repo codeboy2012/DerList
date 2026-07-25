@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { prisma } from '@/lib/prisma';
+import { testProviderConfig } from '@/lib/ai/providers';
 import { z } from 'zod';
 
 import type { ActionState } from '../../(auth)/actions';
@@ -134,4 +135,53 @@ export async function disconnectOAuthAction(formData: FormData): Promise<void> {
 
   await prisma.oAuthAccount.delete({ where: { id: accountId } });
   revalidatePath('/settings/account');
+}
+// ─────────────────────────────────────────────────────────────────────────────
+// AI Provider Settings
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Update user's AI provider configuration
+ */
+export async function updateUserAIProvider(
+  userId: string,
+  providerId: string,
+  config: Record<string, unknown>,
+): Promise<void> {
+  const user = await requireUser();
+  
+  // Verify the user is updating their own settings
+  if (user.id !== userId) {
+    throw new Error('Unauthorized');
+  }
+
+  // Update the user's AI provider settings
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      aiProviderId: providerId,
+      aiProviderConfig: config as any, // JSON field accepts any serializable value
+    },
+  });
+
+  // Revalidate the settings page
+  revalidatePath('/settings/ai');
+}
+
+/**
+ * Test an AI provider configuration
+ */
+export async function testAIProviderConfig(
+  providerId: string,
+  config: Record<string, unknown>,
+): Promise<{ available: boolean; error?: string }> {
+  // This doesn't require authentication since it's just testing configuration
+  try {
+    return await testProviderConfig(providerId, config);
+  } catch (error) {
+    return {
+      available: false,
+      error: error instanceof Error ? error.message : 'Configuration test failed',
+    };
+  }
 }

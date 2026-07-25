@@ -4,11 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { cn } from '@/utils/cn';
-import { Key, LinkIcon, User } from 'lucide-react';
+import { Key, LinkIcon, User, Bot } from 'lucide-react';
 
 const items = [
   { href: '/settings/profile', label: 'Profile', icon: User },
   { href: '/settings/account', label: 'Account', icon: Key },
+  { href: '/settings/ai', label: 'AI Provider', icon: Bot },
 ] as const;
 
 export function SettingsNav() {
