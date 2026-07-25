@@ -70,8 +70,20 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
     notFound();
   }
 
+  // ── Serialize items for Client Components ──
+  // Prisma Decimal and Date objects cannot cross the Server → Client boundary.
+  // Convert Decimals to string|null and Dates to ISO strings at this boundary.
+  const serializedItems = wishlist.items.map((item) => ({
+    ...item,
+    currentPrice: item.currentPrice != null ? item.currentPrice.toString() : null,
+    originalPrice: item.originalPrice != null ? item.originalPrice.toString() : null,
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString(),
+    purchasedAt: item.purchasedAt?.toISOString() ?? null,
+  }));
+
   // Sort items
-  const sortedItems = [...wishlist.items];
+  const sortedItems = [...serializedItems];
   switch (sort) {
     case 'price-asc':
       sortedItems.sort((a, b) => (Number(a.currentPrice) || 0) - (Number(b.currentPrice) || 0));
@@ -108,7 +120,7 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
     : null;
 
   // Determine if any items have categories (for showing category view toggle)
-  const hasCategories = wishlist.items.some((i) => i.category);
+  const hasCategories = serializedItems.some((i) => i.category);
 
   return (
     <div className="flex flex-col gap-6">
@@ -141,7 +153,7 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
           <VisibilityBadge visibility={wishlist.visibility} />
           {wishlist.archived && <Badge variant="warning">Archived</Badge>}
           <span className="text-xs text-muted-foreground">
-            {wishlist.items.length} items · Updated {formatDate(wishlist.updatedAt)}
+            {serializedItems.length} items · Updated {formatDate(wishlist.updatedAt)}
           </span>
           <div className="ml-auto flex flex-wrap gap-2">
             <Button asChild size="sm" variant="secondary">
@@ -193,12 +205,12 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
       )}
 
       {/* ─── Stats summary ─── */}
-      {wishlist.items.length > 0 && (
-        <WishlistStats items={wishlist.items} />
+      {serializedItems.length > 0 && (
+        <WishlistStats items={serializedItems} />
       )}
 
       {/* ─── Sort/Filter/View controls ─── */}
-      {wishlist.items.length > 0 && (
+      {serializedItems.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
           {/* Sort */}
           <div className="flex items-center gap-2">
@@ -255,7 +267,7 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
       )}
 
       {/* ─── Items ─── */}
-      {wishlist.items.length === 0 ? (
+      {serializedItems.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
             <Package className="h-10 w-10 text-muted-foreground/40" />
@@ -360,7 +372,7 @@ function VisibilityBadge({ visibility }: { visibility: string }) {
   return <Badge variant={variant} className="text-[10px]">{label}</Badge>;
 }
 
-function WishlistStats({ items }: { items: Array<{ currentPrice: unknown; currency: string; purchased: boolean; retailer: string | null }> }) {
+function WishlistStats({ items }: { items: Array<{ currentPrice: string | null; currency: string; purchased: boolean; retailer: string | null }> }) {
   const totalItems = items.length;
   const purchasedCount = items.filter((i) => i.purchased).length;
   const remaining = totalItems - purchasedCount;

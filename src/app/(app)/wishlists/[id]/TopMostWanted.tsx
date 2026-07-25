@@ -1,11 +1,11 @@
-import { Star, Trophy } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 import { WishlistPriorityDisplay } from '@/components/ui/WishlistPriority';
 
 interface TopItem {
   id: string;
   title: string;
-  currentPrice: unknown;
-  originalPrice: unknown;
+  currentPrice: string | null;
+  originalPrice: string | null;
   currency: string;
   starPriority: number;
   dealInfo: string | null;

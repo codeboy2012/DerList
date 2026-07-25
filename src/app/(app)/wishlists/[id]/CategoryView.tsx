@@ -9,8 +9,8 @@ interface CategoryItem {
   image: string | null;
   brand: string | null;
   retailer: string | null;
-  currentPrice: unknown;
-  originalPrice: unknown;
+  currentPrice: string | null;
+  originalPrice: string | null;
   dealInfo: string | null;
   currency: string;
   priority: string;
