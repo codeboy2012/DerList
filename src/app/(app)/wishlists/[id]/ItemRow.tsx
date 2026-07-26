@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import {
   Check,
@@ -67,6 +68,7 @@ function getRetailerStyle(retailer: string | null): string {
 export function ItemRow({ item, wishlistId }: ItemRowProps) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
+  const router = useRouter();
 
   const price = item.currentPrice != null ? Number(item.currentPrice) : null;
 
@@ -250,8 +252,14 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
         onClose={() => setEditing(false)}
         item={item}
         wishlistId={wishlistId}
-        onSave={() => setEditing(false)}
-        onDelete={() => setEditing(false)}
+        onSave={() => {
+          setEditing(false);
+          router.refresh();
+        }}
+        onDelete={() => {
+          setEditing(false);
+          router.refresh();
+        }}
       />
     </div>
   );

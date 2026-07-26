@@ -249,7 +249,7 @@ function mergeMetadata(base: ProductEditorData, meta: Record<string, unknown>): 
     needByDate: (meta.needByDate as string) || base.needByDate,
     folder: (meta.folder as string) || base.folder,
     subFolder: (meta.subFolder as string) || base.subFolder,
-    wishlistCategory: (meta.wishlistCategory as string) || base.wishlistCategory,
+    wishlistCategory: base.wishlistCategory, // Always from native DB column, not metadata
     wishlistNotes: (meta.wishlistNotes as string) || base.wishlistNotes,
     customLabels: (meta.customLabels as string) || base.customLabels,
     aiConfidence: (meta.aiConfidence as string) || base.aiConfidence,
@@ -414,7 +414,6 @@ export function ProductEditorDrawer({
         needByDate: data.needByDate,
         folder: data.folder,
         subFolder: data.subFolder,
-        wishlistCategory: data.wishlistCategory,
         wishlistNotes: data.wishlistNotes,
         customLabels: data.customLabels,
         aiConfidence: data.aiConfidence,
