@@ -5,9 +5,9 @@
  * Handles both existing products (by productId) and new manual entries.
  */
 
+import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { revalidatePath } from 'next/cache';
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -15,11 +15,23 @@ export async function POST(request: Request) {
     return Response.json({ success: false, error: 'Authentication required.' }, { status: 401 });
   }
 
+  // Parse body — supports both JSON and FormData
   let body: Record<string, unknown>;
+  const contentType = request.headers.get('content-type') || '';
+
   try {
-    body = await request.json();
+    if (contentType.includes('application/json')) {
+      body = await request.json();
+    } else {
+      // FormData (from ProductEditor and UniversalInput batch add)
+      const formData = await request.formData();
+      body = {};
+      for (const [key, value] of formData.entries()) {
+        body[key] = value;
+      }
+    }
   } catch {
-    return Response.json({ success: false, error: 'Invalid JSON.' }, { status: 400 });
+    return Response.json({ success: false, error: 'Invalid request body.' }, { status: 400 });
   }
 
   const wishlistId = body.wishlistId as string;
@@ -52,7 +64,10 @@ export async function POST(request: Request) {
       select: { id: true, title: true },
     });
     if (existing) {
-      return Response.json({ success: false, error: `"${existing.title}" is already in this wishlist.` }, { status: 409 });
+      return Response.json(
+        { success: false, error: `"${existing.title}" is already in this wishlist.` },
+        { status: 409 }
+      );
     }
   }
 
