@@ -1,16 +1,19 @@
 'use client';
 
-import { cn } from '@/utils/cn';
-import { X } from 'lucide-react';
 import {
   forwardRef,
-  type MouseEvent,
-  type ReactNode,
+  useEffect,
+  useId,
+  useRef,
+  useState,
   type ButtonHTMLAttributes,
   type HTMLAttributes,
+  type MouseEvent,
+  type ReactNode,
 } from 'react';
+import { X } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { useEffect, useId, useRef, useState } from 'react';
+import { cn } from '@/utils/cn';
 
 export interface ModalProps {
   open: boolean;
@@ -54,6 +57,13 @@ export function Modal({
   const titleId = useId();
   const descId = useId();
   const previouslyFocused = useRef<HTMLElement | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // Only render portal on client
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Sync open state with the native <dialog> element
   useEffect(() => {
@@ -100,6 +110,8 @@ export function Modal({
     }
   };
 
+  if (!mounted) return null;
+
   return createPortal(
     <dialog
       ref={dialogRef}
@@ -109,41 +121,39 @@ export function Modal({
       aria-describedby={description ? descId : undefined}
       className={cn(
         'm-0 max-h-[90vh] w-[92vw] p-0 backdrop:bg-black/60 backdrop:backdrop-blur-sm',
-        'rounded-xl border border-border bg-card text-card-foreground shadow-2xl',
-        'fixed inset-0 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
+        'border-border bg-card text-card-foreground rounded-xl border shadow-2xl',
+        'fixed inset-0 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2',
         sizeMap[size],
-        'open:animate-in open:fade-in-0 open:zoom-in-95',
+        'open:animate-in open:fade-in-0 open:zoom-in-95'
       )}
     >
       <div className="flex max-h-[90vh] flex-col">
         {(title || !persistent) && (
-          <header className="flex items-start justify-between gap-4 border-b border-border p-5">
+          <header className="border-border flex items-start justify-between gap-4 border-b p-5">
             <div className="space-y-1">
               {title && (
-                <h2 id={titleId} className="text-lg font-semibold leading-tight">
+                <h2 id={titleId} className="text-lg leading-tight font-semibold">
                   {title}
                 </h2>
               )}
               {description && (
-                <p id={descId} className="text-sm text-muted-foreground">
+                <p id={descId} className="text-muted-foreground text-sm">
                   {description}
                 </p>
               )}
             </div>
-            {!persistent && (
-              <ModalClose onClose={onClose} />
-            )}
+            {!persistent && <ModalClose onClose={onClose} />}
           </header>
         )}
         <div className="flex-1 overflow-y-auto p-5">{children}</div>
         {footer && (
-          <footer className="flex items-center justify-end gap-2 border-t border-border p-5">
+          <footer className="border-border flex items-center justify-end gap-2 border-t p-5">
             {footer}
           </footer>
         )}
       </div>
     </dialog>,
-    document.body,
+    document.body
   );
 }
 
@@ -157,10 +167,10 @@ const ModalClose = forwardRef<
     aria-label="Close dialog"
     onClick={onClose}
     className={cn(
-      'inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground',
-      'transition-colors hover:bg-surface hover:text-foreground',
-      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-      className,
+      'text-muted-foreground inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md',
+      'hover:bg-surface hover:text-foreground transition-colors',
+      'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
+      className
     )}
     {...props}
   >
@@ -170,7 +180,7 @@ const ModalClose = forwardRef<
 ModalClose.displayName = 'ModalClose';
 
 // Dialog is the same as Modal but always non-dismissable (e.g. forced actions)
-export interface DialogProps extends Omit<ModalProps, 'persistent'> {}
+export type DialogProps = Omit<ModalProps, 'persistent'>;
 
 export function Dialog(props: DialogProps) {
   return <Modal {...props} persistent />;
