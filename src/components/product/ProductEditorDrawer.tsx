@@ -341,6 +341,11 @@ export function ProductEditorDrawer({
         const merged = mergeMetadata(base, res.item.metadata || {});
         merged.createdAt = res.item.createdAt || '';
         merged.updatedAt = res.item.updatedAt || '';
+        // Native DB column is source of truth for category
+        if (res.item.category) {
+          merged.category = res.item.category;
+          merged.wishlistCategory = res.item.category;
+        }
         setData(merged);
       }
       setIsLoading(false);
@@ -539,7 +544,10 @@ export function ProductEditorDrawer({
         // Fill empty fields only — never overwrite user data
         if (e.brand && !data.brand) updateField('brand', e.brand);
         if (e.model && !data.model) updateField('model', e.model);
-        if (e.category && !data.category) updateField('category', e.category);
+        if (e.category && !data.category) {
+          updateField('category', e.category);
+          updateField('wishlistCategory', e.category);
+        }
         if (e.subCategory && !data.subCategory) updateField('subCategory', e.subCategory);
         if (e.description && !data.description) updateField('description', e.description);
         if (e.sku && !data.sku) updateField('sku', e.sku);
@@ -984,7 +992,10 @@ function ProductInfoSection({
         <FieldLabel label="Category" />
         <Input
           value={data.category}
-          onChange={(e) => updateField('category', e.target.value)}
+          onChange={(e) => {
+            updateField('category', e.target.value);
+            updateField('wishlistCategory', e.target.value);
+          }}
           placeholder="e.g. Graphics Cards"
         />
       </div>
@@ -1701,7 +1712,10 @@ function WishlistSection({
         <FieldLabel label="Category" />
         <Input
           value={data.wishlistCategory}
-          onChange={(e) => updateField('wishlistCategory', e.target.value)}
+          onChange={(e) => {
+            updateField('wishlistCategory', e.target.value);
+            updateField('category', e.target.value);
+          }}
           placeholder="e.g. GPU"
         />
       </div>
