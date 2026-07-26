@@ -1030,6 +1030,10 @@ model Wishlist {
   /// Display order for manual sorting.
   sortOrder Int @default(0)
 
+  /// User-curated Top Picks (JSON array of {position, itemId}).
+  /// Falls back to auto-generated most-wanted if empty/null.
+  topPicks String?
+
   // ── Relations ──
 
   /// Items in this wishlist.

@@ -30,6 +30,7 @@ import { DeleteWishlistButton } from './DeleteWishlistButton';
 import { ItemRow } from './ItemRow';
 import { RatingExplainer } from './RatingExplainer';
 import { TopMostWanted } from './TopMostWanted';
+import { TopPicksManager } from './TopPicksManager';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -123,6 +124,14 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
   // Determine if any items have categories (for showing category view toggle)
   const hasCategories = serializedItems.some((i) => i.category);
 
+  // Parse curated Top Picks
+  let topPicks: { position: number; itemId: string }[] = [];
+  try {
+    if (wishlist.topPicks) topPicks = JSON.parse(wishlist.topPicks);
+  } catch {
+    /* fallback to auto */
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {/* ─── Header ─── */}
@@ -162,6 +171,20 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
           </span>
           <div className="ml-auto flex flex-wrap gap-2">
             <AIOrganizer wishlistId={id} itemCount={serializedItems.length} />
+            <TopPicksManager
+              wishlistId={id}
+              items={serializedItems
+                .filter((i) => !i.purchased)
+                .map((i) => ({
+                  id: i.id,
+                  title: i.title,
+                  image: i.image,
+                  currentPrice: i.currentPrice,
+                  retailer: i.retailer,
+                  brand: i.brand,
+                }))}
+              initialPicks={topPicks}
+            />
             <Button asChild size="sm" variant="secondary">
               <Link href={`/wishlists/${id}/edit`}>
                 <Pencil className="h-3.5 w-3.5" aria-hidden />
@@ -214,7 +237,7 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
       <RatingExplainer />
 
       {/* ─── Top 3 Most Wanted ─── */}
-      {unpurchased.length >= 3 && <TopMostWanted items={unpurchased} />}
+      {unpurchased.length >= 3 && <TopMostWanted items={unpurchased} topPicks={topPicks} />}
 
       {/* ─── Stats summary ─── */}
       {serializedItems.length > 0 && <WishlistStats items={serializedItems} />}

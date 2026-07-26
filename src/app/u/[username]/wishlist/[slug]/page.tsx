@@ -93,6 +93,14 @@ export default async function PublicWishlistPage({ params, searchParams }: PageP
     updatedAt: item.updatedAt.toISOString(),
   }));
 
+  // Parse curated Top Picks
+  let topPicks: { position: number; itemId: string }[] = [];
+  try {
+    if (wishlist.topPicks) topPicks = JSON.parse(wishlist.topPicks);
+  } catch {
+    /* fallback to auto */
+  }
+
   // Sort
   const sorted = [...items];
   switch (sort) {
@@ -216,7 +224,7 @@ export default async function PublicWishlistPage({ params, searchParams }: PageP
           </div>
 
           {/* ─── Top 3 Most Wanted ─── */}
-          {unpurchased.length >= 3 && <TopMostWanted items={unpurchased} />}
+          {unpurchased.length >= 3 && <TopMostWanted items={unpurchased} topPicks={topPicks} />}
 
           {/* ─── Controls: Sort, Filter, View ─── */}
           {items.length > 0 && (
@@ -644,14 +652,30 @@ function PublicCategoryView({
 // Top 3 Most Wanted (read-only version)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function TopMostWanted({ items }: { items: PublicItem[] }) {
-  const top3 = [...items]
-    .sort((a, b) => {
-      if ((b.starPriority ?? 1) !== (a.starPriority ?? 1))
-        return (b.starPriority ?? 1) - (a.starPriority ?? 1);
-      return (Number(b.currentPrice) || 0) - (Number(a.currentPrice) || 0);
-    })
-    .slice(0, 3);
+function TopMostWanted({
+  items,
+  topPicks,
+}: {
+  items: PublicItem[];
+  topPicks?: { position: number; itemId: string }[];
+}) {
+  let top3: PublicItem[];
+
+  if (topPicks && topPicks.length > 0) {
+    const itemMap = new Map(items.map((i) => [i.id, i]));
+    top3 = topPicks
+      .sort((a, b) => a.position - b.position)
+      .map((p) => itemMap.get(p.itemId))
+      .filter((item): item is PublicItem => item !== undefined);
+  } else {
+    top3 = [...items]
+      .sort((a, b) => {
+        if ((b.starPriority ?? 1) !== (a.starPriority ?? 1))
+          return (b.starPriority ?? 1) - (a.starPriority ?? 1);
+        return (Number(b.currentPrice) || 0) - (Number(a.currentPrice) || 0);
+      })
+      .slice(0, 3);
+  }
 
   if (top3.length < 3) return null;
 
