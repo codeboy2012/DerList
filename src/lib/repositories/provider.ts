@@ -26,10 +26,23 @@ function getEncryptionKey(): Buffer {
   if (!key) {
     throw new Error(
       'PROVIDER_ENCRYPTION_KEY environment variable is required. ' +
-        "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+        'Generate one with: npm run generate-encryption-key'
     );
   }
-  return Buffer.from(key, 'hex');
+
+  // Support both base64 (from generate-encryption-key script) and hex formats.
+  // Base64 keys contain characters outside hex range (A-Z, +, /, =).
+  const isHex = /^[0-9a-fA-F]+$/.test(key);
+  const buf = isHex ? Buffer.from(key, 'hex') : Buffer.from(key, 'base64');
+
+  if (buf.length !== 32) {
+    throw new Error(
+      `PROVIDER_ENCRYPTION_KEY must be 32 bytes (256-bit). Got ${buf.length} bytes. ` +
+        'Generate a valid key with: npm run generate-encryption-key'
+    );
+  }
+
+  return buf;
 }
 
 function encrypt(plaintext: string): { encrypted: string; iv: string; authTag: string } {

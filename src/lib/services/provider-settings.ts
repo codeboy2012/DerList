@@ -226,9 +226,10 @@ export class ProviderSettingsService {
       const latency = Date.now() - start;
       await ProviderRepository.updateHealth(id, true);
 
-      return { success: true, message: 'Provider is working correctly.', latency };
+      return { success: true, message: 'Connected', latency };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Test failed.';
+      const rawMessage = error instanceof Error ? error.message : 'Test failed.';
+      const message = classifyProviderError(rawMessage);
       await ProviderRepository.updateHealth(id, false, message);
 
       return { success: false, message };
@@ -261,4 +262,67 @@ export class ProviderSettingsService {
       })),
     };
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Error Classification
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Translate raw provider error messages into user-friendly status messages.
+ * Based on HTTP status codes and common error patterns.
+ */
+function classifyProviderError(rawMessage: string): string {
+  const lower = rawMessage.toLowerCase();
+
+  // Authentication errors (401, 403)
+  if (
+    lower.includes('(401)') ||
+    lower.includes('(403)') ||
+    lower.includes('unauthorized') ||
+    lower.includes('forbidden') ||
+    lower.includes('invalid api key') ||
+    lower.includes('invalid_api_key') ||
+    lower.includes('incorrect api key') ||
+    lower.includes('authentication')
+  ) {
+    return 'Invalid API key';
+  }
+
+  // Rate limiting (429)
+  if (
+    lower.includes('(429)') ||
+    lower.includes('rate limit') ||
+    lower.includes('rate_limit') ||
+    lower.includes('too many requests')
+  ) {
+    return 'Rate limited';
+  }
+
+  // Network/connection errors
+  if (
+    lower.includes('fetch failed') ||
+    lower.includes('econnrefused') ||
+    lower.includes('enotfound') ||
+    lower.includes('etimedout') ||
+    lower.includes('network') ||
+    lower.includes('dns') ||
+    lower.includes('unable to connect') ||
+    lower.includes('socket')
+  ) {
+    return 'Unable to contact provider';
+  }
+
+  // Key length error (from crypto, should no longer occur but handle gracefully)
+  if (lower.includes('invalid key length') || lower.includes('key length')) {
+    return 'Configuration error — please re-save your API key';
+  }
+
+  // Generic server errors
+  if (lower.includes('(500)') || lower.includes('(502)') || lower.includes('(503)')) {
+    return 'Provider service unavailable';
+  }
+
+  // Fallback: return the raw message truncated
+  return rawMessage.length > 100 ? rawMessage.slice(0, 100) + '...' : rawMessage;
 }
