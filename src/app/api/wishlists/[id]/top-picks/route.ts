@@ -10,7 +10,6 @@
 
 import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
-import type { Prisma } from '@prisma/client';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
@@ -128,11 +127,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
   }
 
-  // ─── Save (native JSON — no stringify needed) ───
+  // ─── Save (native JSONB) ───
+  // Map to plain objects so TypeScript recognizes as InputJsonValue
+  const jsonPicks = picks.map((p) => ({ position: p.position, itemId: p.itemId }));
 
   const updated = await prisma.wishlist.update({
     where: { id },
-    data: { topPicks: picks as unknown as Prisma.InputJsonValue },
+    data: { topPicks: jsonPicks },
     select: { id: true, topPicks: true },
   });
 
