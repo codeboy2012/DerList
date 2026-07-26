@@ -1,226 +1,546 @@
-# DerList
+# 🛒 DerList
 
-### The Open-Source Universal Wishlist Platform
+## The Modern Open-Source Universal Wishlist, Shopping Planner & PC Builder
 
-DerList is a modern, fast, and free application for creating wishlists, tracking prices, organizing products, and planning future purchases—all in one place.
+*A beautiful, intelligent, and completely free platform for organizing everything you want to buy—whether it's your next gaming PC, dream setup, gifts, home projects, or everyday shopping.*
 
-Built with modern web technologies and designed with a clean, responsive interface, DerList aims to become the best open-source wishlist platform available.
+<p align="center">
 
----
+**Free Forever • Open Source • Self-Hostable • Community Driven**
 
-## Why DerList?
-
-Most wishlist apps are limited.
-
-Some lock features behind subscriptions. Others only support a handful of retailers, display intrusive ads, or don't let you control your own data.
-
-DerList is different.
-
-It is built around four simple principles:
-
-- Free forever
-- Open source
-- Beautiful by default
-- Built for everyone
-
-Whether you're planning a new PC, organizing gift ideas, tracking deals, or simply saving products for later, DerList gives you one place to manage everything.
+</p>
 
 ---
 
-## Features
+## 🌐 Website
 
-### Universal Wishlists
+**Visit DerList**
 
-Create unlimited wishlists for anything.
-
-- Unlimited wishlists
-- Unlimited products
-- Categories and folders
-- Priority ratings
-- Rich product cards
-- Product notes
-- Custom tags
-- Public and private lists
-- Shared wishlists
-- Archive support
+https://derlist.dpdns.org
 
 ---
 
-### Smart Product Import
+## 📖 Documentation
 
-Paste a product link and let DerList handle the rest.
+Everything you need to know about installing, configuring, developing, and using DerList.
+
+https://docs.derlist.dpdns.org
+
+---
+
+## 🚀 Installation Guide
+
+Complete setup instructions—including Docker deployment, environment configuration, database setup, and troubleshooting—are available in the Getting Started guide.
+
+👉 **Getting Started**
+
+https://docs.derlist.dpdns.org/guides/getting-started.html
+
+> [!IMPORTANT]
+> ### Current Platform Support
+>
+> At this time, **DerList officially supports Linux only** for self-hosting.
+>
+> Support for **Windows** and **macOS** is planned for a future release.
+>
+> When those platforms are ready, the documentation will include:
+>
+> - Native installation guides
+> - Docker deployment
+> - Platform-specific configuration
+> - Troubleshooting guides
+> - Automatic installer support (planned)
+
+---
+
+## 📦 GitHub Repository
+
+View the source code, report issues, contribute features, or submit pull requests.
+
+https://github.com/codeboy2012/DerList
+
+---
+
+# 🚀 What is DerList?
+
+DerList is a next-generation wishlist platform designed to replace dozens of separate shopping applications with one modern, fast, and intelligent experience.
+
+Instead of juggling:
+
+* Wishlists
+* Shopping lists
+* Price trackers
+* Browser bookmarks
+* Notes apps
+* PC builders
+* Gift lists
+* Product comparison sites
+
+...DerList brings everything together into a single application.
+
+Whether you're saving products for later, planning a gaming setup, tracking price drops, organizing Christmas gifts, or building your next PC, DerList keeps everything organized in one place.
+
+---
+
+# ❤️ Why DerList Exists
+
+Most wishlist applications suffer from the same problems.
+
+They lock features behind expensive subscriptions.
+
+They display intrusive advertisements.
+
+They collect unnecessary user data.
+
+They only support a few retailers.
+
+They're slow.
+
+They're outdated.
+
+They're closed source.
+
+They're impossible to customize.
+
+DerList was created to solve those problems.
+
+Our philosophy is simple:
+
+> **Great software should be free, beautiful, privacy-respecting, and available to everyone.**
+
+No subscriptions.
+
+No advertisements.
+
+No feature paywalls.
+
+No vendor lock-in.
+
+Just an application built for users—not investors.
+
+---
+
+# ✨ Core Features
+
+## 🛍 Universal Wishlists
+
+Create unlimited wishlists for literally anything.
+
+Perfect for:
+
+* Gaming setups
+* Dream PCs
+* Birthday lists
+* Christmas gifts
+* College supplies
+* Home renovations
+* Smart home devices
+* Photography gear
+* Cars
+* Furniture
+* Electronics
+* Collectibles
+* Future purchases
+
+Features include:
+
+* Unlimited wishlists
+* Unlimited folders
+* Unlimited products
+* Categories
+* Smart organization
+* Rich product cards
+* Product images
+* Notes
+* Tags
+* Favorites
+* Archive support
+* Public lists
+* Private lists
+* Shared lists
+
+---
+
+## 🤖 AI-Powered Organization
+
+DerList includes intelligent AI tools that help keep your wishlist organized automatically.
+
+Current capabilities include:
+
+* AI Product Autofill
+* AI Product Identification
+* Automatic Category Detection
+* Brand Recognition
+* Product Cleanup
+* Duplicate Detection
+* Metadata Enrichment
+
+Future AI features include:
+
+* Shopping recommendations
+* Price prediction
+* Automatic deal detection
+* Alternative product suggestions
+* Missing accessory detection
+* Complete PC recommendations
+
+---
+
+## 🔗 Smart Product Import
+
+Simply paste a product URL.
+
+DerList automatically imports information from supported retailers.
 
 Imported information includes:
 
-- Product title
-- Images
-- Brand
-- Retailer
-- Price
-- Description
-- Availability
-- Product metadata
+* Product title
+* Images
+* Price
+* Currency
+* Brand
+* Retailer
+* Description
+* Categories
+* Product specifications
+* Availability
+* Metadata
+* Product identifiers
+* Variants
 
-No manual setup required.
+No manual setup.
 
----
+Paste.
 
-### Price Tracking
+Save.
 
-Track prices across supported retailers.
-
-Current features include:
-
-- Current pricing
-- Discount indicators
-- Price comparisons
-- Multi-retailer support
-
-Planned features:
-
-- Price history
-- Price alerts
-- Restock notifications
+Done.
 
 ---
 
-### Shopping Assistant
+## 📈 Live Price Tracking
 
-The foundation for DerList's upcoming intelligent shopping tools.
+Never miss another deal.
 
-Future capabilities include:
+DerList tracks product prices across supported stores.
 
-- AI product organization
-- Duplicate detection
-- Automatic categorization
-- Cleaner product information
-- Shopping recommendations
+Features:
 
----
+* Current price
+* Sale price
+* Price comparison
+* Multiple retailers
+* Lowest available price
 
-### Free PC Builder *(In Development)*
+Upcoming:
 
-DerList will include a completely free PC builder featuring:
-
-- Compatibility checking
-- Live component pricing
-- Saved builds
-- Build sharing
-- Upgrade planning
+* Historical pricing
+* Interactive price charts
+* Price alerts
+* Restock notifications
+* Price prediction
 
 ---
 
-### User Accounts
+## 💻 Free PC Builder
 
-Secure authentication with support for:
+One of DerList's biggest upcoming features.
 
-- Google
-- GitHub
+Unlike many existing PC builders, DerList's PC Builder will be completely free.
+
+Planned features include:
+
+* Compatibility checking
+* Live component pricing
+* Estimated power consumption
+* Performance estimates
+* Bottleneck analysis
+* Upgrade recommendations
+* Saved builds
+* Public builds
+* Build sharing
+* AI-assisted recommendations
+
+---
+
+## 👥 User Accounts
+
+Secure authentication with modern OAuth providers.
+
+Supported today:
+
+* Google
+* GitHub
+
+Future providers:
+
+* Discord
+* Microsoft
+* Apple
+* Passkeys
+
+Account features include:
+
+* Secure login
+* Multiple devices
+* User profiles
+* Session management
+* Account settings
+
+---
+
+## 📤 Sharing
+
+Share almost everything.
 
 Including:
 
-- Secure login
-- User profiles
-- Device synchronization
-- Session management
+* Wishlists
+* Shopping lists
+* PC builds
+* Individual products
+* Public profiles
+
+Generate shareable links in seconds.
 
 ---
 
-## Administration
+## ⚡ Performance First
 
-DerList includes an integrated administration panel for managing:
+Performance is a core part of DerList.
 
-- Users
-- API Providers
-- Product Database
-- Wishlist Moderation
-- Invitations
-- Audit Logs
+Goals include:
 
----
-
-## Design
-
-DerList follows a modern design philosophy focused on clarity and speed.
-
-Highlights include:
-
-- Responsive layouts
-- Dark interface
-- Fast navigation
-- Consistent spacing
-- Accessible components
-- Mobile-friendly design
+* Lightning-fast navigation
+* Excellent Lighthouse scores
+* Excellent Core Web Vitals
+* Fast API responses
+* Optimized images
+* Lazy loading
+* Minimal JavaScript
+* Responsive UI
+* Smooth animations
 
 ---
 
-## Technology
+# 🎨 Design Philosophy
+
+DerList follows a modern design language inspired by clean, minimal interfaces.
+
+The interface focuses on:
+
+* Beautiful dark mode
+* Rounded components
+* Smooth animations
+* Consistent spacing
+* Accessibility
+* Mobile-first layouts
+* Fast interactions
+* Minimal distractions
+
+The goal is to create software that feels polished while staying incredibly fast.
+
+---
+
+# 🔒 Privacy
+
+Your wishlist belongs to you.
+
+DerList respects your privacy.
+
+We believe users should own their own data.
+
+That's why DerList is:
+
+* Open source
+* Self-hostable
+* Privacy focused
+* Transparent
+
+No hidden tracking.
+
+No selling your information.
+
+No unnecessary analytics.
+
+---
+
+# 🌐 Self Hosting
+
+DerList is designed to be easy to deploy while remaining powerful enough for advanced users.
+
+Whether you're hosting it for yourself, your family, a school, or an organization, DerList gives you complete control over your data.
+
+### 📚 Full Documentation
+
+Complete installation and deployment guides are available at:
+
+## 👉 [https://docs.derlist.dpdns.org](https://docs.derlist.dpdns.org)
+
+### Quick Start Guide
+
+If you're installing DerList for the first time, start here:
+
+## 👉 [https://docs.derlist.dpdns.org/guides/getting-started.html](https://docs.derlist.dpdns.org/guides/getting-started.html)
+
+The documentation includes:
+
+* Installation Guide
+* Quick Start
+* Docker Deployment
+* Environment Variables
+* Database Setup
+* Authentication
+* Reverse Proxy Configuration
+* Cloudflare Setup
+* Updating DerList
+* Backups
+* Production Deployments
+* Security Recommendations
+* Troubleshooting
+* Frequently Asked Questions
+* API Documentation
+* Development Guides
+
+---
+
+# 🛠 Technology Stack
+
+DerList is built using modern technologies.
 
 Current stack:
 
-- TypeScript
-- Next.js
-- React
-- Prisma
-- PostgreSQL
-- OAuth Authentication
-- OpenRouter
-- Cloudflare
+* TypeScript
+* Next.js
+* React
+* Prisma ORM
+* PostgreSQL
+* Tailwind CSS
+* OAuth Authentication
+* OpenRouter AI
+* Cloudflare
+* GitHub Actions
+
+Additional technologies will continue to be added as the project evolves.
 
 ---
 
-## Self Hosting
+# 📱 Cross Platform
 
-DerList is open source and can be self-hosted.
+DerList works everywhere.
 
-The goal is to make deployment as simple as possible while allowing users complete ownership of their data.
+Supported today:
 
-Docker support and deployment documentation are planned.
+* Windows
+* macOS
+* Linux
+* ChromeOS
+* Android
+* iPhone
+* iPad
+* Android Tablets
 
----
+Future plans:
 
-## Roadmap
-
-### Near Term
-
-- AI Organizer
-- Live Price Alerts
-- Price History
-- Public Wishlists
-- Additional Retailers
-
-### Future
-
-- Free PC Builder
-- Mobile Applications
-- Browser Extension
-- Offline Support
-- AI Shopping Assistant
+* Native Windows App
+* Native macOS App
+* Native Linux App
+* Android App
+* iOS App
+* Progressive Web App Improvements
+* Offline Mode
 
 ---
 
-## Open Source
+# 📅 Roadmap
 
-DerList is developed in the open under the MIT License.
+## Current Focus
 
-Contributions of all sizes are welcome.
+* AI Improvements
+* Better Product Importing
+* Additional Retailers
+* Wishlist Improvements
+* Documentation
 
-Whether you're fixing bugs, improving documentation, designing interfaces, or suggesting ideas, every contribution helps improve the project.
+## Coming Soon
+
+* Price History
+* Price Alerts
+* Browser Extension
+* Public User Profiles
+* More OAuth Providers
+
+## Future
+
+* Complete PC Builder
+* Mobile Applications
+* AI Shopping Assistant
+* Community Marketplace
+* Build Sharing
+* Automatic Deal Detection
+* Universal Product Search
 
 ---
 
-## Project Status
+# ❤️ Contributing
 
-Current Version:
+DerList is community-driven.
 
-**v0.10.0 — First Public Alpha**
+Whether you:
 
-DerList is under active development, and new features are being added regularly.
+* Report bugs
+* Improve documentation
+* Submit pull requests
+* Suggest features
+* Improve translations
+* Design interfaces
+* Write tests
 
-The current focus is building a stable, polished wishlist experience before expanding into AI-powered organization, PC building, and advanced shopping tools.
+...your contribution helps make DerList better for everyone.
+
+Please read the documentation before contributing:
+
+📖 [https://docs.derlist.dpdns.org](https://docs.derlist.dpdns.org)
 
 ---
 
-## License
+# 📜 License
 
-Licensed under the MIT License.
+DerList is licensed under the **MIT License**.
+
+You are free to:
+
+* Use
+* Modify
+* Fork
+* Self-host
+* Learn from
+* Improve
+* Redistribute
+
+Forever.
+
+---
+
+# ⭐ Support the Project
+
+If you enjoy DerList, consider:
+
+* ⭐ Starring the repository
+* 🐛 Reporting bugs
+* 💡 Suggesting features
+* 🤝 Contributing code
+* 📖 Improving documentation
+* ❤️ Sharing the project with others
+
+Every contribution helps make DerList better.
+
+---
+
+<div align="center">
+
+## Built by **CodeBoy2012** and the open-source community.
+
+### **Powered by humans. Accelerated by AI. Built for everyone.**
+
+</div>
