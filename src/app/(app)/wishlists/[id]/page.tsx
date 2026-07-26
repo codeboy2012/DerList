@@ -5,7 +5,6 @@ import {
   Archive,
   ArrowLeft,
   CheckCircle2,
-  Copy,
   ExternalLink,
   Info,
   LayoutGrid,
@@ -21,10 +20,11 @@ import { siteConfig } from '@/lib/site-config';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
-import { duplicateWishlistAction, toggleArchiveAction } from '../actions';
+import { toggleArchiveAction } from '../actions';
 import { AddItemPanel } from './AddItemPanel';
 import { AIOrganizer } from './AIOrganizer';
 import { CategoryView } from './CategoryView';
+import { CopyWishlistButton } from './CopyWishlistButton';
 import { DeleteWishlistButton } from './DeleteWishlistButton';
 import { ItemRow } from './ItemRow';
 import { RatingExplainer } from './RatingExplainer';
@@ -174,13 +174,11 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
                 {wishlist.archived ? 'Unarchive' : 'Archive'}
               </Button>
             </form>
-            <form action={duplicateWishlistAction}>
-              <input type="hidden" name="wishlistId" value={id} />
-              <Button type="submit" size="sm" variant="ghost">
-                <Copy className="h-3.5 w-3.5" aria-hidden />
-                Duplicate
-              </Button>
-            </form>
+            <CopyWishlistButton
+              wishlistId={id}
+              wishlistTitle={wishlist.title}
+              itemCount={serializedItems.length}
+            />
           </div>
         </div>
 
