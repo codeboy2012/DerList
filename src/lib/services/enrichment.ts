@@ -45,6 +45,7 @@ export interface EnrichmentResult {
   subCategory?: string;
   description?: string;
   tags?: string[];
+  searchKeywords?: string[];
   // Identifiers
   sku?: string;
   upc?: string;
@@ -53,17 +54,31 @@ export interface EnrichmentResult {
   // Pricing
   msrp?: number;
   currentPrice?: number;
+  salePrice?: number;
+  // Availability
+  availability?: string;
   // Images
   images?: string[];
   // Sellers
   sellers?: EnrichmentSeller[];
   // Specifications (category-aware)
   specifications?: EnrichmentSpec[];
+  // Pros / Cons
+  pros?: string[];
+  cons?: string[];
+  // Buying advice
+  buyingAdvice?: string[];
+  // Similar products
+  similarProducts?: string[];
   // AI metadata
   confidence: number;
+  fieldConfidence?: Record<string, number>;
   reasoning?: string;
   suggestedTitle?: string;
   suggestedCategory?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  shortDescription?: string;
   // Provider info
   modelUsed?: string;
   providerSwitched?: boolean;
@@ -283,48 +298,58 @@ function buildEnrichmentPrompt(input: EnrichmentInput): Message[] {
   if (input.upc) existingFields.push(`UPC: ${input.upc}`);
   if (input.mpn) existingFields.push(`MPN: ${input.mpn}`);
 
-  const systemPrompt = `You are a product data enrichment assistant for a shopping wishlist application.
-
-Your job: Given a product name and any existing information, fill in ALL missing fields with accurate data.
+  const systemPrompt = `You are a comprehensive product intelligence assistant. Given a product name and any known information, research and fill in ALL possible fields with accurate data.
 
 RULES:
 - Return ONLY a JSON object. No markdown, no explanation outside JSON.
-- Only return fields you are confident about (>70% confidence).
-- Never invent prices. Only include prices you know from real sources.
-- For specifications, use the exact field names provided.
-- For sellers, only include real retailers that actually carry this product.
-- URLs must be plausible (you can construct them from known URL patterns).
-- If you cannot determine a field, omit it entirely.
+- Include a confidence score (0-100) for each major field in "fieldConfidence".
+- Never fabricate prices, UPCs, or URLs. Only include data you're confident about.
+- For specifications, use the exact field names provided when applicable.
+- For sellers, only include retailers that realistically carry this product.
+- Omit any field you cannot confidently determine.
+- Pros/cons should be factual, not marketing language.
 
 SPECIFICATIONS to fill (category-specific):
 ${specFields.map((s) => `- ${s}`).join('\n')}
 
 Return this JSON structure:
 {
-  "title": "Best/official product name",
+  "title": "Official/best product name",
   "brand": "Brand name",
-  "model": "Model number/name",
-  "category": "Product category",
+  "model": "Model number",
+  "category": "Primary category",
   "subCategory": "Subcategory",
-  "description": "2-3 sentence product description",
-  "tags": ["tag1", "tag2", "tag3"],
+  "description": "3-4 sentence factual product description",
+  "shortDescription": "One-line summary",
+  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+  "searchKeywords": ["keyword1", "keyword2", "alternate name"],
   "sku": "SKU if known",
-  "upc": "UPC if known",
-  "asin": "ASIN if known",
-  "mpn": "MPN if known",
+  "upc": "UPC/EAN if known",
+  "asin": "Amazon ASIN if known",
+  "mpn": "Manufacturer Part Number",
   "msrp": 0.00,
-  "images": ["url1", "url2"],
+  "currentPrice": 0.00,
+  "salePrice": 0.00,
+  "availability": "In Stock | Out of Stock | Preorder | Discontinued",
+  "images": ["primary_image_url"],
   "sellers": [
-    {"name": "Amazon", "url": "...", "price": 0.00, "shipping": "Free", "availability": "In Stock"},
-    {"name": "Best Buy", "url": "...", "price": 0.00, "shipping": "Free", "availability": "In Stock"}
+    {"name": "Retailer", "url": "product_url", "price": 0.00, "shipping": "Free", "availability": "In Stock"}
   ],
   "specifications": [
-    {"key": "VRAM", "value": "16", "unit": "GB"},
-    {"key": "Boost Clock", "value": "2550", "unit": "MHz"}
+    {"key": "Spec Name", "value": "value", "unit": "unit"}
   ],
+  "pros": ["Advantage 1", "Advantage 2", "Advantage 3"],
+  "cons": ["Disadvantage 1", "Disadvantage 2"],
+  "buyingAdvice": ["Best for gaming", "Good value at this price point"],
+  "similarProducts": ["Alternative Product 1", "Alternative Product 2"],
+  "seoTitle": "Product Name - Brand | Category",
+  "seoDescription": "SEO-optimized description under 160 characters",
   "confidence": 85,
-  "reasoning": "Brief explanation of data sources",
-  "suggestedTitle": "Better title if current one is incomplete",
+  "fieldConfidence": {
+    "brand": 99, "model": 95, "price": 80, "specs": 85, "description": 90
+  },
+  "reasoning": "Brief explanation of data sources and confidence",
+  "suggestedTitle": "Better title if current is incomplete",
   "suggestedCategory": "Better category if applicable"
 }`;
 
@@ -332,7 +357,7 @@ Return this JSON structure:
     `Product: ${input.title}`,
     existingFields.length > 0 ? `\nKnown information:\n${existingFields.join('\n')}` : '',
     input.url ? `\nURL: ${input.url}` : '',
-    '\nFill in everything missing. Return JSON only.',
+    '\nResearch this product thoroughly. Fill every field you can determine with confidence. Include specifications, pricing, retailers, pros/cons, and buying advice. Return JSON only.',
   ]
     .filter(Boolean)
     .join('');
@@ -466,7 +491,7 @@ export class EnrichmentService {
 
     return withSmartFailover(aiProviders, async (provider) => {
       const response = await provider.chat(messages, {
-        maxTokens: 2000,
+        maxTokens: 3000,
         temperature: 0.2,
         json: true,
       });
@@ -606,6 +631,24 @@ export class EnrichmentService {
     if (enrichment.suggestedCategory) merged.aiSuggestedCategory = enrichment.suggestedCategory;
     if (enrichment.tags) merged.aiTags = enrichment.tags.join(', ');
     if (enrichment.reasoning) merged.aiReasoning = enrichment.reasoning;
+    if (enrichment.fieldConfidence) merged.fieldConfidence = enrichment.fieldConfidence;
+
+    // New fields: only fill if empty
+    fillIfEmpty('shortDescription', enrichment.shortDescription);
+    fillIfEmpty('seoTitle', enrichment.seoTitle);
+    fillIfEmpty('seoDescription', enrichment.seoDescription);
+    fillIfEmpty('availability', enrichment.availability);
+    if (enrichment.searchKeywords && enrichment.searchKeywords.length > 0) {
+      fillIfEmpty('searchKeywords', enrichment.searchKeywords.join(', '));
+    }
+    if (enrichment.pros && enrichment.pros.length > 0) fillIfEmpty('pros', enrichment.pros);
+    if (enrichment.cons && enrichment.cons.length > 0) fillIfEmpty('cons', enrichment.cons);
+    if (enrichment.buyingAdvice && enrichment.buyingAdvice.length > 0)
+      fillIfEmpty('buyingAdvice', enrichment.buyingAdvice);
+    if (enrichment.similarProducts && enrichment.similarProducts.length > 0)
+      fillIfEmpty('similarProducts', enrichment.similarProducts);
+    if (!options?.priceLocked && enrichment.salePrice)
+      fillIfEmpty('salePrice', String(enrichment.salePrice));
 
     return merged;
   }
@@ -629,7 +672,9 @@ export class EnrichmentService {
         category: parsed.category || undefined,
         subCategory: parsed.subCategory || parsed.subcategory || undefined,
         description: parsed.description || undefined,
+        shortDescription: parsed.shortDescription || undefined,
         tags: Array.isArray(parsed.tags) ? parsed.tags : undefined,
+        searchKeywords: Array.isArray(parsed.searchKeywords) ? parsed.searchKeywords : undefined,
         sku: parsed.sku || undefined,
         upc: parsed.upc || undefined,
         asin: parsed.asin || undefined,
@@ -639,6 +684,11 @@ export class EnrichmentService {
           typeof parsed.currentPrice === 'number' && parsed.currentPrice > 0
             ? parsed.currentPrice
             : undefined,
+        salePrice:
+          typeof parsed.salePrice === 'number' && parsed.salePrice > 0
+            ? parsed.salePrice
+            : undefined,
+        availability: parsed.availability || undefined,
         images: Array.isArray(parsed.images)
           ? parsed.images.filter((u: unknown) => typeof u === 'string' && u.startsWith('http'))
           : undefined,
@@ -662,10 +712,28 @@ export class EnrichmentService {
               }))
               .filter((s: EnrichmentSpec) => s.key && s.value)
           : undefined,
+        pros: Array.isArray(parsed.pros)
+          ? parsed.pros.filter((p: unknown) => typeof p === 'string')
+          : undefined,
+        cons: Array.isArray(parsed.cons)
+          ? parsed.cons.filter((c: unknown) => typeof c === 'string')
+          : undefined,
+        buyingAdvice: Array.isArray(parsed.buyingAdvice)
+          ? parsed.buyingAdvice.filter((b: unknown) => typeof b === 'string')
+          : undefined,
+        similarProducts: Array.isArray(parsed.similarProducts)
+          ? parsed.similarProducts.filter((s: unknown) => typeof s === 'string')
+          : undefined,
+        seoTitle: parsed.seoTitle || undefined,
+        seoDescription: parsed.seoDescription || undefined,
         confidence:
           typeof parsed.confidence === 'number'
             ? Math.min(100, Math.max(0, parsed.confidence))
             : 50,
+        fieldConfidence:
+          parsed.fieldConfidence && typeof parsed.fieldConfidence === 'object'
+            ? parsed.fieldConfidence
+            : undefined,
         reasoning: parsed.reasoning || undefined,
         suggestedTitle: parsed.suggestedTitle || undefined,
         suggestedCategory: parsed.suggestedCategory || undefined,
