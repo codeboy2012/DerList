@@ -24,6 +24,7 @@ import { toggleArchiveAction } from '../actions';
 import { AddItemPanel } from './AddItemPanel';
 import { AIOrganizer } from './AIOrganizer';
 import { CategoryView } from './CategoryView';
+import { CopyToClipboard } from './CopyToClipboard';
 import { CopyWishlistButton } from './CopyWishlistButton';
 import { DeleteWishlistButton } from './DeleteWishlistButton';
 import { ItemRow } from './ItemRow';
@@ -178,6 +179,16 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
               wishlistId={id}
               wishlistTitle={wishlist.title}
               itemCount={serializedItems.length}
+            />
+            <CopyToClipboard
+              wishlistTitle={wishlist.title}
+              items={serializedItems.map((i) => ({
+                title: i.title,
+                currentPrice: i.currentPrice,
+                category: i.category,
+                starPriority: i.starPriority,
+                purchased: i.purchased,
+              }))}
             />
           </div>
         </div>
