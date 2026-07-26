@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Development — DerList Docs</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-brand">📋 DerList Docs</a>
+      <div class="nav-links">
+        <a href="../guides/getting-started.html">Getting Started</a>
+        <a href="../guides/features.html">Features</a>
+        <a href="../api/index.html">API</a>
+        <a href="../database/index.html">Database</a>
+        <a href="../development/index.html">Development</a>
+        <a href="https://github.com/codeboy2012/DerList" target="_blank">GitHub ↗</a>
+      </div>
+    </div>
+  </nav>
+  <div class="container page">
+    <div class="page-header">
+      <h1>Development</h1>
+      <p>Architecture, project structure, and contributing guidelines.</p>
+    </div>
+    <div class="content">
+
+      <h2>Project Structure</h2>
+      <pre><code>DerList/
+├── src/
+│   ├── app/            # Next.js App Router pages and API routes
+│   ├── components/     # React components (UI, forms, layouts)
+│   └── lib/            # Core business logic, services, utilities
+├── prisma/
+│   ├── schema.prisma   # Database schema
+│   ├── migrations/     # SQL migration files
+│   └── seed.ts         # Database seed script
+├── public/             # Static assets
+├── uploads/            # User-uploaded files (gitignored)
+└── docs/               # This documentation site</code></pre>
+
+      <h2>Architecture Overview</h2>
+      <ul>
+        <li><strong>Next.js App Router</strong> — File-based routing with layouts, loading states, and error boundaries</li>
+        <li><strong>Server Components</strong> — Data fetching happens on the server by default for performance</li>
+        <li><strong>Server Actions</strong> — Form submissions and mutations use Server Actions for type-safe RPC</li>
+        <li><strong>API Routes</strong> — REST endpoints in <code>src/app/api/</code> for programmatic access</li>
+      </ul>
+
+      <h2>Service Layer</h2>
+      <p>Business logic is organized into service classes in <code>src/lib/</code>:</p>
+      <table>
+        <thead>
+          <tr><th>Service</th><th>Responsibility</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>ProductService</code></td><td>Product identification, enrichment, CRUD</td></tr>
+          <tr><td><code>WishlistService</code></td><td>Wishlist and item management, sharing, copying</td></tr>
+          <tr><td><code>AssistantService</code></td><td>Shopping assistant conversations and recommendations</td></tr>
+          <tr><td><code>EnrichmentService</code></td><td>AI-powered product data enrichment pipeline</td></tr>
+          <tr><td><code>ProviderSettingsService</code></td><td>Provider configuration CRUD, encryption/decryption</td></tr>
+          <tr><td><code>FolderSuggestionService</code></td><td>AI-based category and folder suggestions</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Provider System</h2>
+      <p>The provider system uses a <code>ProviderManager</code> that handles automatic failover between configured providers.</p>
+      <h3>Provider Interfaces</h3>
+      <ul>
+        <li><code>AIProvider</code> — Text generation, product parsing, chat (OpenRouter, OpenAI)</li>
+        <li><code>SearchProvider</code> — Product search and identification (SerpAPI)</li>
+        <li><code>PriceProvider</code> — Price tracking and history (Keepa)</li>
+      </ul>
+      <h3>Failover Logic</h3>
+      <ol>
+        <li>Providers are sorted by priority (lower number = higher priority)</li>
+        <li>Requests go to the highest-priority enabled provider</li>
+        <li>On failure, the next provider in priority order is tried</li>
+        <li>All provider API keys are encrypted at rest using AES-256</li>
+      </ol>
+
+      <h2>Authentication</h2>
+      <ul>
+        <li><strong>Session-based</strong> — No JWTs; sessions are stored in the database</li>
+        <li><strong>Token hashing</strong> — Session tokens are SHA-256 hashed before storage</li>
+        <li><strong>Sliding window renewal</strong> — Sessions are extended on activity</li>
+        <li><strong>Roles</strong>: <code>OWNER</code> (full control), <code>ADMIN</code> (manage users), <code>USER</code> (standard access)</li>
+      </ul>
+
+      <h2>Database</h2>
+      <ul>
+        <li><strong>ORM</strong> — Prisma with type-safe client generation</li>
+        <li><strong>Database</strong> — PostgreSQL 15+</li>
+        <li><strong>Migrations</strong> — SQL migrations in <code>prisma/migrations/</code>, managed via <code>prisma migrate</code></li>
+        <li><strong>Schema</strong> — See <a href="../database/index.html">Database Schema</a></li>
+      </ul>
+
+      <h2>Upload System</h2>
+      <ul>
+        <li>Files are stored on local disk at the path specified by <code>UPLOAD_DIR</code></li>
+        <li>Upload endpoint: <code>POST /api/upload</code> (multipart/form-data)</li>
+        <li>Files are renamed with unique identifiers to prevent collisions</li>
+        <li>Media records track original name, MIME type, size, and uploader</li>
+      </ul>
+
+      <h2>Scripts</h2>
+      <table>
+        <thead>
+          <tr><th>Command</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>npm run dev</code></td><td>Start development server with Turbopack</td></tr>
+          <tr><td><code>npm run build</code></td><td>Production build</td></tr>
+          <tr><td><code>npm run lint</code></td><td>Run ESLint</td></tr>
+          <tr><td><code>npm run format</code></td><td>Format code with Prettier</td></tr>
+          <tr><td><code>npm run db:migrate</code></td><td>Run pending database migrations</td></tr>
+          <tr><td><code>npm run db:generate</code></td><td>Regenerate Prisma client</td></tr>
+          <tr><td><code>npm run db:seed</code></td><td>Seed the database</td></tr>
+          <tr><td><code>npm run generate-encryption-key</code></td><td>Generate a new AES-256 encryption key</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Contributing</h2>
+      <ol>
+        <li><strong>Fork</strong> the repository on GitHub</li>
+        <li><strong>Create a branch</strong> from <code>main</code> for your feature or fix</li>
+        <li><strong>Write code</strong> following the existing patterns and conventions</li>
+        <li><strong>Commit</strong> using conventional commit messages (enforced by commitlint)</li>
+        <li><strong>Push</strong> and open a Pull Request</li>
+      </ol>
+
+      <h3>Code Quality</h3>
+      <ul>
+        <li><strong>lint-staged</strong> runs on every commit via Husky git hooks</li>
+        <li><strong>ESLint</strong> for code quality and error detection</li>
+        <li><strong>Prettier</strong> for consistent formatting</li>
+        <li><strong>commitlint</strong> enforces conventional commit message format</li>
+      </ul>
+
+      <h3>Branch Naming</h3>
+      <pre><code>feature/short-description
+fix/issue-number-description
+docs/what-changed</code></pre>
+
+      <h3>Commit Message Format</h3>
+      <pre><code>type(scope): description
+
+# Examples:
+feat(wishlists): add copy wishlist endpoint
+fix(auth): handle expired session renewal
+docs(api): document provider endpoints</code></pre>
+
+    </div>
+  </div>
+  <footer class="footer">
+    <p>DerList Documentation · MIT License · <a href="https://github.com/codeboy2012/DerList">GitHub</a></p>
+  </footer>
+</body>
+</html>

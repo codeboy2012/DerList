@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Getting Started — DerList Docs</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-brand">📋 DerList Docs</a>
+      <div class="nav-links">
+        <a href="../guides/getting-started.html">Getting Started</a>
+        <a href="../guides/features.html">Features</a>
+        <a href="../api/index.html">API</a>
+        <a href="../database/index.html">Database</a>
+        <a href="../development/index.html">Development</a>
+        <a href="https://github.com/codeboy2012/DerList" target="_blank">GitHub ↗</a>
+      </div>
+    </div>
+  </nav>
+  <div class="container page">
+    <div class="page-header">
+      <h1>Getting Started</h1>
+      <p>Install and run DerList on your own server in minutes.</p>
+    </div>
+    <div class="content">
+
+      <h2>Prerequisites</h2>
+      <ul>
+        <li><strong>Node.js 20+</strong> — <a href="https://nodejs.org/">nodejs.org</a></li>
+        <li><strong>PostgreSQL 15+</strong> — <a href="https://www.postgresql.org/download/">postgresql.org</a></li>
+        <li><strong>pnpm</strong> (recommended) or <strong>npm</strong></li>
+      </ul>
+
+      <h2>1. Clone the Repository</h2>
+      <pre><code>git clone https://github.com/codeboy2012/DerList.git
+cd DerList</code></pre>
+
+      <h2>2. Install Dependencies</h2>
+      <pre><code># Using pnpm (recommended)
+pnpm install
+
+# Or using npm
+npm install</code></pre>
+
+      <h2>3. Configure Environment Variables</h2>
+      <p>Copy the example environment file and fill in required values:</p>
+      <pre><code>cp .env.example .env</code></pre>
+      <p>At minimum, configure these variables:</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>DATABASE_URL</code></td>
+            <td>PostgreSQL connection string, e.g. <code>postgresql://user:password@localhost:5432/derlist</code></td>
+          </tr>
+          <tr>
+            <td><code>AUTH_SECRET</code></td>
+            <td>Random secret for session signing (min 32 characters)</td>
+          </tr>
+          <tr>
+            <td><code>PROVIDER_ENCRYPTION_KEY</code></td>
+            <td>Encryption key for provider API keys. Generate with: <code>npm run generate-encryption-key</code></td>
+          </tr>
+        </tbody>
+      </table>
+      <p>See the <a href="configuration.html">Configuration</a> page for the full list of environment variables.</p>
+
+      <h2>4. Set Up the Database</h2>
+      <p>Create the database if it doesn't exist, then run migrations and generate the Prisma client:</p>
+      <pre><code># Create database (if needed)
+createdb derlist
+
+# Run migrations and generate client
+npx prisma migrate deploy && npx prisma generate</code></pre>
+
+      <h2>5. Seed the Database</h2>
+      <p>Create the default admin account and initial data:</p>
+      <pre><code>npx prisma db seed</code></pre>
+
+      <h2>6. Start the Development Server</h2>
+      <pre><code>npm run dev</code></pre>
+      <p>Open <a href="http://localhost:3000">http://localhost:3000</a> in your browser.</p>
+
+      <h2>First Login</h2>
+      <p>The database seed creates a default admin account. Use the credentials printed by the seed script to log in for the first time. You can change the password and configure additional users from the admin panel.</p>
+
+      <h2>Production Build</h2>
+      <pre><code>npm run build
+npm start</code></pre>
+      <p>For production, ensure <code>AUTH_SECRET</code> and <code>PROVIDER_ENCRYPTION_KEY</code> are strong, unique secrets. Set <code>NEXT_PUBLIC_APP_URL</code> to your public domain.</p>
+
+    </div>
+  </div>
+  <footer class="footer">
+    <p>DerList Documentation · MIT License · <a href="https://github.com/codeboy2012/DerList">GitHub</a></p>
+  </footer>
+</body>
+</html>

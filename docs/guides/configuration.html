@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuration — DerList Docs</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-brand">📋 DerList Docs</a>
+      <div class="nav-links">
+        <a href="../guides/getting-started.html">Getting Started</a>
+        <a href="../guides/features.html">Features</a>
+        <a href="../api/index.html">API</a>
+        <a href="../database/index.html">Database</a>
+        <a href="../development/index.html">Development</a>
+        <a href="https://github.com/codeboy2012/DerList" target="_blank">GitHub ↗</a>
+      </div>
+    </div>
+  </nav>
+  <div class="container page">
+    <div class="page-header">
+      <h1>Configuration</h1>
+      <p>Environment variables reference for DerList.</p>
+    </div>
+    <div class="content">
+
+      <p>All configuration is done via environment variables in a <code>.env</code> file at the project root. Copy <code>.env.example</code> to get started:</p>
+      <pre><code>cp .env.example .env</code></pre>
+
+      <h2>Environment Variables</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>Default</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>NEXT_PUBLIC_APP_NAME</code></td>
+            <td>Application display name shown in the UI</td>
+            <td>No</td>
+            <td><code>DerList</code></td>
+          </tr>
+          <tr>
+            <td><code>NEXT_PUBLIC_APP_URL</code></td>
+            <td>Public URL of the application (used for links, sharing)</td>
+            <td>No</td>
+            <td><code>http://localhost:3000</code></td>
+          </tr>
+          <tr>
+            <td><code>DATABASE_URL</code></td>
+            <td>PostgreSQL connection string</td>
+            <td><strong>Yes</strong></td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><code>AUTH_SECRET</code></td>
+            <td>Secret key for signing session tokens (min 32 characters)</td>
+            <td><strong>Yes</strong></td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><code>AUTH_SESSION_DAYS</code></td>
+            <td>Number of days before a session expires</td>
+            <td>No</td>
+            <td><code>30</code></td>
+          </tr>
+          <tr>
+            <td><code>PROVIDER_ENCRYPTION_KEY</code></td>
+            <td>AES-256 key for encrypting provider API keys at rest</td>
+            <td><strong>Yes</strong></td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><code>UPLOAD_DIR</code></td>
+            <td>Directory path for uploaded files (relative or absolute)</td>
+            <td>No</td>
+            <td><code>./uploads</code></td>
+          </tr>
+          <tr>
+            <td><code>LOG_LEVEL</code></td>
+            <td>Logging verbosity: <code>debug</code>, <code>info</code>, <code>warn</code>, <code>error</code></td>
+            <td>No</td>
+            <td><code>info</code></td>
+          </tr>
+          <tr>
+            <td><code>RATE_LIMIT_ENABLED</code></td>
+            <td>Enable rate limiting on API endpoints</td>
+            <td>No</td>
+            <td><code>true</code></td>
+          </tr>
+          <tr>
+            <td><code>NEXT_PUBLIC_ENABLE_ANALYTICS</code></td>
+            <td>Enable client-side analytics (feature flag)</td>
+            <td>No</td>
+            <td><code>false</code></td>
+          </tr>
+          <tr>
+            <td><code>NEXT_PUBLIC_ENABLE_DEBUG</code></td>
+            <td>Enable debug mode in the UI (feature flag)</td>
+            <td>No</td>
+            <td><code>false</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Generating the Encryption Key</h2>
+      <p>The <code>PROVIDER_ENCRYPTION_KEY</code> is used to encrypt third-party API keys (OpenRouter, SerpAPI, etc.) before storing them in the database. Generate one with:</p>
+      <pre><code>npm run generate-encryption-key</code></pre>
+      <p>This outputs a base64-encoded AES-256 key. Copy it into your <code>.env</code> file.</p>
+      <p><strong>Important:</strong> If you lose this key, all stored provider configurations will become unreadable and need to be re-entered.</p>
+
+      <h2>Database URL Format</h2>
+      <pre><code>DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"</code></pre>
+      <p>Examples:</p>
+      <pre><code># Local development
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/derlist"
+
+# Remote server
+DATABASE_URL="postgresql://derlist_user:s3cur3p4ss@db.example.com:5432/derlist_prod"</code></pre>
+
+      <h2>Feature Flags</h2>
+      <p>Feature flags use the <code>NEXT_PUBLIC_</code> prefix so they are available on both server and client:</p>
+      <ul>
+        <li><code>NEXT_PUBLIC_ENABLE_ANALYTICS</code> — When <code>true</code>, loads analytics tracking scripts</li>
+        <li><code>NEXT_PUBLIC_ENABLE_DEBUG</code> — When <code>true</code>, shows debug panels and verbose logging in the browser console</li>
+      </ul>
+
+    </div>
+  </div>
+  <footer class="footer">
+    <p>DerList Documentation · MIT License · <a href="https://github.com/codeboy2012/DerList">GitHub</a></p>
+  </footer>
+</body>
+</html>

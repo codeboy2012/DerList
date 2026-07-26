@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Database Schema — DerList Docs</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>mermaid.initialize({theme:'dark'});</script>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-brand">📋 DerList Docs</a>
+      <div class="nav-links">
+        <a href="../guides/getting-started.html">Getting Started</a>
+        <a href="../guides/features.html">Features</a>
+        <a href="../api/index.html">API</a>
+        <a href="../database/index.html">Database</a>
+        <a href="../development/index.html">Development</a>
+        <a href="https://github.com/codeboy2012/DerList" target="_blank">GitHub ↗</a>
+      </div>
+    </div>
+  </nav>
+  <div class="container page">
+    <div class="page-header">
+      <h1>Database Schema</h1>
+      <p>Prisma models, field definitions, and entity relationships.</p>
+    </div>
+    <div class="content">
+
+      <h2>Entity Relationship Diagram</h2>
+      <div class="mermaid">
+erDiagram
+    User ||--o{ Wishlist : owns
+    User ||--o{ ProviderConfiguration : configures
+    User ||--o{ Session : has
+    User ||--o{ Invitation : invites
+    User ||--o{ Media : uploads
+    Wishlist ||--o{ WishlistItem : contains
+    Wishlist ||--o{ WishlistCategory : has
+    WishlistItem }o--o| Product : references
+    Product ||--o{ PriceHistory : tracks
+      </div>
+
+      <h2>Models</h2>
+
+      <h3>User</h3>
+      <table>
+        <thead>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>String (cuid)</td><td>Primary key</td></tr>
+          <tr><td><code>email</code></td><td>String</td><td>Unique email address</td></tr>
+          <tr><td><code>username</code></td><td>String</td><td>Unique username</td></tr>
+          <tr><td><code>displayName</code></td><td>String?</td><td>Display name</td></tr>
+          <tr><td><code>passwordHash</code></td><td>String</td><td>Bcrypt hashed password</td></tr>
+          <tr><td><code>avatarUrl</code></td><td>String?</td><td>Profile avatar URL</td></tr>
+          <tr><td><code>role</code></td><td>Enum</td><td>OWNER, ADMIN, or USER</td></tr>
+          <tr><td><code>emailVerified</code></td><td>Boolean</td><td>Whether email is verified</td></tr>
+          <tr><td><code>disabled</code></td><td>Boolean</td><td>Account disabled flag</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Wishlist</h3>
+      <table>
+        <thead>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>String (cuid)</td><td>Primary key</td></tr>
+          <tr><td><code>ownerId</code></td><td>String</td><td>Foreign key → User</td></tr>
+          <tr><td><code>title</code></td><td>String</td><td>Wishlist name</td></tr>
+          <tr><td><code>description</code></td><td>String?</td><td>Optional description</td></tr>
+          <tr><td><code>visibility</code></td><td>Enum</td><td>PRIVATE, SHARED, or PUBLIC</td></tr>
+          <tr><td><code>icon</code></td><td>String?</td><td>Emoji or icon identifier</td></tr>
+          <tr><td><code>color</code></td><td>String?</td><td>Hex color code</td></tr>
+          <tr><td><code>slug</code></td><td>String</td><td>URL-safe identifier for sharing</td></tr>
+          <tr><td><code>archived</code></td><td>Boolean</td><td>Whether wishlist is archived</td></tr>
+          <tr><td><code>notice</code></td><td>String?</td><td>Optional notice shown to viewers</td></tr>
+        </tbody>
+      </table>
+
+      <h3>WishlistItem</h3>
+      <table>
+        <thead>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>String (cuid)</td><td>Primary key</td></tr>
+          <tr><td><code>wishlistId</code></td><td>String</td><td>Foreign key → Wishlist</td></tr>
+          <tr><td><code>title</code></td><td>String</td><td>Product title</td></tr>
+          <tr><td><code>description</code></td><td>String?</td><td>Product description</td></tr>
+          <tr><td><code>url</code></td><td>String?</td><td>Product page URL</td></tr>
+          <tr><td><code>image</code></td><td>String?</td><td>Primary image URL</td></tr>
+          <tr><td><code>brand</code></td><td>String?</td><td>Brand name</td></tr>
+          <tr><td><code>retailer</code></td><td>String?</td><td>Retailer name</td></tr>
+          <tr><td><code>currentPrice</code></td><td>Float?</td><td>Current price</td></tr>
+          <tr><td><code>originalPrice</code></td><td>Float?</td><td>Original/list price</td></tr>
+          <tr><td><code>dealInfo</code></td><td>String?</td><td>Deal or discount description</td></tr>
+          <tr><td><code>currency</code></td><td>String?</td><td>Currency code (e.g. USD, EUR)</td></tr>
+          <tr><td><code>priority</code></td><td>Int?</td><td>Legacy priority field</td></tr>
+          <tr><td><code>starPriority</code></td><td>Int?</td><td>Star priority (1–4)</td></tr>
+          <tr><td><code>quantity</code></td><td>Int</td><td>Desired quantity</td></tr>
+          <tr><td><code>purchased</code></td><td>Boolean</td><td>Whether item is purchased</td></tr>
+          <tr><td><code>notes</code></td><td>String?</td><td>Personal notes</td></tr>
+          <tr><td><code>category</code></td><td>String?</td><td>Category/folder name</td></tr>
+          <tr><td><code>position</code></td><td>Int</td><td>Sort order position</td></tr>
+          <tr><td><code>metadata</code></td><td>Json?</td><td>Flexible metadata (specs, attributes)</td></tr>
+          <tr><td><code>productId</code></td><td>String?</td><td>Foreign key → Product</td></tr>
+        </tbody>
+      </table>
+
+      <h3>WishlistCategory</h3>
+      <table>
+        <thead>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>String (cuid)</td><td>Primary key</td></tr>
+          <tr><td><code>wishlistId</code></td><td>String</td><td>Foreign key → Wishlist</td></tr>
+          <tr><td><code>name</code></td><td>String</td><td>Category name</td></tr>
+          <tr><td><code>description</code></td><td>String?</td><td>Optional description</td></tr>
+          <tr><td><code>externalLink</code></td><td>String?</td><td>Link to external resource</td></tr>
+          <tr><td><code>icon</code></td><td>String?</td><td>Icon identifier</td></tr>
+          <tr><td><code>sortOrder</code></td><td>Int</td><td>Display order</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Product</h3>
+      <table>
+        <thead>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>String (cuid)</td><td>Primary key</td></tr>
+          <tr><td><code>canonicalUrl</code></td><td>String?</td><td>Canonical product URL</td></tr>
+          <tr><td><code>title</code></td><td>String</td><td>Product title</td></tr>
+          <tr><td><code>brand</code></td><td>String?</td><td>Brand name</td></tr>
+          <tr><td><code>sku</code></td><td>String?</td><td>SKU identifier</td></tr>
+          <tr><td><code>mpn</code></td><td>String?</td><td>Manufacturer part number</td></tr>
+          <tr><td><code>asin</code></td><td>String?</td><td>Amazon ASIN</td></tr>
+          <tr><td><code>upc</code></td><td>String?</td><td>Universal Product Code</td></tr>
+          <tr><td><code>image</code></td><td>String?</td><td>Primary image URL</td></tr>
+          <tr><td><code>gallery</code></td><td>Json?</td><td>Array of image URLs</td></tr>
+          <tr><td><code>currentPrice</code></td><td>Float?</td><td>Latest known price</td></tr>
+          <tr><td><code>specifications</code></td><td>Json?</td><td>Technical specifications</td></tr>
+          <tr><td><code>attributes</code></td><td>Json?</td><td>Product attributes (color, size, etc.)</td></tr>
+          <tr><td><code>source</code></td><td>String?</td><td>Data source identifier</td></tr>
+        </tbody>
+      </table>
+
+      <h3>PriceHistory</h3>
+      <table>
+        <thead>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>String (cuid)</td><td>Primary key</td></tr>
+          <tr><td><code>productId</code></td><td>String</td><td>Foreign key → Product</td></tr>
+          <tr><td><code>price</code></td><td>Float</td><td>Recorded price</td></tr>
+          <tr><td><code>currency</code></td><td>String</td><td>Currency code</td></tr>
+          <tr><td><code>recordedAt</code></td><td>DateTime</td><td>When this price was recorded</td></tr>
+        </tbody>
+      </table>
+
+      <h3>ProviderConfiguration</h3>
+      <table>
+        <thead>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>String (cuid)</td><td>Primary key</td></tr>
+          <tr><td><code>userId</code></td><td>String</td><td>Foreign key → User</td></tr>
+          <tr><td><code>category</code></td><td>String</td><td>Provider category (ai, search, price)</td></tr>
+          <tr><td><code>providerId</code></td><td>String</td><td>Provider identifier</td></tr>
+          <tr><td><code>name</code></td><td>String</td><td>User-defined name</td></tr>
+          <tr><td><code>enabled</code></td><td>Boolean</td><td>Whether provider is active</td></tr>
+          <tr><td><code>priority</code></td><td>Int</td><td>Failover priority (lower = higher priority)</td></tr>
+          <tr><td><code>encryptedConfig</code></td><td>String</td><td>AES-256 encrypted configuration JSON</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Session</h3>
+      <table>
+        <thead>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>String (cuid)</td><td>Primary key</td></tr>
+          <tr><td><code>tokenHash</code></td><td>String</td><td>SHA-256 hash of the session token</td></tr>
+          <tr><td><code>userId</code></td><td>String</td><td>Foreign key → User</td></tr>
+          <tr><td><code>expiresAt</code></td><td>DateTime</td><td>Session expiration timestamp</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Invitation</h3>
+      <table>
+        <thead>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>String (cuid)</td><td>Primary key</td></tr>
+          <tr><td><code>email</code></td><td>String</td><td>Invited email address</td></tr>
+          <tr><td><code>token</code></td><td>String</td><td>Unique invitation token</td></tr>
+          <tr><td><code>invitedById</code></td><td>String</td><td>Foreign key → User who invited</td></tr>
+          <tr><td><code>expiresAt</code></td><td>DateTime</td><td>Invitation expiration</td></tr>
+          <tr><td><code>acceptedAt</code></td><td>DateTime?</td><td>When invitation was accepted</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Media</h3>
+      <table>
+        <thead>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>id</code></td><td>String (cuid)</td><td>Primary key</td></tr>
+          <tr><td><code>originalName</code></td><td>String</td><td>Original filename</td></tr>
+          <tr><td><code>filename</code></td><td>String</td><td>Stored filename (sanitized)</td></tr>
+          <tr><td><code>mimeType</code></td><td>String</td><td>MIME type</td></tr>
+          <tr><td><code>size</code></td><td>Int</td><td>File size in bytes</td></tr>
+          <tr><td><code>storagePath</code></td><td>String</td><td>Path on disk</td></tr>
+          <tr><td><code>uploadedById</code></td><td>String</td><td>Foreign key → User</td></tr>
+        </tbody>
+      </table>
+
+    </div>
+  </div>
+  <footer class="footer">
+    <p>DerList Documentation · MIT License · <a href="https://github.com/codeboy2012/DerList">GitHub</a></p>
+  </footer>
+</body>
+</html>

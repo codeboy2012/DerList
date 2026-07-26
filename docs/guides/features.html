@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Features — DerList Docs</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-brand">📋 DerList Docs</a>
+      <div class="nav-links">
+        <a href="../guides/getting-started.html">Getting Started</a>
+        <a href="../guides/features.html">Features</a>
+        <a href="../api/index.html">API</a>
+        <a href="../database/index.html">Database</a>
+        <a href="../development/index.html">Development</a>
+        <a href="https://github.com/codeboy2012/DerList" target="_blank">GitHub ↗</a>
+      </div>
+    </div>
+  </nav>
+  <div class="container page">
+    <div class="page-header">
+      <h1>Features</h1>
+      <p>A complete overview of what DerList can do.</p>
+    </div>
+    <div class="content">
+
+      <h2>📋 Wishlists</h2>
+      <p>Create unlimited wishlists for any purpose — PC builds, gift lists, home decor, shopping plans.</p>
+      <ul>
+        <li><strong>Folders &amp; Categories</strong> — Organize items into folders and categories within each wishlist</li>
+        <li><strong>Star Priority (1–4)</strong> — Mark items by importance with a 4-level star rating</li>
+        <li><strong>Share</strong> — Share wishlists publicly or with specific users via slug-based URLs</li>
+        <li><strong>Archive</strong> — Archive completed wishlists to keep your workspace clean</li>
+        <li><strong>Copy Wishlist</strong> — Duplicate an entire wishlist with configurable options</li>
+        <li><strong>Copy to Clipboard</strong> — Export wishlist as formatted text for sharing anywhere</li>
+      </ul>
+
+      <h2>🛒 Product Editor</h2>
+      <p>A full-featured product editor in a slide-out drawer with 8 dedicated sections:</p>
+      <ol>
+        <li><strong>Info</strong> — Title, description, brand, URL, category</li>
+        <li><strong>Pricing</strong> — Current price, original price, deal info, currency</li>
+        <li><strong>Sellers</strong> — Multiple retailers with pricing per seller</li>
+        <li><strong>Images</strong> — Primary image and gallery management</li>
+        <li><strong>Wishlist</strong> — Priority, quantity, purchased status, notes</li>
+        <li><strong>AI</strong> — AI autofill, identification, and enrichment controls</li>
+        <li><strong>Specs</strong> — Technical specifications and attributes</li>
+        <li><strong>History</strong> — Price history chart and change log</li>
+      </ol>
+
+      <h2>🔍 Smart Import</h2>
+      <p>Paste anything into DerList and it will figure out what you mean:</p>
+      <ul>
+        <li><strong>URLs</strong> — Product pages from any retailer</li>
+        <li><strong>Product names</strong> — Plain text product names get identified and enriched</li>
+        <li><strong>Shopping lists</strong> — Multi-line text with quantities and items</li>
+        <li><strong>PCPartPicker builds</strong> — Full PC part lists imported with specs and pricing</li>
+      </ul>
+
+      <h2>🤖 AI Autofill</h2>
+      <p>One-click enrichment that fills in missing product data:</p>
+      <ul>
+        <li>Technical specifications</li>
+        <li>Sellers and pricing from multiple retailers</li>
+        <li>Product identifiers (SKU, MPN, ASIN, UPC)</li>
+        <li>Descriptions, images, and brand information</li>
+      </ul>
+
+      <h2>🧹 AI Organizer</h2>
+      <p>Bulk cleanup operations powered by AI:</p>
+      <ul>
+        <li><strong>Rename</strong> — Standardize product titles across a wishlist</li>
+        <li><strong>Categorize</strong> — Automatically assign items to categories</li>
+        <li><strong>Deduplicate</strong> — Find and merge duplicate items</li>
+      </ul>
+      <p>Works in two modes: <em>analyze</em> (preview changes) and <em>apply</em> (execute changes).</p>
+
+      <h2>💰 Price Tracking</h2>
+      <ul>
+        <li><strong>Price History</strong> — Visual chart of price changes over time</li>
+        <li><strong>Multiple Sellers</strong> — Track the same product across different retailers</li>
+        <li><strong>Price Lock</strong> — Record a target price for future comparison</li>
+      </ul>
+
+      <h2>💬 Shopping Assistant</h2>
+      <p>An AI-powered chat interface for product recommendations. Ask questions like:</p>
+      <ul>
+        <li>"What's the best GPU under $500?"</li>
+        <li>"Compare these two monitors"</li>
+        <li>"Suggest a keyboard for programming"</li>
+      </ul>
+      <p>The assistant maintains conversation history and can add recommended products directly to your wishlists.</p>
+
+      <h2>🔌 Provider System</h2>
+      <p>DerList uses a pluggable provider architecture for AI, search, and pricing:</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Provider</th>
+            <th>Category</th>
+            <th>Used For</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>OpenRouter</td>
+            <td>AI</td>
+            <td>Autofill, organizer, chat, parsing</td>
+          </tr>
+          <tr>
+            <td>OpenAI</td>
+            <td>AI</td>
+            <td>Autofill, organizer, chat, parsing</td>
+          </tr>
+          <tr>
+            <td>SerpAPI</td>
+            <td>Search</td>
+            <td>Product search, identification</td>
+          </tr>
+          <tr>
+            <td>Keepa</td>
+            <td>Price</td>
+            <td>Amazon price tracking and history</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>Providers support <strong>automatic failover</strong> — if one provider fails, DerList tries the next by priority order.</p>
+
+    </div>
+  </div>
+  <footer class="footer">
+    <p>DerList Documentation · MIT License · <a href="https://github.com/codeboy2012/DerList">GitHub</a></p>
+  </footer>
+</body>
+</html>

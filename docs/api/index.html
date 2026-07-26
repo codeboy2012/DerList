@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Reference — DerList Docs</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-brand">📋 DerList Docs</a>
+      <div class="nav-links">
+        <a href="../guides/getting-started.html">Getting Started</a>
+        <a href="../guides/features.html">Features</a>
+        <a href="../api/index.html">API</a>
+        <a href="../database/index.html">Database</a>
+        <a href="../development/index.html">Development</a>
+        <a href="https://github.com/codeboy2012/DerList" target="_blank">GitHub ↗</a>
+      </div>
+    </div>
+  </nav>
+  <div class="container page">
+    <div class="page-header">
+      <h1>API Reference</h1>
+      <p>REST API endpoints for DerList. All endpoints require authentication unless noted otherwise.</p>
+    </div>
+    <div class="content">
+
+      <h2>Authentication</h2>
+      <p>All API requests must include a valid session cookie. Sessions are created via the login flow and use SHA-256 hashed tokens stored in the database.</p>
+
+      <h2>Wishlists</h2>
+
+      <h3>Add Item to Wishlist</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Method</strong></td><td><code>POST</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/wishlists/add-item</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+          <tr><td><strong>Content-Type</strong></td><td><code>application/json</code> or <code>multipart/form-data</code></td></tr>
+        </tbody>
+      </table>
+      <p><strong>Request Body (JSON):</strong></p>
+      <pre><code>{
+  "wishlistId": "string",
+  "title": "string",
+  "url": "string (optional)",
+  "description": "string (optional)",
+  "price": "number (optional)",
+  "image": "string (optional)",
+  "category": "string (optional)"
+}</code></pre>
+      <p><strong>Response:</strong> <code>201</code> — Created wishlist item object.</p>
+
+      <h3>Get / Update / Delete Wishlist Item</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Methods</strong></td><td><code>GET</code>, <code>PATCH</code>, <code>DELETE</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/wishlists/items/[id]</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+        </tbody>
+      </table>
+      <p><strong>GET</strong> — Returns the full item with all fields including metadata, specifications, and price history.</p>
+      <p><strong>PATCH</strong> — Partial update. Send only the fields you want to change.</p>
+      <p><strong>DELETE</strong> — Removes the item from the wishlist. Returns <code>204 No Content</code>.</p>
+
+      <h3>Copy Wishlist</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Method</strong></td><td><code>POST</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/wishlists/copy</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+        </tbody>
+      </table>
+      <pre><code>{
+  "wishlistId": "string",
+  "title": "string (optional, defaults to 'Copy of ...')",
+  "includeCategories": "boolean (default: true)",
+  "includeItems": "boolean (default: true)"
+}</code></pre>
+      <p><strong>Response:</strong> <code>201</code> — New wishlist object.</p>
+
+      <h3>Suggest Folder</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Method</strong></td><td><code>POST</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/wishlists/suggest-folder</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+        </tbody>
+      </table>
+      <pre><code>{
+  "wishlistId": "string",
+  "itemIds": ["string"]
+}</code></pre>
+      <p><strong>Response:</strong> <code>200</code> — Array of suggested folder names with confidence scores.</p>
+
+      <h3>Apply Folder</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Method</strong></td><td><code>POST</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/wishlists/apply-folder</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+        </tbody>
+      </table>
+      <pre><code>{
+  "wishlistId": "string",
+  "itemIds": ["string"],
+  "category": "string"
+}</code></pre>
+      <p><strong>Response:</strong> <code>200</code> — Updated items count.</p>
+
+      <h3>Organize Wishlist (AI)</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Method</strong></td><td><code>POST</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/wishlists/organize</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+        </tbody>
+      </table>
+      <pre><code>{
+  "wishlistId": "string",
+  "mode": "analyze | apply",
+  "operations": ["rename", "categorize", "deduplicate"]
+}</code></pre>
+      <p><strong>Response (analyze):</strong> <code>200</code> — Preview of proposed changes.</p>
+      <p><strong>Response (apply):</strong> <code>200</code> — Summary of applied changes.</p>
+
+      <hr>
+
+      <h2>Products</h2>
+
+      <h3>Identify Product</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Method</strong></td><td><code>POST</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/products/identify</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+        </tbody>
+      </table>
+      <pre><code>{
+  "input": "string (URL, product name, or search query)"
+}</code></pre>
+      <p><strong>Response:</strong> <code>200</code> — Identified product with title, brand, image, price, and identifiers.</p>
+
+      <h3>Enrich Product</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Method</strong></td><td><code>POST</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/products/enrich</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+        </tbody>
+      </table>
+      <pre><code>{
+  "itemId": "string",
+  "fields": ["specifications", "sellers", "identifiers", "description"] (optional)
+}</code></pre>
+      <p><strong>Response:</strong> <code>200</code> — Enriched product data for the specified fields.</p>
+
+      <h3>Search Products</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Method</strong></td><td><code>POST</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/products/search</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+        </tbody>
+      </table>
+      <pre><code>{
+  "query": "string",
+  "limit": "number (optional, default: 10)"
+}</code></pre>
+      <p><strong>Response:</strong> <code>200</code> — Array of matching products with pricing.</p>
+
+      <hr>
+
+      <h2>Providers</h2>
+
+      <h3>List / Create / Delete Providers</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Methods</strong></td><td><code>GET</code>, <code>POST</code>, <code>DELETE</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/providers</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+        </tbody>
+      </table>
+      <p><strong>GET</strong> — Returns all configured providers for the current user.</p>
+      <p><strong>POST</strong> — Create a new provider configuration:</p>
+      <pre><code>{
+  "category": "ai | search | price",
+  "providerId": "openrouter | openai | serpapi | keepa",
+  "name": "string",
+  "config": { "apiKey": "string", ... },
+  "priority": "number",
+  "enabled": "boolean"
+}</code></pre>
+      <p><strong>DELETE</strong> — Remove a provider by ID (passed as query param).</p>
+
+      <h3>Test Provider Connection</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Method</strong></td><td><code>POST</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/providers/[id]/test</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Response:</strong> <code>200</code> — <code>{ "success": true, "latency": 230 }</code> or error details.</p>
+
+      <hr>
+
+      <h2>Upload</h2>
+
+      <h3>Upload File</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Method</strong></td><td><code>POST</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/upload</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+          <tr><td><strong>Content-Type</strong></td><td><code>multipart/form-data</code></td></tr>
+        </tbody>
+      </table>
+      <p><strong>Form Fields:</strong></p>
+      <ul>
+        <li><code>file</code> — The file to upload</li>
+      </ul>
+      <p><strong>Response:</strong> <code>201</code> — <code>{ "id": "string", "url": "string", "filename": "string" }</code></p>
+
+      <hr>
+
+      <h2>AI</h2>
+
+      <h3>AI Chat</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Method</strong></td><td><code>POST</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/ai/chat</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+        </tbody>
+      </table>
+      <pre><code>{
+  "message": "string",
+  "conversationId": "string (optional)"
+}</code></pre>
+      <p><strong>Response:</strong> <code>200</code> — Streamed or JSON response with AI reply.</p>
+
+      <h3>Parse Products</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Method</strong></td><td><code>POST</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/ai/parse-products</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+        </tbody>
+      </table>
+      <pre><code>{
+  "text": "string (multi-line product list, URLs, or natural language)"
+}</code></pre>
+      <p><strong>Response:</strong> <code>200</code> — Array of parsed product objects.</p>
+
+      <h3>Parse Image</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Method</strong></td><td><code>POST</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/ai/parse-image</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+          <tr><td><strong>Content-Type</strong></td><td><code>multipart/form-data</code></td></tr>
+        </tbody>
+      </table>
+      <p><strong>Form Fields:</strong></p>
+      <ul>
+        <li><code>image</code> — Image file containing product(s)</li>
+      </ul>
+      <p><strong>Response:</strong> <code>200</code> — Array of products identified in the image.</p>
+
+      <hr>
+
+      <h2>Shopping Assistant</h2>
+
+      <h3>List Conversations</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Method</strong></td><td><code>GET</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/assistant/conversations</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Response:</strong> <code>200</code> — Array of conversation objects with id, title, and last message timestamp.</p>
+
+      <h3>Query Assistant</h3>
+      <table>
+        <tbody>
+          <tr><td><strong>Method</strong></td><td><code>POST</code></td></tr>
+          <tr><td><strong>Path</strong></td><td><code>/api/assistant/query</code></td></tr>
+          <tr><td><strong>Auth</strong></td><td>Required</td></tr>
+        </tbody>
+      </table>
+      <pre><code>{
+  "query": "string",
+  "conversationId": "string (optional)",
+  "wishlistId": "string (optional, context for recommendations)"
+}</code></pre>
+      <p><strong>Response:</strong> <code>200</code> — AI response with optional product recommendations.</p>
+
+    </div>
+  </div>
+  <footer class="footer">
+    <p>DerList Documentation · MIT License · <a href="https://github.com/codeboy2012/DerList">GitHub</a></p>
+  </footer>
+</body>
+</html>
