@@ -3,18 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Sparkles, Star } from 'lucide-react';
 import { cn } from '@/utils/cn';
-import { Tooltip } from '@/components/ui/Tooltip';
 
 /** Short labels shown inline next to stars */
 const PRIORITY_LABELS: Record<number, string> = {
-  1: 'Want',
-  2: 'Really Want',
-  3: 'Need This',
-  4: 'Must Have!',
-};
-
-/** Playful labels shown in tooltips only */
-const PRIORITY_TOOLTIP_LABELS: Record<number, string> = {
   1: 'Want',
   2: 'Really Want',
   3: 'Need This',
@@ -90,42 +81,37 @@ export function WishlistPriority({
           const filled = star <= displayValue;
           const isPopping = justSelected !== null && star <= justSelected;
           return (
-            <Tooltip
+            <button
               key={star}
-              content={`${'\u2B50'.repeat(star)} ${PRIORITY_TOOLTIP_LABELS[star]}`}
-              side="top"
+              type="button"
+              role="radio"
+              aria-checked={star === value}
+              aria-label={`${star} star${star > 1 ? 's' : ''}: ${PRIORITY_LABELS[star]}`}
+              disabled={disabled}
+              className={cn(
+                'rounded-sm p-0.5 transition-all duration-150',
+                'focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
+                !disabled && 'cursor-pointer hover:scale-110',
+                disabled && 'cursor-default opacity-70',
+                isPopping && 'scale-125'
+              )}
+              onClick={() => handleSelect(star)}
+              onMouseEnter={() => !disabled && setHoverValue(star)}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowRight' && value < 4) handleSelect(value + 1);
+                if (e.key === 'ArrowLeft' && value > 1) handleSelect(value - 1);
+              }}
             >
-              <button
-                type="button"
-                role="radio"
-                aria-checked={star === value}
-                aria-label={`${star} star${star > 1 ? 's' : ''}: ${PRIORITY_LABELS[star]}`}
-                disabled={disabled}
+              <Star
                 className={cn(
-                  'rounded-sm p-0.5 transition-all duration-150',
-                  'focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
-                  !disabled && 'cursor-pointer hover:scale-110',
-                  disabled && 'cursor-default opacity-70',
-                  isPopping && 'scale-125'
+                  iconSize,
+                  'transition-all duration-150',
+                  filled
+                    ? 'fill-yellow-400 text-yellow-400 drop-shadow-[0_0_3px_rgba(250,204,21,0.4)]'
+                    : 'text-muted-foreground/40 fill-transparent'
                 )}
-                onClick={() => handleSelect(star)}
-                onMouseEnter={() => !disabled && setHoverValue(star)}
-                onKeyDown={(e) => {
-                  if (e.key === 'ArrowRight' && value < 4) handleSelect(value + 1);
-                  if (e.key === 'ArrowLeft' && value > 1) handleSelect(value - 1);
-                }}
-              >
-                <Star
-                  className={cn(
-                    iconSize,
-                    'transition-all duration-150',
-                    filled
-                      ? 'fill-yellow-400 text-yellow-400 drop-shadow-[0_0_3px_rgba(250,204,21,0.4)]'
-                      : 'text-muted-foreground/40 fill-transparent'
-                  )}
-                />
-              </button>
-            </Tooltip>
+              />
+            </button>
           );
         })}
 
@@ -195,4 +181,4 @@ export function WishlistPriorityDisplay({
   );
 }
 
-export { PRIORITY_LABELS, PRIORITY_TOOLTIP_LABELS };
+export { PRIORITY_LABELS };
