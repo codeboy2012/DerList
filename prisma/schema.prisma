@@ -1165,6 +1165,12 @@ model WishlistItem {
   wishlistCategory   WishlistCategory? @relation(fields: [wishlistCategoryId], references: [id], onDelete: SetNull)
   wishlistCategoryId String?
 
+  // ── Extended editor data ──
+
+  /// JSON blob for extended product editor fields (sellers, specs, images,
+  /// pricing extras, AI metadata, etc.) that don't have dedicated columns.
+  metadata String?
+
   @@index([wishlistId])
   @@index([wishlistId, position])
   @@index([wishlistId, category])

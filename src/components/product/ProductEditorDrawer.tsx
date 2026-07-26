@@ -3,22 +3,16 @@
 /**
  * ProductEditorDrawer — Full-featured product editor in a right-side drawer.
  *
- * Sections:
- * - Product Information (name, brand, model, identifiers, URLs)
- * - Pricing (current, original, sale, shipping, tax, coupons)
- * - Sellers (multiple retailers with price/link/availability)
- * - Images (upload, paste URL, reorder, delete)
- * - Wishlist (priority, quantity, desired price, status, notes)
- * - AI Metadata (confidence, tags, suggestions)
- * - Specifications (dynamic key-value pairs)
- * - History (price history, import info, timestamps)
- *
- * All existing API logic is preserved. This is UI-only.
+ * Persists ALL fields via PATCH /api/wishlists/items/[id].
+ * Native columns: title, description, url, image, brand, retailer, currentPrice,
+ *   originalPrice, dealInfo, currency, priority, quantity, purchased, notes, category.
+ * Extended fields stored in `metadata` JSON column.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   Archive,
+  Check,
   ChevronDown,
   ChevronRight,
   Copy,
@@ -49,21 +43,28 @@ import { useToast } from '@/components/ui/Toast';
 export interface Seller {
   id: string;
   name: string;
+  logo: string;
   price: string;
   shipping: string;
+  tax: string;
+  coupon: string;
+  promoCode: string;
   url: string;
   availability: string;
+  notes: string;
+  lastChecked: string;
   isPreferred: boolean;
+  isVerified: boolean;
 }
 
 export interface SpecField {
   id: string;
   key: string;
   value: string;
+  unit: string;
 }
 
 export interface ProductEditorData {
-  // Identity
   title: string;
   brand: string;
   model: string;
@@ -78,7 +79,6 @@ export interface ProductEditorData {
   description: string;
   notes: string;
   tags: string;
-  // Pricing
   currentPrice: string;
   originalPrice: string;
   salePrice: string;
@@ -90,12 +90,9 @@ export interface ProductEditorData {
   promoCode: string;
   finalTotal: string;
   priceLocked: boolean;
-  // Sellers
   sellers: Seller[];
-  // Images
   images: string[];
   primaryImageIndex: number;
-  // Wishlist
   priority: string;
   quantity: string;
   desiredPrice: string;
@@ -106,14 +103,11 @@ export interface ProductEditorData {
   subFolder: string;
   wishlistCategory: string;
   customLabels: string;
-  // AI Metadata
   aiConfidence: string;
   aiTags: string;
   aiSuggestedCategory: string;
   aiSuggestedName: string;
-  // Specs
   specs: SpecField[];
-  // History (read-only display)
   createdAt: string;
   updatedAt: string;
   importedFrom: string;
@@ -125,7 +119,6 @@ export interface ProductEditorData {
 export interface ProductEditorDrawerProps {
   open: boolean;
   onClose: () => void;
-  /** Pre-filled data from existing item */
   item: {
     id: string;
     title: string;
@@ -149,6 +142,10 @@ export interface ProductEditorDrawerProps {
   onSave?: () => void;
   onDelete?: () => void;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 function buildInitialData(item: ProductEditorDrawerProps['item']): ProductEditorData {
   return {
@@ -182,11 +179,18 @@ function buildInitialData(item: ProductEditorDrawerProps['item']): ProductEditor
           {
             id: '1',
             name: item.retailer,
+            logo: '',
             price: item.currentPrice || '',
             shipping: '',
+            tax: '',
+            coupon: '',
+            promoCode: '',
             url: item.url || '',
             availability: 'In Stock',
+            notes: '',
+            lastChecked: '',
             isPreferred: true,
+            isVerified: false,
           },
         ]
       : [],
@@ -216,26 +220,83 @@ function buildInitialData(item: ProductEditorDrawerProps['item']): ProductEditor
   };
 }
 
+/** Merge API response metadata into data state */
+function mergeMetadata(base: ProductEditorData, meta: Record<string, unknown>): ProductEditorData {
+  return {
+    ...base,
+    model: (meta.model as string) || base.model,
+    subCategory: (meta.subCategory as string) || base.subCategory,
+    sku: (meta.sku as string) || base.sku,
+    upc: (meta.upc as string) || base.upc,
+    asin: (meta.asin as string) || base.asin,
+    mpn: (meta.mpn as string) || base.mpn,
+    storeUrl: (meta.storeUrl as string) || base.storeUrl,
+    tags: (meta.tags as string) || base.tags,
+    salePrice: (meta.salePrice as string) || base.salePrice,
+    dealAmount: (meta.dealAmount as string) || base.dealAmount,
+    discountPercent: (meta.discountPercent as string) || base.discountPercent,
+    shippingCost: (meta.shippingCost as string) || base.shippingCost,
+    tax: (meta.tax as string) || base.tax,
+    coupon: (meta.coupon as string) || base.coupon,
+    promoCode: (meta.promoCode as string) || base.promoCode,
+    finalTotal: (meta.finalTotal as string) || base.finalTotal,
+    priceLocked: (meta.priceLocked as boolean) || base.priceLocked,
+    sellers: (meta.sellers as Seller[]) || base.sellers,
+    images: (meta.images as string[]) || base.images,
+    primaryImageIndex: (meta.primaryImageIndex as number) ?? base.primaryImageIndex,
+    desiredPrice: (meta.desiredPrice as string) || base.desiredPrice,
+    purchaseStatus: (meta.purchaseStatus as string) || base.purchaseStatus,
+    needByDate: (meta.needByDate as string) || base.needByDate,
+    folder: (meta.folder as string) || base.folder,
+    subFolder: (meta.subFolder as string) || base.subFolder,
+    wishlistCategory: (meta.wishlistCategory as string) || base.wishlistCategory,
+    wishlistNotes: (meta.wishlistNotes as string) || base.wishlistNotes,
+    customLabels: (meta.customLabels as string) || base.customLabels,
+    aiConfidence: (meta.aiConfidence as string) || base.aiConfidence,
+    aiTags: (meta.aiTags as string) || base.aiTags,
+    aiSuggestedCategory: (meta.aiSuggestedCategory as string) || base.aiSuggestedCategory,
+    aiSuggestedName: (meta.aiSuggestedName as string) || base.aiSuggestedName,
+    specs: (meta.specs as SpecField[]) || base.specs,
+    importedFrom: (meta.importedFrom as string) || base.importedFrom,
+    lastSynced: (meta.lastSynced as string) || base.lastSynced,
+    provider: (meta.provider as string) || base.provider,
+    extractionConfidence: (meta.extractionConfidence as string) || base.extractionConfidence,
+  };
+}
+
+/** Calculate pricing totals */
+function calcPricing(data: ProductEditorData) {
+  const price = parseFloat(data.currentPrice) || 0;
+  const original = parseFloat(data.originalPrice) || 0;
+  const shipping = parseFloat(data.shippingCost) || 0;
+  const tax = parseFloat(data.tax) || 0;
+
+  const savings = original > price && price > 0 ? original - price : 0;
+  const savingsPercent = original > 0 && savings > 0 ? Math.round((savings / original) * 100) : 0;
+  const total = price + shipping + tax;
+
+  return { savings: savings.toFixed(2), savingsPercent, total: total.toFixed(2) };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Main Drawer Component
+// Main Component
 // ─────────────────────────────────────────────────────────────────────────────
+
+type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error';
 
 export function ProductEditorDrawer({
   open,
   onClose,
   item,
-  wishlistId,
   onSave,
   onDelete,
 }: ProductEditorDrawerProps) {
   const [data, setData] = useState<ProductEditorData>(() => buildInitialData(item));
-  const [isDirty, setIsDirty] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [overflowOpen, setOverflowOpen] = useState(false);
-  const toast = useToast();
-
-  // Track which sections are expanded
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [sections, setSections] = useState<Record<string, boolean>>({
     info: true,
     pricing: true,
@@ -246,6 +307,53 @@ export function ProductEditorDrawer({
     specs: false,
     history: false,
   });
+  const toast = useToast();
+  const savedTimer = useRef<ReturnType<typeof setTimeout>>(null);
+
+  const isDirty = saveStatus === 'unsaved' || saveStatus === 'error';
+
+  // Load full item data from API on open
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const loadItem = async () => {
+      const r = await fetch(`/api/wishlists/items/${item.id}`);
+      const res = await r.json();
+      if (cancelled) return;
+      if (res.success && res.item) {
+        const base = buildInitialData({
+          ...item,
+          title: res.item.title,
+          description: res.item.description,
+          url: res.item.url,
+          image: res.item.image,
+          brand: res.item.brand,
+          retailer: res.item.retailer,
+          currentPrice: res.item.currentPrice,
+          originalPrice: res.item.originalPrice,
+          dealInfo: res.item.dealInfo,
+          priority: res.item.priority,
+          quantity: res.item.quantity,
+          purchased: res.item.purchased,
+          notes: res.item.notes,
+          category: res.item.category,
+        });
+        const merged = mergeMetadata(base, res.item.metadata || {});
+        merged.createdAt = res.item.createdAt || '';
+        merged.updatedAt = res.item.updatedAt || '';
+        setData(merged);
+      }
+      setIsLoading(false);
+    };
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsLoading(true);
+    loadItem().catch(() => {
+      if (!cancelled) setIsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, item.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleSection = (key: string) => {
     setSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -254,7 +362,7 @@ export function ProductEditorDrawer({
   const updateField = useCallback(
     <K extends keyof ProductEditorData>(key: K, value: ProductEditorData[K]) => {
       setData((prev) => ({ ...prev, [key]: value }));
-      setIsDirty(true);
+      setSaveStatus('unsaved');
     },
     []
   );
@@ -264,78 +372,139 @@ export function ProductEditorDrawer({
     return window.confirm('You have unsaved changes. Discard them?');
   }, [isDirty]);
 
-  // ─── Save ───
-  const handleSave = async (closeAfter = false) => {
-    if (!data.title.trim()) {
-      setError('Product name is required.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    setError(null);
-
-    const formData = new FormData();
-    formData.set('wishlistId', wishlistId);
-    formData.set('itemId', item.id);
-    formData.set('title', data.title.trim());
-    if (data.description) formData.set('description', data.description);
-    if (data.url) formData.set('url', data.url);
-    if (data.images.length > 0)
-      formData.set('image', data.images[data.primaryImageIndex] || data.images[0]);
-    if (data.brand) formData.set('brand', data.brand);
-    if (data.sellers.length > 0) {
-      const preferred = data.sellers.find((s) => s.isPreferred) || data.sellers[0];
-      formData.set('retailer', preferred.name);
-    }
-    if (data.currentPrice) formData.set('currentPrice', data.currentPrice);
-    formData.set('currency', item.currency || 'USD');
-    formData.set('priority', data.priority);
-    formData.set('quantity', data.quantity || '1');
-    if (data.wishlistNotes) formData.set('notes', data.wishlistNotes);
-    formData.set('purchased', data.purchaseStatus === 'PURCHASED' ? 'true' : 'false');
-
-    try {
-      const res = await fetch('/api/wishlists/add-item', {
-        method: 'POST',
-        body: formData,
-      });
-      const result = await res.json();
-
-      if (!result.success && !res.ok) {
-        setError(result.error || 'Failed to save.');
-        setIsSubmitting(false);
+  // ─── Save (persists everything) ───
+  const handleSave = useCallback(
+    async (closeAfter = false) => {
+      if (!data.title.trim()) {
+        setError('Product name is required.');
         return;
       }
+      setSaveStatus('saving');
+      setError(null);
 
-      setIsDirty(false);
-      toast.success('Product updated successfully');
-      onSave?.();
-      if (closeAfter) onClose();
-    } catch {
-      setError('Network error. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+      // Build metadata object with all extended fields
+      const metadata = {
+        model: data.model,
+        subCategory: data.subCategory,
+        sku: data.sku,
+        upc: data.upc,
+        asin: data.asin,
+        mpn: data.mpn,
+        storeUrl: data.storeUrl,
+        tags: data.tags,
+        salePrice: data.salePrice,
+        dealAmount: data.dealAmount,
+        discountPercent: data.discountPercent,
+        shippingCost: data.shippingCost,
+        tax: data.tax,
+        coupon: data.coupon,
+        promoCode: data.promoCode,
+        finalTotal: data.finalTotal,
+        priceLocked: data.priceLocked,
+        sellers: data.sellers,
+        images: data.images,
+        primaryImageIndex: data.primaryImageIndex,
+        desiredPrice: data.desiredPrice,
+        purchaseStatus: data.purchaseStatus,
+        needByDate: data.needByDate,
+        folder: data.folder,
+        subFolder: data.subFolder,
+        wishlistCategory: data.wishlistCategory,
+        wishlistNotes: data.wishlistNotes,
+        customLabels: data.customLabels,
+        aiConfidence: data.aiConfidence,
+        aiTags: data.aiTags,
+        aiSuggestedCategory: data.aiSuggestedCategory,
+        aiSuggestedName: data.aiSuggestedName,
+        specs: data.specs,
+        importedFrom: data.importedFrom,
+        lastSynced: data.lastSynced,
+        provider: data.provider,
+        extractionConfidence: data.extractionConfidence,
+      };
+
+      // Determine retailer from preferred seller
+      const preferredSeller = data.sellers.find((s) => s.isPreferred) || data.sellers[0];
+
+      const body = {
+        title: data.title.trim(),
+        description: data.description || undefined,
+        url: data.url || undefined,
+        image:
+          data.images.length > 0
+            ? data.images[data.primaryImageIndex] || data.images[0]
+            : undefined,
+        brand: data.brand || undefined,
+        retailer: preferredSeller?.name || undefined,
+        currentPrice: data.currentPrice || undefined,
+        originalPrice: data.originalPrice || undefined,
+        dealInfo: data.dealAmount || undefined,
+        currency: 'USD',
+        priority: data.priority,
+        quantity: parseInt(data.quantity) || 1,
+        purchased: data.purchaseStatus === 'PURCHASED',
+        notes: data.wishlistNotes || data.notes || undefined,
+        category: data.wishlistCategory || data.category || undefined,
+        metadata,
+      };
+
+      try {
+        const res = await fetch(`/api/wishlists/items/${item.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const result = await res.json();
+
+        if (!res.ok || !result.success) {
+          setError(result.error || 'Failed to save.');
+          setSaveStatus('error');
+          return;
+        }
+
+        setSaveStatus('saved');
+        if (savedTimer.current) clearTimeout(savedTimer.current);
+        savedTimer.current = setTimeout(() => setSaveStatus('idle'), 2000);
+        toast.success('Saved');
+        onSave?.();
+        if (closeAfter) onClose();
+      } catch {
+        setError('Network error. Please try again.');
+        setSaveStatus('error');
+      }
+    },
+    [data, item.id, toast, onSave, onClose]
+  );
+
+  // Ctrl+S keyboard shortcut
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        handleSave(false);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [open, handleSave]);
 
   // ─── Delete ───
   const handleDelete = useCallback(async () => {
-    if (!window.confirm('Delete this product? This cannot be undone.')) return;
-    const fd = new FormData();
-    fd.set('itemId', item.id);
-    fd.set('wishlistId', wishlistId);
     try {
-      await fetch('/api/wishlists/add-item', {
-        method: 'DELETE',
-        body: fd,
-      });
-      toast.success('Product removed');
-      onDelete?.();
-      onClose();
+      const res = await fetch(`/api/wishlists/items/${item.id}`, { method: 'DELETE' });
+      const result = await res.json();
+      if (result.success) {
+        toast.success('Product removed');
+        onDelete?.();
+        onClose();
+      } else {
+        toast.error('Failed to delete');
+      }
     } catch {
       toast.error('Failed to delete product');
     }
-  }, [item.id, wishlistId, toast, onDelete, onClose]);
+  }, [item.id, toast, onDelete, onClose]);
 
   // ─── AI Identify ───
   const handleAiIdentify = async () => {
@@ -354,6 +523,8 @@ export function ProductEditorDrawer({
         updateField('aiSuggestedName', c.title || '');
         updateField('aiSuggestedCategory', c.category || '');
         updateField('aiTags', c.tags?.join(', ') || '');
+        if (c.brand && !data.brand) updateField('brand', c.brand);
+        if (c.sku && !data.sku) updateField('sku', c.sku);
         toast.success('AI identification complete');
       } else {
         updateField('aiConfidence', '');
@@ -365,7 +536,7 @@ export function ProductEditorDrawer({
     }
   };
 
-  // ─── Overflow Menu Actions ───
+  // ─── Overflow Menu ───
   const overflowActions = useMemo(
     () => [
       {
@@ -403,18 +574,12 @@ export function ProductEditorDrawer({
           setOverflowOpen(false);
         },
       },
-      {
-        label: 'Delete',
-        icon: Trash2,
-        action: () => {
-          handleDelete();
-          setOverflowOpen(false);
-        },
-        danger: true,
-      },
     ],
-    [data.url, toast, handleDelete]
+    [data.url, toast]
   );
+
+  // ─── Pricing calculations ───
+  const pricing = useMemo(() => calcPricing(data), [data]);
 
   // ─── Render ───
   return (
@@ -426,153 +591,196 @@ export function ProductEditorDrawer({
       title={
         <div className="flex items-center gap-3">
           <span className="truncate">Edit Product</span>
-          {isDirty && (
-            <Badge variant="warning" className="text-[10px]">
-              Unsaved
-            </Badge>
-          )}
+          <SaveStatusBadge status={saveStatus} />
         </div>
       }
       description={data.title || 'New product'}
       footer={
         <DrawerFooter
-          isSubmitting={isSubmitting}
+          saveStatus={saveStatus}
           onSave={() => handleSave(false)}
           onSaveClose={() => handleSave(true)}
           onCancel={() => {
             if (handleBeforeClose()) onClose();
           }}
+          onDelete={() => setDeleteConfirm(true)}
         />
       }
     >
-      <div className="relative">
-        {/* Overflow menu button */}
-        <div className="absolute top-4 right-4 z-10">
-          <div className="relative">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={() => setOverflowOpen((o) => !o)}
+      {/* Loading overlay */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+        </div>
+      )}
+
+      {!isLoading && (
+        <div className="relative">
+          {/* Overflow menu */}
+          <div className="absolute top-4 right-4 z-10">
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => setOverflowOpen((o) => !o)}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+              {overflowOpen && (
+                <div className="border-border bg-card absolute top-full right-0 z-20 mt-1 w-44 rounded-xl border p-1 shadow-xl">
+                  {overflowActions.map((a) => (
+                    <button
+                      key={a.label}
+                      type="button"
+                      onClick={a.action}
+                      className="text-foreground hover:bg-surface flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors"
+                    >
+                      <a.icon className="h-4 w-4" />
+                      {a.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Error banner */}
+          {error && (
+            <div className="border-danger/30 bg-danger/5 text-danger mx-6 mt-4 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {error}
+              <button type="button" onClick={() => setError(null)} className="ml-auto">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          <div className="space-y-1 p-4">
+            <CollapsibleSection
+              title="Product Information"
+              expanded={sections.info}
+              onToggle={() => toggleSection('info')}
             >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-            {overflowOpen && (
-              <div className="border-border bg-card absolute top-full right-0 z-20 mt-1 w-44 rounded-xl border p-1 shadow-xl">
-                {overflowActions.map((a) => (
-                  <button
-                    key={a.label}
-                    type="button"
-                    onClick={a.action}
-                    className={cn(
-                      'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors',
-                      'danger' in a && a.danger
-                        ? 'text-danger hover:bg-danger/10'
-                        : 'text-foreground hover:bg-surface'
-                    )}
-                  >
-                    <a.icon className="h-4 w-4" />
-                    {a.label}
-                  </button>
-                ))}
-              </div>
-            )}
+              <ProductInfoSection data={data} updateField={updateField} />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Pricing"
+              expanded={sections.pricing}
+              onToggle={() => toggleSection('pricing')}
+            >
+              <PricingSection data={data} updateField={updateField} pricing={pricing} />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Sellers"
+              expanded={sections.sellers}
+              onToggle={() => toggleSection('sellers')}
+              badge={data.sellers.length > 0 ? String(data.sellers.length) : undefined}
+            >
+              <SellersSection data={data} setData={setData} setSaveStatus={setSaveStatus} />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Images"
+              expanded={sections.images}
+              onToggle={() => toggleSection('images')}
+              badge={data.images.length > 0 ? String(data.images.length) : undefined}
+            >
+              <ImagesSection data={data} setData={setData} setSaveStatus={setSaveStatus} />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Wishlist"
+              expanded={sections.wishlist}
+              onToggle={() => toggleSection('wishlist')}
+            >
+              <WishlistSection data={data} updateField={updateField} />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="AI Metadata"
+              expanded={sections.ai}
+              onToggle={() => toggleSection('ai')}
+            >
+              <AIMetadataSection
+                data={data}
+                updateField={updateField}
+                onIdentify={handleAiIdentify}
+              />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Specifications"
+              expanded={sections.specs}
+              onToggle={() => toggleSection('specs')}
+              badge={data.specs.length > 0 ? String(data.specs.length) : undefined}
+            >
+              <SpecsSection data={data} setData={setData} setSaveStatus={setSaveStatus} />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="History & Import"
+              expanded={sections.history}
+              onToggle={() => toggleSection('history')}
+            >
+              <HistorySection data={data} />
+            </CollapsibleSection>
           </div>
         </div>
+      )}
 
-        {/* Error banner */}
-        {error && (
-          <div className="border-danger/30 bg-danger/5 text-danger mx-6 mt-4 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            {error}
-            <button type="button" onClick={() => setError(null)} className="ml-auto">
-              <X className="h-3.5 w-3.5" />
-            </button>
+      {/* Delete confirmation dialog */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className="border-border bg-card w-full max-w-sm rounded-xl border p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold">Delete Product</h3>
+            <p className="text-muted-foreground mt-2 text-sm">
+              Are you sure you want to delete &ldquo;{data.title}&rdquo;? This action cannot be
+              undone.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="ghost" size="md" onClick={() => setDeleteConfirm(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="md"
+                onClick={() => {
+                  setDeleteConfirm(false);
+                  handleDelete();
+                }}
+              >
+                Delete Product
+              </Button>
+            </div>
           </div>
-        )}
-
-        <div className="space-y-1 p-4">
-          {/* ─── Product Information ─── */}
-          <CollapsibleSection
-            title="Product Information"
-            expanded={sections.info}
-            onToggle={() => toggleSection('info')}
-          >
-            <ProductInfoSection data={data} updateField={updateField} />
-          </CollapsibleSection>
-
-          {/* ─── Pricing ─── */}
-          <CollapsibleSection
-            title="Pricing"
-            expanded={sections.pricing}
-            onToggle={() => toggleSection('pricing')}
-          >
-            <PricingSection data={data} updateField={updateField} />
-          </CollapsibleSection>
-
-          {/* ─── Sellers ─── */}
-          <CollapsibleSection
-            title="Sellers"
-            expanded={sections.sellers}
-            onToggle={() => toggleSection('sellers')}
-            badge={data.sellers.length > 0 ? String(data.sellers.length) : undefined}
-          >
-            <SellersSection data={data} setData={setData} setIsDirty={setIsDirty} />
-          </CollapsibleSection>
-
-          {/* ─── Images ─── */}
-          <CollapsibleSection
-            title="Images"
-            expanded={sections.images}
-            onToggle={() => toggleSection('images')}
-            badge={data.images.length > 0 ? String(data.images.length) : undefined}
-          >
-            <ImagesSection data={data} setData={setData} setIsDirty={setIsDirty} />
-          </CollapsibleSection>
-
-          {/* ─── Wishlist ─── */}
-          <CollapsibleSection
-            title="Wishlist"
-            expanded={sections.wishlist}
-            onToggle={() => toggleSection('wishlist')}
-          >
-            <WishlistSection data={data} updateField={updateField} />
-          </CollapsibleSection>
-
-          {/* ─── AI Metadata ─── */}
-          <CollapsibleSection
-            title="AI Metadata"
-            expanded={sections.ai}
-            onToggle={() => toggleSection('ai')}
-          >
-            <AIMetadataSection
-              data={data}
-              updateField={updateField}
-              onIdentify={handleAiIdentify}
-            />
-          </CollapsibleSection>
-
-          {/* ─── Specifications ─── */}
-          <CollapsibleSection
-            title="Specifications"
-            expanded={sections.specs}
-            onToggle={() => toggleSection('specs')}
-            badge={data.specs.length > 0 ? String(data.specs.length) : undefined}
-          >
-            <SpecsSection data={data} setData={setData} setIsDirty={setIsDirty} />
-          </CollapsibleSection>
-
-          {/* ─── History ─── */}
-          <CollapsibleSection
-            title="History & Import"
-            expanded={sections.history}
-            onToggle={() => toggleSection('history')}
-          >
-            <HistorySection data={data} />
-          </CollapsibleSection>
         </div>
-      </div>
+      )}
     </Drawer>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Save Status Badge
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SaveStatusBadge({ status }: { status: SaveStatus }) {
+  if (status === 'idle') return null;
+  const config = {
+    unsaved: { variant: 'warning' as const, label: 'Unsaved', icon: null },
+    saving: { variant: 'accent' as const, label: 'Saving...', icon: Loader2 },
+    saved: { variant: 'success' as const, label: 'Saved', icon: Check },
+    error: { variant: 'danger' as const, label: 'Error', icon: AlertCircle },
+  };
+  const c = config[status];
+  if (!c) return null;
+  return (
+    <Badge variant={c.variant} className="gap-1 text-[10px]">
+      {c.icon && <c.icon className="h-3 w-3" />}
+      {c.label}
+    </Badge>
   );
 }
 
@@ -630,6 +838,7 @@ function ProductInfoSection({
   data: ProductEditorData;
   updateField: UpdateFn;
 }) {
+  const urlInvalid = data.url !== '' && !data.url.startsWith('http');
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <div className="sm:col-span-2">
@@ -638,6 +847,7 @@ function ProductInfoSection({
           value={data.title}
           onChange={(e) => updateField('title', e.target.value)}
           placeholder="e.g. NVIDIA RTX 5070 Ti"
+          invalid={data.title.length === 0}
         />
       </div>
       <div>
@@ -715,7 +925,11 @@ function ProductInfoSection({
           onChange={(e) => updateField('url', e.target.value)}
           type="url"
           placeholder="https://..."
+          invalid={urlInvalid}
         />
+        {urlInvalid && (
+          <p className="text-danger mt-1 text-xs">Must be a valid URL starting with http</p>
+        )}
       </div>
       <div className="sm:col-span-2">
         <FieldLabel label="Store URL" />
@@ -757,10 +971,20 @@ function ProductInfoSection({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Pricing Section
+// Pricing Section (with live calculations)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PricingSection({ data, updateField }: { data: ProductEditorData; updateField: UpdateFn }) {
+function PricingSection({
+  data,
+  updateField,
+  pricing,
+}: {
+  data: ProductEditorData;
+  updateField: UpdateFn;
+  pricing: { savings: string; savingsPercent: number; total: string };
+}) {
+  const priceInvalid =
+    data.currentPrice !== '' && (isNaN(Number(data.currentPrice)) || Number(data.currentPrice) < 0);
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -773,7 +997,11 @@ function PricingSection({ data, updateField }: { data: ProductEditorData; update
             step="0.01"
             min="0"
             placeholder="0.00"
+            invalid={priceInvalid}
           />
+          {priceInvalid && (
+            <p className="text-danger mt-1 text-xs">Price must be a positive number</p>
+          )}
         </div>
         <div>
           <FieldLabel label="Original Price" />
@@ -867,7 +1095,39 @@ function PricingSection({ data, updateField }: { data: ProductEditorData; update
           />
         </div>
       </div>
-      {/* Price Lock */}
+
+      {/* Live pricing summary */}
+      {parseFloat(data.currentPrice) > 0 && (
+        <div className="bg-surface/50 space-y-1 rounded-lg p-3">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span className="font-medium">${parseFloat(data.currentPrice).toFixed(2)}</span>
+          </div>
+          {parseFloat(data.shippingCost) > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">+ Shipping</span>
+              <span>${parseFloat(data.shippingCost).toFixed(2)}</span>
+            </div>
+          )}
+          {parseFloat(data.tax) > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">+ Tax</span>
+              <span>${parseFloat(data.tax).toFixed(2)}</span>
+            </div>
+          )}
+          {pricing.savingsPercent > 0 && (
+            <div className="text-success flex justify-between text-sm">
+              <span>Savings ({pricing.savingsPercent}%)</span>
+              <span>-${pricing.savings}</span>
+            </div>
+          )}
+          <div className="border-border flex justify-between border-t pt-1 text-sm font-semibold">
+            <span>Total</span>
+            <span>${pricing.total}</span>
+          </div>
+        </div>
+      )}
+
       <label className="border-border hover:bg-surface/50 flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-colors">
         <input
           type="checkbox"
@@ -887,17 +1147,17 @@ function PricingSection({ data, updateField }: { data: ProductEditorData; update
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sellers Section
+// Sellers Section (full fields)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function SellersSection({
   data,
   setData,
-  setIsDirty,
+  setSaveStatus,
 }: {
   data: ProductEditorData;
   setData: React.Dispatch<React.SetStateAction<ProductEditorData>>;
-  setIsDirty: React.Dispatch<React.SetStateAction<boolean>>;
+  setSaveStatus: React.Dispatch<React.SetStateAction<SaveStatus>>;
 }) {
   const addSeller = () => {
     setData((prev) => ({
@@ -907,48 +1167,56 @@ function SellersSection({
         {
           id: String(Date.now()),
           name: '',
+          logo: '',
           price: '',
           shipping: '',
+          tax: '',
+          coupon: '',
+          promoCode: '',
           url: '',
           availability: 'In Stock',
+          notes: '',
+          lastChecked: '',
           isPreferred: prev.sellers.length === 0,
+          isVerified: false,
         },
       ],
     }));
-    setIsDirty(true);
+    setSaveStatus('unsaved');
   };
 
   const removeSeller = (id: string) => {
-    setData((prev) => ({
-      ...prev,
-      sellers: prev.sellers.filter((s) => s.id !== id),
-    }));
-    setIsDirty(true);
+    setData((prev) => ({ ...prev, sellers: prev.sellers.filter((s) => s.id !== id) }));
+    setSaveStatus('unsaved');
   };
 
   const updateSeller = (id: string, field: keyof Seller, value: string | boolean) => {
     setData((prev) => ({
       ...prev,
-      sellers: prev.sellers.map((s) =>
-        s.id === id
-          ? { ...s, [field]: value }
-          : field === 'isPreferred' && value === true
-            ? { ...s, isPreferred: false }
-            : s
-      ),
+      sellers: prev.sellers.map((s) => {
+        if (s.id === id) return { ...s, [field]: value };
+        if (field === 'isPreferred' && value === true) return { ...s, isPreferred: false };
+        return s;
+      }),
     }));
-    setIsDirty(true);
+    setSaveStatus('unsaved');
   };
 
   return (
     <div className="space-y-3">
       {data.sellers.map((seller) => (
-        <div key={seller.id} className="border-border space-y-3 rounded-lg border p-3">
+        <div
+          key={seller.id}
+          className={cn(
+            'space-y-3 rounded-lg border p-3',
+            seller.isPreferred ? 'border-accent/40 bg-accent/5' : 'border-border'
+          )}
+        >
           <div className="flex items-center gap-2">
             <Input
               value={seller.name}
               onChange={(e) => updateSeller(seller.id, 'name', e.target.value)}
-              placeholder="Retailer name"
+              placeholder="Store name"
               className="flex-1 font-medium"
             />
             <label className="flex cursor-pointer items-center gap-1.5 text-xs whitespace-nowrap">
@@ -961,6 +1229,15 @@ function SellersSection({
               />
               Preferred
             </label>
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={seller.isVerified}
+                onChange={(e) => updateSeller(seller.id, 'isVerified', e.target.checked)}
+                className="h-3 w-3"
+              />
+              Verified
+            </label>
             <Button
               variant="ghost"
               size="sm"
@@ -970,7 +1247,7 @@ function SellersSection({
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-3">
             <Input
               value={seller.price}
               onChange={(e) => updateSeller(seller.id, 'price', e.target.value)}
@@ -986,10 +1263,22 @@ function SellersSection({
               step="0.01"
             />
             <Input
-              value={seller.url}
-              onChange={(e) => updateSeller(seller.id, 'url', e.target.value)}
-              placeholder="Product URL"
-              className="sm:col-span-2"
+              value={seller.tax}
+              onChange={(e) => updateSeller(seller.id, 'tax', e.target.value)}
+              placeholder="Tax"
+              type="number"
+              step="0.01"
+            />
+            <Input
+              value={seller.coupon}
+              onChange={(e) => updateSeller(seller.id, 'coupon', e.target.value)}
+              placeholder="Coupon"
+            />
+            <Input
+              value={seller.promoCode}
+              onChange={(e) => updateSeller(seller.id, 'promoCode', e.target.value)}
+              placeholder="Promo code"
+              className="font-mono"
             />
             <Select
               value={seller.availability}
@@ -1002,6 +1291,31 @@ function SellersSection({
               <option value="Unknown">Unknown</option>
             </Select>
           </div>
+          <Input
+            value={seller.url}
+            onChange={(e) => updateSeller(seller.id, 'url', e.target.value)}
+            placeholder="Product URL at this store"
+          />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Input
+              value={seller.logo}
+              onChange={(e) => updateSeller(seller.id, 'logo', e.target.value)}
+              placeholder="Store logo URL (optional)"
+            />
+            <Input
+              value={seller.lastChecked}
+              onChange={(e) => updateSeller(seller.id, 'lastChecked', e.target.value)}
+              type="date"
+              placeholder="Last checked"
+            />
+          </div>
+          <Textarea
+            value={seller.notes}
+            onChange={(e) => updateSeller(seller.id, 'notes', e.target.value)}
+            placeholder="Seller notes..."
+            rows={1}
+            className="text-xs"
+          />
         </div>
       ))}
       <Button type="button" variant="secondary" size="sm" className="gap-2" onClick={addSeller}>
@@ -1018,18 +1332,19 @@ function SellersSection({
 function ImagesSection({
   data,
   setData,
-  setIsDirty,
+  setSaveStatus,
 }: {
   data: ProductEditorData;
   setData: React.Dispatch<React.SetStateAction<ProductEditorData>>;
-  setIsDirty: React.Dispatch<React.SetStateAction<boolean>>;
+  setSaveStatus: React.Dispatch<React.SetStateAction<SaveStatus>>;
 }) {
   const [urlInput, setUrlInput] = useState('');
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
   const addImage = (url: string) => {
     if (!url.trim()) return;
     setData((prev) => ({ ...prev, images: [...prev.images, url.trim()] }));
-    setIsDirty(true);
+    setSaveStatus('unsaved');
     setUrlInput('');
   };
 
@@ -1040,12 +1355,12 @@ function ImagesSection({
         prev.primaryImageIndex >= images.length ? 0 : prev.primaryImageIndex;
       return { ...prev, images, primaryImageIndex };
     });
-    setIsDirty(true);
+    setSaveStatus('unsaved');
   };
 
   const setPrimary = (index: number) => {
     setData((prev) => ({ ...prev, primaryImageIndex: index }));
-    setIsDirty(true);
+    setSaveStatus('unsaved');
   };
 
   const moveImage = (from: number, to: number) => {
@@ -1054,39 +1369,42 @@ function ImagesSection({
       const images = [...prev.images];
       const [moved] = images.splice(from, 1);
       images.splice(to, 0, moved);
-      let primaryImageIndex = prev.primaryImageIndex;
-      if (prev.primaryImageIndex === from) primaryImageIndex = to;
-      else if (from < prev.primaryImageIndex && to >= prev.primaryImageIndex) primaryImageIndex--;
-      else if (from > prev.primaryImageIndex && to <= prev.primaryImageIndex) primaryImageIndex++;
-      return { ...prev, images, primaryImageIndex };
+      let pi = prev.primaryImageIndex;
+      if (prev.primaryImageIndex === from) pi = to;
+      else if (from < prev.primaryImageIndex && to >= prev.primaryImageIndex) pi--;
+      else if (from > prev.primaryImageIndex && to <= prev.primaryImageIndex) pi++;
+      return { ...prev, images, primaryImageIndex: pi };
     });
-    setIsDirty(true);
+    setSaveStatus('unsaved');
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const url = e.dataTransfer.getData('text/plain');
-    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-      addImage(url);
-    }
+    if (url && (url.startsWith('http://') || url.startsWith('https://'))) addImage(url);
   };
 
   return (
     <div className="space-y-4">
-      {/* Image grid */}
       {data.images.length > 0 && (
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
           {data.images.map((img, i) => (
             <div
               key={`${img}-${i}`}
               className={cn(
-                'group relative aspect-square overflow-hidden rounded-lg border',
+                'group relative aspect-square cursor-pointer overflow-hidden rounded-lg border',
                 i === data.primaryImageIndex
                   ? 'border-accent ring-accent/30 ring-2'
                   : 'border-border'
               )}
             >
-              <img src={img} alt="" className="h-full w-full object-cover" loading="lazy" />
+              <img
+                src={img}
+                alt=""
+                className="h-full w-full object-cover"
+                loading="lazy"
+                onClick={() => setZoomedImage(img)}
+              />
               <div className="absolute inset-0 flex items-center justify-center gap-1 bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
                 <button
                   type="button"
@@ -1135,7 +1453,6 @@ function ImagesSection({
         </div>
       )}
 
-      {/* Drop zone / URL input */}
       <div
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
@@ -1161,6 +1478,27 @@ function ImagesSection({
           </Button>
         </div>
       </div>
+
+      {/* Image zoom modal */}
+      {zoomedImage && (
+        <div
+          className="fixed inset-0 z-[60] flex cursor-pointer items-center justify-center bg-black/80"
+          onClick={() => setZoomedImage(null)}
+        >
+          <img
+            src={zoomedImage}
+            alt="Zoomed"
+            className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain"
+          />
+          <button
+            type="button"
+            className="absolute top-4 right-4 text-white"
+            onClick={() => setZoomedImage(null)}
+          >
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1288,7 +1626,6 @@ function AIMetadataSection({
   onIdentify: () => void;
 }) {
   const isLoading = data.aiConfidence === 'loading';
-
   return (
     <div className="space-y-4">
       <Button
@@ -1297,7 +1634,7 @@ function AIMetadataSection({
         size="sm"
         className="gap-2"
         onClick={onIdentify}
-        disabled={isLoading}
+        disabled={isLoading || !data.title.trim()}
       >
         {isLoading ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1306,7 +1643,6 @@ function AIMetadataSection({
         )}
         {isLoading ? 'Identifying...' : 'Run AI Identification'}
       </Button>
-
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <FieldLabel label="AI Confidence" />
@@ -1339,7 +1675,7 @@ function AIMetadataSection({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="shrink-0 text-xs"
+                className="text-accent shrink-0 text-xs"
                 onClick={() => updateField('category', data.aiSuggestedCategory)}
               >
                 Accept
@@ -1361,7 +1697,7 @@ function AIMetadataSection({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="shrink-0 text-xs"
+                className="text-accent shrink-0 text-xs"
                 onClick={() => updateField('title', data.aiSuggestedName)}
               >
                 Accept
@@ -1375,64 +1711,73 @@ function AIMetadataSection({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Specifications Section
+// Specifications Section (with units)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function SpecsSection({
   data,
   setData,
-  setIsDirty,
+  setSaveStatus,
 }: {
   data: ProductEditorData;
   setData: React.Dispatch<React.SetStateAction<ProductEditorData>>;
-  setIsDirty: React.Dispatch<React.SetStateAction<boolean>>;
+  setSaveStatus: React.Dispatch<React.SetStateAction<SaveStatus>>;
 }) {
   const addSpec = () => {
     setData((prev) => ({
       ...prev,
-      specs: [...prev.specs, { id: String(Date.now()), key: '', value: '' }],
+      specs: [...prev.specs, { id: String(Date.now()), key: '', value: '', unit: '' }],
     }));
-    setIsDirty(true);
+    setSaveStatus('unsaved');
   };
 
   const removeSpec = (id: string) => {
-    setData((prev) => ({
-      ...prev,
-      specs: prev.specs.filter((s) => s.id !== id),
-    }));
-    setIsDirty(true);
+    setData((prev) => ({ ...prev, specs: prev.specs.filter((s) => s.id !== id) }));
+    setSaveStatus('unsaved');
   };
 
-  const updateSpec = (id: string, field: 'key' | 'value', value: string) => {
+  const updateSpec = (id: string, field: 'key' | 'value' | 'unit', value: string) => {
     setData((prev) => ({
       ...prev,
       specs: prev.specs.map((s) => (s.id === id ? { ...s, [field]: value } : s)),
     }));
-    setIsDirty(true);
+    setSaveStatus('unsaved');
   };
 
   return (
     <div className="space-y-3">
       {data.specs.length > 0 && (
         <div className="space-y-2">
+          <div className="text-muted-foreground grid grid-cols-[1fr_1fr_80px_32px] gap-2 px-1 text-[10px] font-medium">
+            <span>Name</span>
+            <span>Value</span>
+            <span>Unit</span>
+            <span />
+          </div>
           {data.specs.map((spec) => (
-            <div key={spec.id} className="flex items-center gap-2">
+            <div key={spec.id} className="grid grid-cols-[1fr_1fr_80px_32px] items-center gap-2">
               <Input
                 value={spec.key}
                 onChange={(e) => updateSpec(spec.id, 'key', e.target.value)}
-                placeholder="e.g. CPU, Weight, Color"
-                className="w-40 shrink-0 text-sm font-medium"
+                placeholder="e.g. VRAM"
+                className="text-sm"
               />
               <Input
                 value={spec.value}
                 onChange={(e) => updateSpec(spec.id, 'value', e.target.value)}
-                placeholder="Value"
-                className="flex-1 text-sm"
+                placeholder="e.g. 16"
+                className="text-sm"
+              />
+              <Input
+                value={spec.unit}
+                onChange={(e) => updateSpec(spec.id, 'unit', e.target.value)}
+                placeholder="GB"
+                className="text-sm"
               />
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-muted-foreground hover:text-danger h-8 w-8 shrink-0 p-0"
+                className="text-muted-foreground hover:text-danger h-8 w-8 p-0"
                 onClick={() => removeSpec(spec.id)}
               >
                 <X className="h-3.5 w-3.5" />
@@ -1446,7 +1791,7 @@ function SpecsSection({
       </Button>
       {data.specs.length === 0 && (
         <p className="text-muted-foreground text-xs">
-          Add custom specifications like CPU, GPU, VRAM, Weight, Dimensions, etc.
+          Add custom specs like VRAM: 16 GB, Weight: 2.1 lb, Socket: AM5
         </p>
       )}
     </div>
@@ -1459,18 +1804,24 @@ function SpecsSection({
 
 function HistorySection({ data }: { data: ProductEditorData }) {
   const fields = [
-    { label: 'Created', value: data.createdAt },
-    { label: 'Last Updated', value: data.updatedAt },
+    { label: 'Created', value: data.createdAt ? new Date(data.createdAt).toLocaleString() : '' },
+    {
+      label: 'Last Updated',
+      value: data.updatedAt ? new Date(data.updatedAt).toLocaleString() : '',
+    },
     { label: 'Imported From', value: data.importedFrom },
     { label: 'Last Synced', value: data.lastSynced },
     { label: 'Provider', value: data.provider },
-    { label: 'Extraction Confidence', value: data.extractionConfidence },
+    {
+      label: 'Extraction Confidence',
+      value: data.extractionConfidence ? `${data.extractionConfidence}%` : '',
+    },
   ].filter((f) => f.value);
 
   if (fields.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
-        No history data available yet. Information will appear here after the product is synced or
+        No history data available yet. Information appears here after the product is synced or
         imported.
       </p>
     );
@@ -1505,35 +1856,39 @@ function FieldLabel({ label, required }: { label: string; required?: boolean }) 
 }
 
 function DrawerFooter({
-  isSubmitting,
+  saveStatus,
   onSave,
   onSaveClose,
   onCancel,
+  onDelete,
 }: {
-  isSubmitting: boolean;
+  saveStatus: SaveStatus;
   onSave: () => void;
   onSaveClose: () => void;
   onCancel: () => void;
+  onDelete: () => void;
 }) {
+  const isSaving = saveStatus === 'saving';
   return (
     <>
-      <Button type="button" variant="ghost" size="md" onClick={onCancel}>
-        Cancel
-      </Button>
       <div className="flex items-center gap-2">
+        <Button type="button" variant="danger" size="sm" onClick={onDelete} className="gap-1.5">
+          <Trash2 className="h-3.5 w-3.5" /> Delete
+        </Button>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button type="button" variant="ghost" size="md" onClick={onCancel}>
+          Cancel
+        </Button>
         <Button
           type="button"
           variant="secondary"
           size="md"
           onClick={onSave}
-          disabled={isSubmitting}
+          disabled={isSaving}
           className="gap-2"
         >
-          {isSubmitting ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
+          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Save
         </Button>
         <Button
@@ -1541,14 +1896,10 @@ function DrawerFooter({
           variant="primary"
           size="md"
           onClick={onSaveClose}
-          disabled={isSubmitting}
+          disabled={isSaving}
           className="gap-2"
         >
-          {isSubmitting ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
+          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           Save & Close
         </Button>
       </div>
