@@ -94,12 +94,9 @@ export default async function PublicWishlistPage({ params, searchParams }: PageP
   }));
 
   // Parse curated Top Picks
-  let topPicks: { position: number; itemId: string }[] = [];
-  try {
-    if (wishlist.topPicks) topPicks = JSON.parse(wishlist.topPicks);
-  } catch {
-    /* fallback to auto */
-  }
+  const topPicks: { position: number; itemId: string }[] = Array.isArray(wishlist.topPicks)
+    ? (wishlist.topPicks as { position: number; itemId: string }[])
+    : [];
 
   // Sort
   const sorted = [...items];

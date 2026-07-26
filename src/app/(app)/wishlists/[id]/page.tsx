@@ -125,12 +125,9 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
   const hasCategories = serializedItems.some((i) => i.category);
 
   // Parse curated Top Picks
-  let topPicks: { position: number; itemId: string }[] = [];
-  try {
-    if (wishlist.topPicks) topPicks = JSON.parse(wishlist.topPicks);
-  } catch {
-    /* fallback to auto */
-  }
+  const topPicks: { position: number; itemId: string }[] = Array.isArray(wishlist.topPicks)
+    ? (wishlist.topPicks as { position: number; itemId: string }[])
+    : [];
 
   return (
     <div className="flex flex-col gap-6">
