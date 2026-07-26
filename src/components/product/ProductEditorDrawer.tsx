@@ -511,28 +511,140 @@ export function ProductEditorDrawer({
     if (!data.title.trim()) return;
     updateField('aiConfidence', 'loading');
     try {
-      const res = await fetch('/api/products/identify', {
+      const res = await fetch('/api/products/enrich', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: data.title }),
+        body: JSON.stringify({
+          product: {
+            title: data.title,
+            brand: data.brand || undefined,
+            category: data.category || undefined,
+            description: data.description || undefined,
+            url: data.url || undefined,
+            retailer: data.sellers.find((s) => s.isPreferred)?.name || undefined,
+            currentPrice: data.currentPrice ? parseFloat(data.currentPrice) : undefined,
+            originalPrice: data.originalPrice ? parseFloat(data.originalPrice) : undefined,
+            image: data.images[0] || undefined,
+            sku: data.sku || undefined,
+            asin: data.asin || undefined,
+            upc: data.upc || undefined,
+            mpn: data.mpn || undefined,
+          },
+        }),
       });
       const result = await res.json();
-      if (result.success && result.candidates?.length) {
-        const c = result.candidates[0];
-        updateField('aiConfidence', String(c.confidence || ''));
-        updateField('aiSuggestedName', c.title || '');
-        updateField('aiSuggestedCategory', c.category || '');
-        updateField('aiTags', c.tags?.join(', ') || '');
-        if (c.brand && !data.brand) updateField('brand', c.brand);
-        if (c.sku && !data.sku) updateField('sku', c.sku);
-        toast.success('AI identification complete');
+
+      if (result.success && result.enrichment) {
+        const e = result.enrichment;
+        // Fill empty fields only — never overwrite user data
+        if (e.brand && !data.brand) updateField('brand', e.brand);
+        if (e.model && !data.model) updateField('model', e.model);
+        if (e.category && !data.category) updateField('category', e.category);
+        if (e.subCategory && !data.subCategory) updateField('subCategory', e.subCategory);
+        if (e.description && !data.description) updateField('description', e.description);
+        if (e.sku && !data.sku) updateField('sku', e.sku);
+        if (e.upc && !data.upc) updateField('upc', e.upc);
+        if (e.asin && !data.asin) updateField('asin', e.asin);
+        if (e.mpn && !data.mpn) updateField('mpn', e.mpn);
+        if (e.msrp && !data.originalPrice) updateField('originalPrice', String(e.msrp));
+        if (e.currentPrice && !data.currentPrice)
+          updateField('currentPrice', String(e.currentPrice));
+
+        // Tags: append
+        if (e.tags && e.tags.length > 0) {
+          const existingTags = data.tags
+            ? data.tags.split(',').map((t: string) => t.trim().toLowerCase())
+            : [];
+          const newTags = e.tags.filter((t: string) => !existingTags.includes(t.toLowerCase()));
+          if (newTags.length > 0) {
+            updateField(
+              'tags',
+              data.tags ? `${data.tags}, ${newTags.join(', ')}` : newTags.join(', ')
+            );
+          }
+        }
+
+        // Images: append new ones
+        if (e.images && e.images.length > 0) {
+          const existing = new Set(data.images);
+          const newImages = e.images.filter((img: string) => !existing.has(img));
+          if (newImages.length > 0) {
+            setData((prev) => ({ ...prev, images: [...prev.images, ...newImages] }));
+            setSaveStatus('unsaved');
+          }
+        }
+
+        // Sellers: append new
+        if (e.sellers && e.sellers.length > 0) {
+          const existingNames = new Set(data.sellers.map((s) => s.name.toLowerCase()));
+          const newSellers = e.sellers
+            .filter((s: { name: string }) => s.name && !existingNames.has(s.name.toLowerCase()))
+            .map(
+              (s: {
+                name: string;
+                url?: string;
+                price?: number;
+                shipping?: string;
+                availability?: string;
+              }) => ({
+                id: String(Date.now() + Math.random()),
+                name: s.name,
+                logo: '',
+                price: s.price ? String(s.price) : '',
+                shipping: s.shipping || '',
+                tax: '',
+                coupon: '',
+                promoCode: '',
+                url: s.url || '',
+                availability: s.availability || 'Unknown',
+                notes: '',
+                lastChecked: '',
+                isPreferred: false,
+                isVerified: false,
+              })
+            );
+          if (newSellers.length > 0) {
+            setData((prev) => ({ ...prev, sellers: [...prev.sellers, ...newSellers] }));
+            setSaveStatus('unsaved');
+          }
+        }
+
+        // Specifications: append new
+        if (e.specifications && e.specifications.length > 0) {
+          const existingKeys = new Set(data.specs.map((s) => s.key.toLowerCase()));
+          const newSpecs = e.specifications
+            .filter((s: { key: string }) => s.key && !existingKeys.has(s.key.toLowerCase()))
+            .map((s: { key: string; value: string; unit?: string }) => ({
+              id: String(Date.now() + Math.random()),
+              key: s.key,
+              value: s.value,
+              unit: s.unit || '',
+            }));
+          if (newSpecs.length > 0) {
+            setData((prev) => ({ ...prev, specs: [...prev.specs, ...newSpecs] }));
+            setSaveStatus('unsaved');
+          }
+        }
+
+        // AI metadata
+        updateField('aiConfidence', String(e.confidence || ''));
+        if (e.suggestedTitle) updateField('aiSuggestedName', e.suggestedTitle);
+        if (e.suggestedCategory) updateField('aiSuggestedCategory', e.suggestedCategory);
+        if (e.tags) updateField('aiTags', e.tags.join(', '));
+
+        // Provider switch notification
+        if (result.providerSwitched) {
+          toast.info(`AI switched providers: ${result.switchReason}`);
+        }
+
+        toast.success('AI Autofill complete');
       } else {
         updateField('aiConfidence', '');
-        toast.error('Could not identify product');
+        toast.error(result.error || 'Could not enrich product');
       }
     } catch {
       updateField('aiConfidence', '');
-      toast.error('AI identification failed');
+      toast.error('AI Autofill failed');
     }
   };
 

@@ -33,6 +33,7 @@ type Phase = 'idle' | 'analyzing' | 'preview' | 'applying' | 'done';
 export function AIOrganizer({ wishlistId, itemCount }: AIOrganizerProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [changes, setChanges] = useState<unknown[]>([]);
   const toast = useToast();
 
   const handleAnalyze = async () => {
@@ -53,6 +54,7 @@ export function AIOrganizer({ wishlistId, itemCount }: AIOrganizerProps) {
 
       if (data.success && data.analysis) {
         setResult(data.analysis);
+        setChanges(data.changes || []);
         setPhase('preview');
       } else {
         toast.error(data.error || 'Analysis failed');
@@ -71,14 +73,13 @@ export function AIOrganizer({ wishlistId, itemCount }: AIOrganizerProps) {
       const res = await fetch('/api/wishlists/organize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wishlistId, mode: 'apply' }),
+        body: JSON.stringify({ wishlistId, mode: 'apply', changes }),
       });
       const data = await res.json();
 
       if (data.success) {
         setPhase('done');
-        toast.success('Wishlist organized successfully');
-        // Reload to show changes
+        toast.success(`Wishlist organized — ${data.applied} changes applied`);
         setTimeout(() => window.location.reload(), 1500);
       } else {
         toast.error(data.error || 'Failed to apply changes');
