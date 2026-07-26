@@ -26,3 +26,11 @@ export type {
 } from './enrichment';
 
 export { createServices } from './create';
+
+export { ProductResearchService } from './product-research';
+export type {
+  ResearchInput,
+  ResearchResult,
+  ResearchField,
+  RetailerData,
+} from './product-research';
