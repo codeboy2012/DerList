@@ -1,12 +1,6 @@
 'use client';
 
-import { useActionState, useState } from 'react';
-
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Textarea } from '@/components/ui/Textarea';
-import { WishlistPriority } from '@/components/ui/WishlistPriority';
+import { useState } from 'react';
 import {
   Check,
   CheckCircle2,
@@ -19,9 +13,10 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
-
-import type { ActionState } from '../../../(auth)/actions';
-import { deleteItemAction, quickEditItemAction, togglePurchasedAction } from './item-actions';
+import { Button } from '@/components/ui/Button';
+import { WishlistPriority } from '@/components/ui/WishlistPriority';
+import { ProductEditorDrawer } from '@/components/product/ProductEditorDrawer';
+import { deleteItemAction, togglePurchasedAction } from './item-actions';
 import { updateStarPriorityAction } from './priority-action';
 
 interface ItemRowProps {
@@ -64,7 +59,10 @@ const retailerStyles: Record<string, string> = {
 
 function getRetailerStyle(retailer: string | null): string {
   if (!retailer) return 'bg-surface text-muted-foreground border-border';
-  const key = retailer.toLowerCase().replace(/\s*(us|uk|de|ca)$/i, '').trim();
+  const key = retailer
+    .toLowerCase()
+    .replace(/\s*(us|uk|de|ca)$/i, '')
+    .trim();
   return retailerStyles[key] ?? 'bg-surface text-muted-foreground border-border';
 }
 
@@ -88,12 +86,12 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
         className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 ${
           item.purchased
             ? 'border-border/40 bg-card/50 opacity-75'
-            : 'border-border bg-card hover:border-border-hover hover:shadow-xl hover:shadow-black/10 hover:-translate-y-0.5'
+            : 'border-border bg-card hover:border-border-hover hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/10'
         }`}
       >
         <div className="flex gap-0 sm:gap-0">
           {/* Image section */}
-          <div className="relative shrink-0 w-28 sm:w-36">
+          <div className="relative w-28 shrink-0 sm:w-36">
             {item.image ? (
               <div className="flex h-full min-h-[120px] items-center justify-center bg-white/[0.03] p-3">
                 <img
@@ -104,14 +102,14 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
                 />
               </div>
             ) : (
-              <div className="flex h-full min-h-[120px] items-center justify-center bg-surface">
-                <Package className="h-10 w-10 text-muted/20" />
+              <div className="bg-surface flex h-full min-h-[120px] items-center justify-center">
+                <Package className="text-muted/20 h-10 w-10" />
               </div>
             )}
             {/* Purchased overlay */}
             {item.purchased && (
-              <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-[2px]">
-                <CheckCircle2 className="h-8 w-8 text-success" />
+              <div className="bg-background/50 absolute inset-0 flex items-center justify-center backdrop-blur-[2px]">
+                <CheckCircle2 className="text-success h-8 w-8" />
               </div>
             )}
           </div>
@@ -121,25 +119,29 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
             {/* Top row: title + price */}
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 overflow-hidden">
-                <h3 className={`line-clamp-2 text-sm font-semibold leading-snug sm:text-base ${
-                  item.purchased ? 'text-muted-foreground line-through' : 'text-foreground'
-                }`}>
+                <h3
+                  className={`line-clamp-2 text-sm leading-snug font-semibold sm:text-base ${
+                    item.purchased ? 'text-muted-foreground line-through' : 'text-foreground'
+                  }`}
+                >
                   {item.title}
                 </h3>
 
                 {/* Meta: brand + retailer */}
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   {item.retailer && (
-                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium leading-none ${getRetailerStyle(item.retailer)}`}>
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] leading-none font-medium ${getRetailerStyle(item.retailer)}`}
+                    >
                       {item.retailer}
                     </span>
                   )}
                   {item.brand && (
-                    <span className="text-[11px] text-muted-foreground">{item.brand}</span>
+                    <span className="text-muted-foreground text-[11px]">{item.brand}</span>
                   )}
                   <InlineStarPriority item={item} wishlistId={wishlistId} />
                   {item.quantity > 1 && (
-                    <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    <span className="bg-surface text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium">
                       ×{item.quantity}
                     </span>
                   )}
@@ -149,18 +151,20 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
               {/* Price */}
               {price != null && (
                 <div className="shrink-0 text-right">
-                  <span className={`text-lg font-bold tabular-nums leading-tight ${
-                    item.purchased ? 'text-muted-foreground' : 'text-foreground'
-                  }`}>
+                  <span
+                    className={`text-lg leading-tight font-bold tabular-nums ${
+                      item.purchased ? 'text-muted-foreground' : 'text-foreground'
+                    }`}
+                  >
                     ${price.toFixed(2)}
                   </span>
                   {item.originalPrice != null && Number(item.originalPrice) > price && (
-                    <span className="block text-[10px] text-muted-foreground line-through">
+                    <span className="text-muted-foreground block text-[10px] line-through">
                       ${Number(item.originalPrice).toFixed(2)}
                     </span>
                   )}
                   {!(item.originalPrice != null && Number(item.originalPrice) > price) && (
-                    <span className="block text-[10px] text-muted-foreground">{item.currency}</span>
+                    <span className="text-muted-foreground block text-[10px]">{item.currency}</span>
                   )}
                   {item.dealInfo && (
                     <span className="mt-0.5 inline-block rounded-full bg-green-500/10 px-1.5 py-0.5 text-[9px] font-medium text-green-400">
@@ -172,9 +176,7 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
             </div>
 
             {/* Notes — expandable */}
-            {item.notes && (
-              <ItemNotes notes={item.notes} />
-            )}
+            {item.notes && <ItemNotes notes={item.notes} />}
 
             {/* Actions row */}
             <div className="flex flex-wrap items-center gap-1.5">
@@ -189,16 +191,25 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
                   className="h-7 gap-1.5 rounded-lg text-[11px]"
                 >
                   {item.purchased ? (
-                    <><CheckCircle2 className="h-3 w-3 text-success" /> Purchased</>
+                    <>
+                      <CheckCircle2 className="text-success h-3 w-3" /> Purchased
+                    </>
                   ) : (
-                    <><Circle className="h-3 w-3" /> Mark Bought</>
+                    <>
+                      <Circle className="h-3 w-3" /> Mark Bought
+                    </>
                   )}
                 </Button>
               </form>
 
               {/* Visit store */}
               {item.url && (
-                <Button asChild variant="ghost" size="sm" className="h-7 gap-1.5 rounded-lg text-[11px]">
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1.5 rounded-lg text-[11px]"
+                >
                   <a href={item.url} target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="h-3 w-3" /> Visit Store
                   </a>
@@ -207,28 +218,57 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
 
               {/* Copy */}
               {item.url && (
-                <Button variant="ghost" size="sm" className="h-7 gap-1.5 rounded-lg text-[11px]" onClick={handleCopy}>
-                  {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1.5 rounded-lg text-[11px]"
+                  onClick={handleCopy}
+                >
+                  {copied ? (
+                    <Check className="text-success h-3 w-3" />
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
                   {copied ? 'Copied' : 'Copy'}
                 </Button>
               )}
 
               {/* Edit */}
-              <Button variant="ghost" size="sm" className="h-7 gap-1.5 rounded-lg text-[11px]" onClick={() => setEditing((e) => !e)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 rounded-lg text-[11px]"
+                onClick={() => setEditing(true)}
+              >
                 <Pencil className="h-3 w-3" /> Edit
               </Button>
 
               {/* More */}
               <div className="relative ml-auto">
-                <Button variant="ghost" size="sm" className="h-7 w-7 rounded-lg p-0" onClick={() => setMenuOpen((o) => !o)} aria-label="More">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 rounded-lg p-0"
+                  onClick={() => setMenuOpen((o) => !o)}
+                  aria-label="More"
+                >
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </Button>
                 {menuOpen && (
-                  <div className="absolute right-0 top-full z-20 mt-1 w-36 rounded-xl border border-border bg-card p-1 shadow-xl animate-scale-in">
-                    <form action={async (fd) => { if (!window.confirm('Delete this item?')) return; await deleteItemAction(fd); setMenuOpen(false); }}>
+                  <div className="border-border bg-card animate-scale-in absolute top-full right-0 z-20 mt-1 w-36 rounded-xl border p-1 shadow-xl">
+                    <form
+                      action={async (fd) => {
+                        if (!window.confirm('Delete this item?')) return;
+                        await deleteItemAction(fd);
+                        setMenuOpen(false);
+                      }}
+                    >
                       <input type="hidden" name="itemId" value={item.id} />
                       <input type="hidden" name="wishlistId" value={wishlistId} />
-                      <button type="submit" className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-danger transition-colors hover:bg-danger/10">
+                      <button
+                        type="submit"
+                        className="text-danger hover:bg-danger/10 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors"
+                      >
                         <Trash2 className="h-3.5 w-3.5" /> Remove
                       </button>
                     </form>
@@ -240,26 +280,28 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
         </div>
       </article>
 
-      {/* Inline edit panel */}
-      {editing && <InlineEditForm item={item} wishlistId={wishlistId} onDone={() => setEditing(false)} />}
+      {/* Product Editor Drawer */}
+      <ProductEditorDrawer
+        open={editing}
+        onClose={() => setEditing(false)}
+        item={item}
+        wishlistId={wishlistId}
+        onSave={() => setEditing(false)}
+        onDelete={() => setEditing(false)}
+      />
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PriorityBadge({ priority }: { priority: string }) {
-  const config: Record<string, { variant: 'warning' | 'danger' | 'default'; label: string }> = {
-    LOW: { variant: 'default', label: 'Low' },
-    HIGH: { variant: 'warning', label: 'High Priority' },
-    CRITICAL: { variant: 'danger', label: 'Must Have' },
-  };
-  const c = config[priority];
-  if (!c) return null;
-  return <Badge variant={c.variant} className="text-[9px] leading-none">{c.label}</Badge>;
-}
-
-function InlineStarPriority({ item, wishlistId }: { item: ItemRowProps['item']; wishlistId: string }) {
+function InlineStarPriority({
+  item,
+  wishlistId,
+}: {
+  item: ItemRowProps['item'];
+  wishlistId: string;
+}) {
   const [optimistic, setOptimistic] = useState(item.starPriority);
 
   const handleChange = async (newValue: number) => {
@@ -271,71 +313,23 @@ function InlineStarPriority({ item, wishlistId }: { item: ItemRowProps['item']; 
     await updateStarPriorityAction(fd);
   };
 
-  return (
-    <WishlistPriority value={optimistic} onChange={handleChange} showLabel size="sm" />
-  );
-}
-
-function InlineEditForm({ item, wishlistId, onDone }: { item: ItemRowProps['item']; wishlistId: string; onDone: () => void }) {
-  const initialState: ActionState = { success: false };
-  const [state, formAction, pending] = useActionState(quickEditItemAction, initialState);
-  const [starPriority, setStarPriority] = useState(item.starPriority);
-
-  if (state.success) onDone();
-
-  return (
-    <form action={formAction} className="rounded-xl border border-accent/20 bg-card-hover p-4 animate-fade-up" noValidate>
-      <input type="hidden" name="itemId" value={item.id} />
-      <input type="hidden" name="wishlistId" value={wishlistId} />
-      <input type="hidden" name="priority" value={item.priority} />
-      <input type="hidden" name="starPriority" value={starPriority} />
-      {state.error && <p className="mb-3 text-xs text-danger">{state.error}</p>}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1 sm:col-span-2">
-          <label className="text-[11px] font-medium text-muted-foreground">Title</label>
-          <Input name="title" defaultValue={item.title} className="h-8 text-xs" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-[11px] font-medium text-muted-foreground">Priority</label>
-          <WishlistPriority value={starPriority} onChange={setStarPriority} size="md" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-[11px] font-medium text-muted-foreground">Quantity</label>
-          <Input name="quantity" type="number" min={1} max={999} defaultValue={item.quantity} className="h-8 text-xs" />
-        </div>
-        <div className="flex flex-col gap-1 sm:col-span-2">
-          <label className="text-[11px] font-medium text-muted-foreground">Category</label>
-          <Input name="category" defaultValue={item.category ?? ''} className="h-8 text-xs" placeholder="e.g. PC Upgrades, Smart Home" />
-        </div>
-        <div className="flex flex-col gap-1 sm:col-span-2">
-          <label className="text-[11px] font-medium text-muted-foreground">Notes</label>
-          <Textarea name="notes" defaultValue={item.notes ?? ''} rows={2} className="text-xs" placeholder="Personal notes, specs, reasons..." />
-        </div>
-      </div>
-      <div className="mt-3 flex gap-2">
-        <Button type="submit" size="sm" disabled={pending} className="h-7 text-xs">{pending ? 'Saving...' : 'Save'}</Button>
-        <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={onDone}>Cancel</Button>
-      </div>
-    </form>
-  );
+  return <WishlistPriority value={optimistic} onChange={handleChange} showLabel size="sm" />;
 }
 
 function ItemNotes({ notes }: { notes: string }) {
   const isLong = notes.length > 80;
 
   if (!isLong) {
-    return (
-      <p className="text-[11px] italic text-muted-foreground">{notes}</p>
-    );
+    return <p className="text-muted-foreground text-[11px] italic">{notes}</p>;
   }
 
   return (
     <details className="group">
-      <summary className="flex cursor-pointer items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground">
+      <summary className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1 text-[11px] transition-colors">
         <ChevronRight className="h-3 w-3 transition-transform duration-150 group-open:rotate-90" />
         <span className="italic">{notes.slice(0, 60)}...</span>
       </summary>
-      <div className="mt-1.5 rounded-lg border border-border/50 bg-surface/50 p-2.5 text-[11px] leading-relaxed text-muted-foreground whitespace-pre-wrap">
+      <div className="border-border/50 bg-surface/50 text-muted-foreground mt-1.5 rounded-lg border p-2.5 text-[11px] leading-relaxed whitespace-pre-wrap">
         {notes}
       </div>
     </details>
