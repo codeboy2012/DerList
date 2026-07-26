@@ -147,20 +147,27 @@ export function UniversalInput({ wishlistId, className }: UniversalInputProps) {
     setState({ phase: 'loading' });
 
     try {
-      // Add all items in batch via the wishlist add-item endpoint
-      for (const draft of state.drafts) {
-        const formData = new FormData();
-        formData.set('wishlistId', wishlistId);
-        formData.set('title', draft.title);
-        if (draft.url) formData.set('url', draft.url);
-        if (draft.image) formData.set('image', draft.image);
-        if (draft.brand) formData.set('brand', draft.brand);
-        if (draft.retailer) formData.set('retailer', draft.retailer);
-        if (draft.currentPrice) formData.set('currentPrice', String(draft.currentPrice));
-        if (draft.currency) formData.set('currency', draft.currency);
-        if (draft.category) formData.set('category', draft.category);
+      // Fast import: creates items instantly, enrichment runs in background
+      const promises = state.drafts.map((draft) =>
+        fetch('/api/wishlists/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            wishlistId,
+            title: draft.title,
+            url: draft.url,
+            image: draft.image,
+            brand: draft.brand,
+            retailer: draft.retailer,
+            price: draft.currentPrice,
+            category: draft.category,
+          }),
+        })
+      );
 
-        await fetch('/api/wishlists/add-item', { method: 'POST', body: formData });
+      // Run up to 3 at a time for speed without overloading
+      for (let i = 0; i < promises.length; i += 3) {
+        await Promise.allSettled(promises.slice(i, i + 3));
       }
 
       // Reset and reload
