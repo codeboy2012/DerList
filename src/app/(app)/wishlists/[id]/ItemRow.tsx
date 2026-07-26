@@ -88,9 +88,9 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
             : 'border-border bg-card hover:border-border-hover hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/10'
         }`}
       >
-        <div className="flex gap-0 sm:gap-0">
+        <div className="flex gap-0">
           {/* Image section */}
-          <div className="relative w-28 shrink-0 sm:w-36">
+          <div className="relative w-24 shrink-0 sm:w-36">
             {item.image ? (
               <div className="flex h-full min-h-[120px] items-center justify-center bg-white/[0.03] p-3">
                 <img
