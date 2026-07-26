@@ -1,13 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-
+import { z } from 'zod';
 import { requireUser } from '@/lib/auth';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
 import { prisma } from '@/lib/prisma';
-import { testProviderConfig } from '@/lib/ai/providers';
-import { z } from 'zod';
-
 import type { ActionState } from '../../(auth)/actions';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -20,13 +17,16 @@ const updateProfileSchema = z.object({
     .string()
     .min(3, 'Username must be at least 3 characters.')
     .max(32)
-    .regex(/^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$/, 'Lowercase letters, numbers, hyphens, underscores only.'),
+    .regex(
+      /^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$/,
+      'Lowercase letters, numbers, hyphens, underscores only.'
+    ),
   avatarUrl: z.string().url('Must be a valid URL.').optional().or(z.literal('')),
 });
 
 export async function updateProfileAction(
   _prevState: ActionState,
-  formData: FormData,
+  formData: FormData
 ): Promise<ActionState> {
   const user = await requireUser();
 
@@ -72,18 +72,20 @@ export async function updateProfileAction(
 // Change Password
 // ─────────────────────────────────────────────────────────────────────────────
 
-const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, 'Current password is required.'),
-  newPassword: z.string().min(8, 'New password must be at least 8 characters.').max(128),
-  confirmPassword: z.string().min(1, 'Please confirm your new password.'),
-}).refine((d) => d.newPassword === d.confirmPassword, {
-  message: 'Passwords do not match.',
-  path: ['confirmPassword'],
-});
+const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required.'),
+    newPassword: z.string().min(8, 'New password must be at least 8 characters.').max(128),
+    confirmPassword: z.string().min(1, 'Please confirm your new password.'),
+  })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    message: 'Passwords do not match.',
+    path: ['confirmPassword'],
+  });
 
 export async function changePasswordAction(
   _prevState: ActionState,
-  formData: FormData,
+  formData: FormData
 ): Promise<ActionState> {
   const sessionUser = await requireUser();
 
@@ -135,53 +137,4 @@ export async function disconnectOAuthAction(formData: FormData): Promise<void> {
 
   await prisma.oAuthAccount.delete({ where: { id: accountId } });
   revalidatePath('/settings/account');
-}
-// ─────────────────────────────────────────────────────────────────────────────
-// AI Provider Settings
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Update user's AI provider configuration
- */
-export async function updateUserAIProvider(
-  userId: string,
-  providerId: string,
-  config: Record<string, unknown>,
-): Promise<void> {
-  const user = await requireUser();
-  
-  // Verify the user is updating their own settings
-  if (user.id !== userId) {
-    throw new Error('Unauthorized');
-  }
-
-  // Update the user's AI provider settings
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      aiProviderId: providerId,
-      aiProviderConfig: config as any, // JSON field accepts any serializable value
-    },
-  });
-
-  // Revalidate the settings page
-  revalidatePath('/settings/ai');
-}
-
-/**
- * Test an AI provider configuration
- */
-export async function testAIProviderConfig(
-  providerId: string,
-  config: Record<string, unknown>,
-): Promise<{ available: boolean; error?: string }> {
-  // This doesn't require authentication since it's just testing configuration
-  try {
-    return await testProviderConfig(providerId, config);
-  } catch (error) {
-    return {
-      available: false,
-      error: error instanceof Error ? error.message : 'Configuration test failed',
-    };
-  }
 }

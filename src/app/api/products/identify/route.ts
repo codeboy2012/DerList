@@ -1,125 +1,82 @@
 /**
  * POST /api/products/identify
  *
- * Unified Product Getter API. Accepts any input type and returns
- * identified product candidates with confidence scores.
- *
- * Body: { type: 'url'|'text'|'image'|'search'|'manual', ...data }
- * Returns: { success, candidates, unmatched?, error? }
+ * Universal product identification endpoint.
+ * Accepts any input (URL, text, shopping list) and returns ProductDraft(s).
+ * Uses the import pipeline + ProductService for identification.
  */
 
+import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { identifyProducts, type ProductGetterInput } from '@/lib/products/product-getter';
+import { universalImport } from '@/lib/importers';
+import { createServices } from '@/lib/services/create';
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
-    return Response.json({ success: false, candidates: [], error: 'Authentication required.' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: Record<string, unknown>;
+  let body: { input?: string; type?: string; data?: Record<string, unknown> };
   try {
     body = await request.json();
   } catch {
-    return Response.json({ success: false, candidates: [], error: 'Invalid JSON body.' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
   }
 
-  const { type } = body;
+  // Support both new format (input) and legacy format (type + data)
+  const input = body.input ?? (body.data as Record<string, string>)?.title ?? '';
 
-  if (!type || typeof type !== 'string') {
-    return Response.json({ success: false, candidates: [], error: 'Missing "type" field.' }, { status: 400 });
+  if (!input || typeof input !== 'string' || input.trim().length < 2) {
+    return NextResponse.json({ error: 'Input is required (min 2 characters).' }, { status: 400 });
   }
 
-  let input: ProductGetterInput;
+  try {
+    // 1. Run the universal import pipeline
+    const importResult = await universalImport(input.trim());
 
-  switch (type) {
-    case 'url': {
-      const url = body.url;
-      if (!url || typeof url !== 'string') {
-        return Response.json({ success: false, candidates: [], error: 'Missing "url" field.' }, { status: 400 });
-      }
-      if (url.length > 2000) {
-        return Response.json({ success: false, candidates: [], error: 'URL too long.' }, { status: 400 });
-      }
-      input = { type: 'url', url };
-      break;
-    }
+    // 2. Try to enrich drafts with external data
+    const { products } = createServices();
+    const enrichedDrafts = await Promise.all(
+      importResult.drafts.map(async (draft) => {
+        try {
+          return await products.enrich(draft, user.id);
+        } catch {
+          return draft; // Enrichment is best-effort
+        }
+      })
+    );
 
-    case 'text': {
-      const text = body.text;
-      if (!text || typeof text !== 'string' || text.trim().length < 2) {
-        return Response.json({ success: false, candidates: [], error: 'Missing or too short "text" field.' }, { status: 400 });
-      }
-      if (text.length > 5000) {
-        return Response.json({ success: false, candidates: [], error: 'Text too long (max 5000 chars).' }, { status: 400 });
-      }
-      input = { type: 'text', text: text.trim() };
-      break;
-    }
-
-    case 'image': {
-      const image = body.image;
-      if (!image || typeof image !== 'string') {
-        return Response.json({ success: false, candidates: [], error: 'Missing "image" field.' }, { status: 400 });
-      }
-      try {
-        new URL(image);
-      } catch {
-        return Response.json({ success: false, candidates: [], error: 'Invalid image URL.' }, { status: 400 });
-      }
-      input = { type: 'image', image };
-      break;
-    }
-
-    case 'search': {
-      const query = body.query;
-      if (!query || typeof query !== 'string' || query.trim().length < 2) {
-        return Response.json({ success: false, candidates: [], error: 'Missing or too short "query" field.' }, { status: 400 });
-      }
-      if (query.length > 500) {
-        return Response.json({ success: false, candidates: [], error: 'Query too long.' }, { status: 400 });
-      }
-      input = { type: 'search', query: query.trim() };
-      break;
-    }
-
-    case 'manual': {
-      const data = body.data;
-      if (!data || typeof data !== 'object') {
-        return Response.json({ success: false, candidates: [], error: 'Missing "data" object.' }, { status: 400 });
-      }
-      const d = data as Record<string, unknown>;
-      if (!d.title || typeof d.title !== 'string' || d.title.trim().length === 0) {
-        return Response.json({ success: false, candidates: [], error: 'Product title is required.' }, { status: 400 });
-      }
-      input = {
-        type: 'manual',
-        data: {
-          title: (d.title as string).trim(),
-          url: typeof d.url === 'string' ? d.url.trim() || undefined : undefined,
-          image: typeof d.image === 'string' ? d.image.trim() || undefined : undefined,
-          brand: typeof d.brand === 'string' ? d.brand.trim() || undefined : undefined,
-          retailer: typeof d.retailer === 'string' ? d.retailer.trim() || undefined : undefined,
-          sku: typeof d.sku === 'string' ? d.sku.trim() || undefined : undefined,
-          category: typeof d.category === 'string' ? d.category.trim() || undefined : undefined,
-          currentPrice: typeof d.currentPrice === 'number' ? d.currentPrice : undefined,
-          originalPrice: typeof d.originalPrice === 'number' ? d.originalPrice : undefined,
-          currency: typeof d.currency === 'string' ? d.currency.trim() || undefined : undefined,
-          dealInfo: typeof d.dealInfo === 'string' ? d.dealInfo.trim() || undefined : undefined,
-          description: typeof d.description === 'string' ? d.description.trim() || undefined : undefined,
-        },
-      };
-      break;
-    }
-
-    default:
-      return Response.json(
-        { success: false, candidates: [], error: `Unknown type "${type}". Use: url, text, image, search, or manual.` },
-        { status: 400 },
-      );
+    // 3. Return results in a format the ProductEditor can consume
+    return NextResponse.json({
+      success: true,
+      drafts: enrichedDrafts,
+      isBatch: importResult.isBatch,
+      batchName: importResult.batchName,
+      batchMeta: importResult.batchMeta,
+      // Legacy compatibility: also return as "candidates" for the ManualTab AI identify button
+      candidates: enrichedDrafts.map((d) => ({
+        title: d.title,
+        brand: d.brand,
+        retailer: d.retailer,
+        category: d.category,
+        url: d.url,
+        image: d.image,
+        sku: d.sku,
+        description: d.description,
+        currentPrice: d.currentPrice,
+        originalPrice: d.originalPrice,
+        currency: d.currency ?? 'USD',
+        dealInfo: d.dealInfo,
+        confidence: d.confidence,
+        verified: d.confidence >= 80,
+      })),
+    });
+  } catch (error) {
+    console.error('Product identify error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to identify product.', candidates: [] },
+      { status: 500 }
+    );
   }
-
-  const result = await identifyProducts(input, user.id);
-
-  return Response.json(result);
 }

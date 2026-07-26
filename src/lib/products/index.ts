@@ -1,14 +1,13 @@
 /**
- * Product import service — main entry point.
+ * Product Import — URL Extraction Pipeline
  *
- * Orchestrates: URL validation → normalization → cache check → fetch → metadata extraction.
- * Returns a structured product data object ready for database insertion.
+ * Imports product data from URLs by fetching page HTML and extracting
+ * structured metadata (JSON-LD, Open Graph, HTML parsers).
  */
 
 import { prisma } from '@/lib/prisma';
-
-import { fetchProductPage } from './fetch';
 import { runExtractionPipeline } from './engine';
+import { fetchProductPage } from './fetch';
 import { extractDomain, getRetailerName, normalizeUrl } from './normalize';
 
 export type { PipelineResult } from './engine';
@@ -35,13 +34,15 @@ export interface ImportedProductData {
   currency: string;
   inStock: boolean | null;
   availability: string | null;
-  /** 0-100 overall extraction confidence */
   confidence: number;
-  /** Which extractor won the price vote */
   priceSource: string;
-  /** All price candidates considered */
-  priceCandidates: Array<{ method: string; price: number; currency: string | null; confidence: number; reason: string }>;
-  /** True if confidence is low and review is recommended */
+  priceCandidates: Array<{
+    method: string;
+    price: number;
+    currency: string | null;
+    confidence: number;
+    reason: string;
+  }>;
   needsReview: boolean;
 }
 
@@ -70,9 +71,6 @@ export type ImportOutcome = ImportResult | ImportError;
  * 3. Fetch the page HTML (if not cached)
  * 4. Extract metadata (JSON-LD, OG, Twitter, HTML fallback)
  * 5. Return structured product data
- *
- * Does NOT interact with the database for writes — that's handled by the server action.
- * DOES read from the database to check the recently-fetched cache.
  */
 export async function importProductFromUrl(rawUrl: string): Promise<ImportOutcome> {
   // 1. Normalize URL
@@ -93,106 +91,76 @@ export async function importProductFromUrl(rawUrl: string): Promise<ImportOutcom
   });
 
   if (cached) {
-    // Return existing product data without re-fetching
-    const data: ImportedProductData = {
-      canonicalUrl: cached.canonicalUrl ?? normalizedUrl,
-      normalizedUrl: cached.normalizedUrl ?? normalizedUrl.toLowerCase(),
-      domain: cached.domain,
-      retailer: cached.retailer,
-      title: cached.title,
-      description: cached.description,
-      brand: cached.brand,
-      sku: cached.sku,
-      mpn: cached.mpn,
-      gtin: cached.gtin,
-      image: cached.image,
-      gallery: cached.gallery ? JSON.parse(cached.gallery) : [],
-      currentPrice: cached.currentPrice ? Number(cached.currentPrice) : null,
-      currency: cached.currency,
-      inStock: cached.inStock,
-      availability: cached.availability,
-      confidence: 100,  // Cached products are already verified
-      priceSource: 'cached',
-      priceCandidates: [],
-      needsReview: false,
+    return {
+      success: true,
+      data: {
+        canonicalUrl: normalizedUrl,
+        normalizedUrl,
+        domain,
+        retailer: cached.retailer ?? getRetailerName(domain),
+        title: cached.title,
+        description: cached.description,
+        brand: cached.brand,
+        sku: cached.sku,
+        mpn: cached.mpn,
+        gtin: cached.gtin,
+        image: cached.image,
+        gallery: cached.gallery ? JSON.parse(cached.gallery) : [],
+        currentPrice: cached.currentPrice ? Number(cached.currentPrice) : null,
+        currency: cached.currency,
+        inStock: cached.inStock,
+        availability: cached.availability,
+        confidence: cached.avgConfidence ?? 80,
+        priceSource: cached.lastExtractionMethod ?? 'cache',
+        priceCandidates: [],
+        needsReview: false,
+      },
     };
-    return { success: true, data };
   }
 
   // 3. Fetch the page
-  let html: string;
-  let finalUrl: string;
+  let fetchResult: { html: string; finalUrl: string; status: number };
   try {
-    const result = await fetchProductPage(normalizedUrl);
-    html = result.html;
-    finalUrl = result.finalUrl;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch product page.';
-
-    // Provide user-friendly error messages for common failures
-    if (message.includes('HTTP 403') || message.includes('HTTP 429')) {
-      return {
-        success: false,
-        error: 'The retailer blocked the request. Please wait a moment and try again.',
-      };
-    }
-    if (message.includes('HTTP 4')) {
-      return { success: false, error: `Could not fetch page: ${message}` };
-    }
-    if (err instanceof Error && err.name === 'AbortError') {
-      return {
-        success: false,
-        error: 'The page took too long to respond. Please try again later.',
-      };
-    }
-    if (message.includes('abort') || message.includes('timeout') || message.includes('timed out')) {
-      return {
-        success: false,
-        error: 'The page took too long to respond. Please try again later.',
-      };
-    }
-
-    return { success: false, error: `Could not fetch page: ${message}` };
-  }
-
-  // 4. Extract metadata via pipeline (parallel extractors + consensus)
-  const pipelineResult = await runExtractionPipeline({ html, url: normalizedUrl, domain });
-
-  // Must have at least a title
-  if (!pipelineResult.title) {
+    fetchResult = await fetchProductPage(normalizedUrl);
+  } catch (error) {
     return {
       success: false,
-      error:
-        'Could not identify a product on this page. Make sure the URL points directly to a product.',
+      error: error instanceof Error ? error.message : 'Failed to fetch the product page.',
     };
   }
 
-  // 5. Build result
-  const canonicalUrl = normalizeUrl(finalUrl) ?? normalizedUrl;
-  const retailerFromDomain = getRetailerName(domain);
-
-  const data: ImportedProductData = {
-    canonicalUrl,
-    normalizedUrl: canonicalUrl.toLowerCase(),
+  // 4. Extract metadata
+  const extraction = await runExtractionPipeline({
+    html: fetchResult.html,
+    url: normalizedUrl,
     domain,
-    retailer: pipelineResult.retailer ?? retailerFromDomain ?? domain,
-    title: pipelineResult.title,
-    description: pipelineResult.description,
-    brand: pipelineResult.brand,
-    sku: pipelineResult.sku,
-    mpn: pipelineResult.mpn,
-    gtin: pipelineResult.gtin,
-    image: pipelineResult.image,
-    gallery: pipelineResult.gallery,
-    currentPrice: pipelineResult.price,
-    currency: pipelineResult.currency ?? 'USD',
-    inStock: pipelineResult.inStock,
-    availability: pipelineResult.availability,
-    confidence: pipelineResult.confidence,
-    priceSource: pipelineResult.priceSource,
-    priceCandidates: pipelineResult.priceCandidates,
-    needsReview: pipelineResult.needsReview,
-  };
+  });
 
-  return { success: true, data };
+  const retailer = extraction.retailer ?? getRetailerName(domain);
+
+  return {
+    success: true,
+    data: {
+      canonicalUrl: normalizedUrl,
+      normalizedUrl,
+      domain,
+      retailer,
+      title: extraction.title ?? 'Unknown Product',
+      description: extraction.description ?? null,
+      brand: extraction.brand ?? null,
+      sku: extraction.sku ?? null,
+      mpn: extraction.mpn ?? null,
+      gtin: extraction.gtin ?? null,
+      image: extraction.image ?? null,
+      gallery: extraction.gallery ?? [],
+      currentPrice: extraction.price,
+      currency: extraction.currency ?? 'USD',
+      inStock: extraction.inStock ?? null,
+      availability: extraction.availability ?? null,
+      confidence: extraction.confidence ?? 50,
+      priceSource: extraction.priceSource ?? 'unknown',
+      priceCandidates: extraction.priceCandidates ?? [],
+      needsReview: extraction.needsReview ?? extraction.confidence < 70,
+    },
+  };
 }

@@ -63,12 +63,9 @@ model User {
   /// Soft-disable flag. Disabled users cannot authenticate.
   disabled Boolean @default(false)
 
-  /// AI Provider Configuration
-  /// User's preferred AI provider (serpapi, openai, anthropic, etc.)
+  /// DEPRECATED: Legacy AI provider fields - replaced by dedicated provider tables
+  /// These fields are kept for migration compatibility and will be removed after migration
   aiProviderId String?
-
-  /// JSON configuration for the selected AI provider (API keys, models, etc.)
-  /// Stored as encrypted JSON in production
   aiProviderConfig Json?
 
   // ── Relations ──
@@ -91,9 +88,699 @@ model User {
   /// Uploaded media files.
   uploads Media[]
 
+  /// AI provider configurations for this user.
+  aiProviders UserAIProvider[]
+
+  /// Shopping search provider configurations for this user.
+  shoppingProviders UserShoppingProvider[]
+
+  /// Price tracking provider configurations for this user.
+  priceProviders UserPriceProvider[]
+
+  /// Vision provider configurations for this user.
+  visionProviders UserVisionProvider[]
+
+  /// Unified provider configurations (replaces separate provider tables)
+  providerConfigurations ProviderConfiguration[]
+
+  /// Provider usage analytics.
+  providerUsage ProviderUsage[]
+
+  /// Price alerts created by this user.
+  priceAlerts ProviderPriceAlert[]
+
+  /// Shopping assistant conversations.
+  shoppingConversations ShoppingConversation[]
+
   @@index([email])
   @@index([username])
   @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Provider Management Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Provider categories for type-safe provider management
+enum ProviderCategory {
+  AI
+  SHOPPING_SEARCH
+  PRICE
+  VISION
+}
+
+/// Provider status for health monitoring
+enum ProviderStatus {
+  HEALTHY
+  DEGRADED
+  UNHEALTHY
+  UNKNOWN
+}
+
+/// Provider usage event types for analytics
+enum ProviderUsageType {
+  CHAT
+  PRODUCT_IDENTIFICATION
+  PRODUCT_NORMALIZATION
+  RECOMMENDATION
+  DATA_EXTRACTION
+  PRODUCT_SEARCH
+  PRODUCT_DETAILS
+  PRODUCT_OFFERS
+  IMAGE_SEARCH
+  PRODUCT_REVIEWS
+  CURRENT_PRICE
+  PRICE_HISTORY
+  PRICE_ALERTS
+  PRICE_MONITORING
+  PRICE_COMPARISON
+  PRICE_VERIFICATION
+  PRICE_DROPS
+  VISION_ANALYSIS
+  OCR
+  BARCODE_SCAN
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Unified Provider Configuration
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Unified provider configuration table for all provider types
+/// This replaces the separate UserAIProvider, UserShoppingProvider, etc. tables
+model ProviderConfiguration {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The user who owns this provider configuration
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  /// Provider category (AI, SHOPPING_SEARCH, PRICE, VISION)
+  category ProviderCategory
+
+  /// Provider identifier (e.g., 'openai', 'anthropic', 'serpapi', 'keepa')
+  providerId String
+
+  /// Display name for this provider instance
+  name String
+
+  /// Whether this provider is enabled
+  enabled Boolean @default(true)
+
+  /// Priority order (1 = highest priority, used for failover)
+  priority Int @default(1)
+
+  /// AES-256-GCM encrypted configuration JSON (API keys, endpoints, etc.)
+  encryptedConfig String
+
+  /// Initialization vector for AES-GCM encryption
+  configIv String
+
+  /// Authentication tag for AES-GCM encryption
+  configAuthTag String
+
+  /// Rate limiting configuration as JSON
+  rateLimit Json?
+
+  /// Timeout configuration in milliseconds
+  timeout Int @default(30000)
+
+  /// Retry configuration as JSON
+  retries Json?
+
+  /// Provider-specific metadata as JSON
+  metadata Json?
+
+  /// Whether this is the default provider for this category and user
+  isDefault Boolean @default(false)
+
+  /// Last health check timestamp
+  lastHealthCheck DateTime?
+
+  /// Last known provider status
+  lastStatus ProviderStatus @default(UNKNOWN)
+
+  /// Last successful request timestamp
+  lastSuccessAt DateTime?
+
+  /// Last error timestamp
+  lastErrorAt DateTime?
+
+  /// Last error message
+  lastError String?
+
+  /// Usage analytics relation
+  usage ProviderUsage[]
+
+  @@unique([userId, category, providerId])
+  @@index([userId])
+  @@index([userId, category])
+  @@index([userId, enabled])
+  @@index([userId, category, priority])
+  @@index([providerId])
+  @@index([category])
+  @@index([lastStatus])
+  @@map("provider_configurations")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User Provider Relations (Updated)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Update User model to include the unified relation
+// This replaces the separate aiProviders, shoppingProviders, etc. relations
+/// DEPRECATED: Separate provider tables - replaced by unified ProviderConfiguration
+/// These models are kept for migration compatibility and will be removed after data migration
+
+/// DEPRECATED: AI provider configuration - use ProviderConfiguration with category=AI instead
+model UserAIProvider {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The user who owns this provider configuration
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  /// Provider identifier (e.g., 'openai', 'anthropic', 'gemini', 'openrouter', 'ollama')
+  providerId String
+
+  /// Display name for this provider instance
+  name String
+
+  /// Whether this provider is enabled
+  enabled Boolean @default(true)
+
+  /// Priority order (1 = highest priority, used for failover)
+  priority Int @default(1)
+
+  /// AES-256-GCM encrypted configuration JSON (API keys, endpoints, etc.)
+  encryptedConfig String
+
+  /// Initialization vector for AES-GCM encryption
+  configIv String
+
+  /// Authentication tag for AES-GCM encryption
+  configAuthTag String
+
+  /// Rate limiting configuration as JSON
+  rateLimit Json?
+
+  /// Timeout configuration in milliseconds
+  timeout Int @default(30000)
+
+  /// Retry configuration as JSON
+  retries Json?
+
+  /// Provider-specific metadata as JSON
+  metadata Json?
+
+  /// Whether this is the default provider for this user
+  isDefault Boolean @default(false)
+
+  /// Last health check timestamp
+  lastHealthCheck DateTime?
+
+  /// Last known provider status
+  lastStatus ProviderStatus @default(UNKNOWN)
+
+  /// Last successful request timestamp
+  lastSuccessAt DateTime?
+
+  /// Last error timestamp
+  lastErrorAt DateTime?
+
+  /// Last error message
+  lastError String?
+
+  @@unique([userId, providerId])
+  @@index([userId])
+  @@index([userId, enabled])
+  @@index([userId, priority])
+  @@index([providerId])
+  @@map("user_ai_providers")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User Shopping Provider
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// DEPRECATED: Shopping search provider configuration - use ProviderConfiguration with category=SHOPPING_SEARCH instead
+model UserShoppingProvider {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The user who owns this provider configuration
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  /// Provider identifier (e.g., 'serpapi', 'rainforest', 'zenserp')
+  providerId String
+
+  /// Display name for this provider instance
+  name String
+
+  /// Whether this provider is enabled
+  enabled Boolean @default(true)
+
+  /// Priority order (1 = highest priority, used for failover)
+  priority Int @default(1)
+
+  /// AES-256-GCM encrypted configuration JSON (API keys, endpoints, etc.)
+  encryptedConfig String
+
+  /// Initialization vector for AES-GCM encryption
+  configIv String
+
+  /// Authentication tag for AES-GCM encryption
+  configAuthTag String
+
+  /// Rate limiting configuration as JSON
+  rateLimit Json?
+
+  /// Timeout configuration in milliseconds
+  timeout Int @default(30000)
+
+  /// Retry configuration as JSON
+  retries Json?
+
+  /// Provider-specific metadata as JSON
+  metadata Json?
+
+  /// Whether this is the default provider for this user
+  isDefault Boolean @default(false)
+
+  /// Last health check timestamp
+  lastHealthCheck DateTime?
+
+  /// Last known provider status
+  lastStatus ProviderStatus @default(UNKNOWN)
+
+  /// Last successful request timestamp
+  lastSuccessAt DateTime?
+
+  /// Last error timestamp
+  lastErrorAt DateTime?
+
+  /// Last error message
+  lastError String?
+
+  @@unique([userId, providerId])
+  @@index([userId])
+  @@index([userId, enabled])
+  @@index([userId, priority])
+  @@index([providerId])
+  @@map("user_shopping_providers")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User Price Provider
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// DEPRECATED: Price tracking provider configuration - use ProviderConfiguration with category=PRICE instead
+model UserPriceProvider {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The user who owns this provider configuration
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  /// Provider identifier (e.g., 'keepa', 'camelcamelcamel', 'priceapi')
+  providerId String
+
+  /// Display name for this provider instance
+  name String
+
+  /// Whether this provider is enabled
+  enabled Boolean @default(true)
+
+  /// Priority order (1 = highest priority, used for failover)
+  priority Int @default(1)
+
+  /// AES-256-GCM encrypted configuration JSON (API keys, endpoints, etc.)
+  encryptedConfig String
+
+  /// Initialization vector for AES-GCM encryption
+  configIv String
+
+  /// Authentication tag for AES-GCM encryption
+  configAuthTag String
+
+  /// Rate limiting configuration as JSON
+  rateLimit Json?
+
+  /// Timeout configuration in milliseconds
+  timeout Int @default(30000)
+
+  /// Retry configuration as JSON
+  retries Json?
+
+  /// Provider-specific metadata as JSON
+  metadata Json?
+
+  /// Whether this is the default provider for this user
+  isDefault Boolean @default(false)
+
+  /// Last health check timestamp
+  lastHealthCheck DateTime?
+
+  /// Last known provider status
+  lastStatus ProviderStatus @default(UNKNOWN)
+
+  /// Last successful request timestamp
+  lastSuccessAt DateTime?
+
+  /// Last error timestamp
+  lastErrorAt DateTime?
+
+  /// Last error message
+  lastError String?
+
+  @@unique([userId, providerId])
+  @@index([userId])
+  @@index([userId, enabled])
+  @@index([userId, priority])
+  @@index([providerId])
+  @@map("user_price_providers")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User Vision Provider
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// DEPRECATED: Vision provider configuration - use ProviderConfiguration with category=VISION instead
+model UserVisionProvider {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The user who owns this provider configuration
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  /// Provider identifier (e.g., 'openai_vision', 'gemini_vision', 'claude_vision')
+  providerId String
+
+  /// Display name for this provider instance
+  name String
+
+  /// Whether this provider is enabled
+  enabled Boolean @default(true)
+
+  /// Priority order (1 = highest priority, used for failover)
+  priority Int @default(1)
+
+  /// AES-256-GCM encrypted configuration JSON (API keys, endpoints, etc.)
+  encryptedConfig String
+
+  /// Initialization vector for AES-GCM encryption
+  configIv String
+
+  /// Authentication tag for AES-GCM encryption
+  configAuthTag String
+
+  /// Rate limiting configuration as JSON
+  rateLimit Json?
+
+  /// Timeout configuration in milliseconds
+  timeout Int @default(30000)
+
+  /// Retry configuration as JSON
+  retries Json?
+
+  /// Provider-specific metadata as JSON
+  metadata Json?
+
+  /// Whether this is the default provider for this user
+  isDefault Boolean @default(false)
+
+  /// Last health check timestamp
+  lastHealthCheck DateTime?
+
+  /// Last known provider status
+  lastStatus ProviderStatus @default(UNKNOWN)
+
+  /// Last successful request timestamp
+  lastSuccessAt DateTime?
+
+  /// Last error timestamp
+  lastErrorAt DateTime?
+
+  /// Last error message
+  lastError String?
+
+  @@unique([userId, providerId])
+  @@index([userId])
+  @@index([userId, enabled])
+  @@index([userId, priority])
+  @@index([providerId])
+  @@map("user_vision_providers")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Provider Usage Analytics
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Tracks provider usage for analytics, billing, and monitoring
+model ProviderUsage {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  /// The user who made the request
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  /// Provider category
+  category ProviderCategory
+
+  /// Provider identifier
+  providerId String
+
+  /// Provider configuration used (optional, for tracking specific configs)
+  providerConfig   ProviderConfiguration? @relation(fields: [providerConfigId], references: [id], onDelete: SetNull)
+  providerConfigId String?
+
+  /// Type of usage/operation
+  usageType ProviderUsageType
+
+  /// Whether the request was successful
+  success Boolean
+
+  /// Response time in milliseconds
+  responseTime Int?
+
+  /// Tokens used (for AI providers)
+  tokensUsed Int?
+
+  /// Input tokens (for AI providers)
+  inputTokens Int?
+
+  /// Output tokens (for AI providers)
+  outputTokens Int?
+
+  /// Credits consumed
+  creditsUsed Decimal? @db.Decimal(10, 4)
+
+  /// Estimated cost in USD
+  estimatedCost Decimal? @db.Decimal(10, 4)
+
+  /// Error code (if unsuccessful)
+  errorCode String?
+
+  /// Error message (if unsuccessful)
+  errorMessage String?
+
+  /// Request metadata as JSON
+  metadata Json?
+
+  /// IP address of the request
+  ipAddress String?
+
+  /// User agent of the request
+  userAgent String?
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([providerId])
+  @@index([providerConfigId])
+  @@index([category])
+  @@index([usageType])
+  @@index([createdAt])
+  @@index([success])
+  @@map("provider_usage")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Provider Health Metrics
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// System-wide provider health metrics for monitoring and admin dashboard
+model ProviderHealthMetrics {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Provider category
+  category ProviderCategory
+
+  /// Provider identifier
+  providerId String
+
+  /// Provider status
+  status ProviderStatus
+
+  /// Average response time (last 24h)
+  averageResponseTime Int
+
+  /// Success rate percentage (last 24h)
+  successRate Decimal @db.Decimal(5, 2)
+
+  /// Total requests (last 24h)
+  totalRequests Int
+
+  /// Failed requests (last 24h)
+  failedRequests Int
+
+  /// Current rate limit status as JSON
+  rateLimitStatus Json?
+
+  /// Last successful request timestamp
+  lastSuccessTime DateTime?
+
+  /// Last error timestamp
+  lastErrorTime DateTime?
+
+  /// Last error message
+  lastError String?
+
+  /// Additional metrics as JSON
+  additionalMetrics Json?
+
+  /// Date for this metrics record (for daily aggregation)
+  metricsDate DateTime
+
+  @@unique([providerId, metricsDate])
+  @@index([providerId])
+  @@index([category])
+  @@index([status])
+  @@index([metricsDate])
+  @@map("provider_health_metrics")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Provider Price Alerts
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Price alerts created through price providers
+model ProviderPriceAlert {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The user who created this alert
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  /// Product identifier being monitored
+  productIdentifier String
+
+  /// Type of identifier (asin, upc, etc.)
+  identifierType String
+
+  /// Alert type
+  alertType String // 'price_drop', 'price_target', 'availability', 'deal'
+
+  /// Alert condition as JSON
+  condition Json
+
+  /// Alert status
+  status String @default("active") // 'active', 'triggered', 'paused', 'expired'
+
+  /// Notification settings as JSON
+  notifications Json
+
+  /// Last triggered timestamp
+  lastTriggered DateTime?
+
+  /// Number of times this alert has been triggered
+  triggerCount Int @default(0)
+
+  /// Price provider used for monitoring
+  priceProviderId String?
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([productIdentifier])
+  @@index([status])
+  @@map("provider_price_alerts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Global Provider Registry
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Global registry of all available providers for admin management
+/// This table defines which providers are available system-wide
+model ProviderRegistry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Provider identifier (e.g., 'openai', 'serpapi', 'keepa')
+  providerId String @unique
+
+  /// Provider display name
+  name String
+
+  /// Provider description
+  description String?
+
+  /// Provider category
+  category ProviderCategory
+
+  /// Whether this provider is enabled system-wide
+  enabled Boolean @default(true)
+
+  /// Provider homepage URL
+  homepage String?
+
+  /// Documentation URL
+  documentation String?
+
+  /// Configuration schema as JSON (for dynamic UI generation)
+  configSchema Json
+
+  /// Default configuration values as JSON
+  defaultConfig Json?
+
+  /// Provider limitations as JSON
+  limitations Json?
+
+  /// Pricing information as JSON
+  pricing Json?
+
+  /// Supported features as JSON array
+  features Json
+
+  /// Provider metadata as JSON
+  metadata Json?
+
+  /// Minimum required version (for future compatibility)
+  minVersion String?
+
+  /// Current version
+  version String?
+
+  /// Whether this provider requires admin approval for user activation
+  requiresApproval Boolean @default(false)
+
+  @@index([category])
+  @@index([enabled])
+  @@map("provider_registry")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -830,4 +1517,51 @@ model Media {
   @@index([uploadedById])
   @@index([purpose])
   @@map("media")
+}
+// ─────────────────────────────────────────────────────────────────────────────
+// Shopping Assistant Conversations
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Shopping assistant conversations for AI-powered shopping help
+model ShoppingConversation {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The user who owns this conversation
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  /// Conversation title (usually derived from first message)
+  title String
+
+  /// Conversation messages
+  messages ShoppingMessage[]
+
+  @@index([userId])
+  @@index([updatedAt])
+  @@map("shopping_conversations")
+}
+
+/// Individual messages within a shopping conversation
+model ShoppingMessage {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  /// The conversation this message belongs to
+  conversation   ShoppingConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversationId String
+
+  /// Message role: 'user' or 'assistant'
+  role String
+
+  /// Message content (text)
+  content String @db.Text
+
+  /// Structured data (query/response objects) as JSON
+  data Json?
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("shopping_messages")
 }

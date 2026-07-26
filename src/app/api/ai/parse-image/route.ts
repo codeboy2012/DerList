@@ -1,50 +1,76 @@
 /**
  * POST /api/ai/parse-image
  *
- * Product Getter image analysis endpoint. Analyzes screenshots or product
- * images to identify products, then matches against DerList's database.
- *
- * Body: { imageUrl: string, model?: string }
- * Returns: { success, parsed, matched, unmatched, error? }
+ * Analyze a product image using AI.
+ * Extracts product information from the image URL.
  */
 
+import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { parseImage, isProductGetterAvailable } from '@/lib/ai';
+import { getProviderManager } from '@/lib/providers';
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
-    return Response.json({ success: false, error: 'Authentication required.' }, { status: 401 });
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (!(await isProductGetterAvailable(user.id))) {
-    return Response.json(
-      { success: false, error: 'Image analysis AI is not configured. Please configure an AI provider in Settings.' },
-      { status: 503 },
-    );
-  }
-
-  let body: { imageUrl?: string; model?: string };
+  let body: { imageUrl?: string };
   try {
     body = await request.json();
   } catch {
-    return Response.json({ success: false, error: 'Invalid JSON body.' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Invalid JSON.' }, { status: 400 });
   }
 
-  const { imageUrl, model } = body;
-
+  const { imageUrl } = body;
   if (!imageUrl || typeof imageUrl !== 'string') {
-    return Response.json({ success: false, error: 'imageUrl is required.' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'imageUrl is required.' }, { status: 400 });
   }
 
-  // Basic URL validation
   try {
     new URL(imageUrl);
   } catch {
-    return Response.json({ success: false, error: 'Invalid image URL.' }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Invalid URL.' }, { status: 400 });
   }
 
-  const result = await parseImage(imageUrl, user.id, model);
+  try {
+    const providers = getProviderManager();
+    const aiProvider = await providers.getAIProvider(user.id);
 
-  return Response.json(result);
+    if (!aiProvider) {
+      return NextResponse.json(
+        { success: false, error: 'No AI provider configured.' },
+        { status: 503 }
+      );
+    }
+
+    const response = await aiProvider.chat(
+      [
+        {
+          role: 'system',
+          content:
+            'You are a product identification assistant. Analyze the image at the URL and identify any products. Return a JSON array of products with: title, brand, price (number or null), category.',
+        },
+        {
+          role: 'user',
+          content: `Identify products in this image: ${imageUrl}`,
+        },
+      ],
+      { maxTokens: 500, temperature: 0.1, json: true }
+    );
+
+    return NextResponse.json({
+      success: true,
+      analysis: response.content,
+    });
+  } catch (error) {
+    console.error('Parse image error:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to analyze image.',
+      },
+      { status: 500 }
+    );
+  }
 }
