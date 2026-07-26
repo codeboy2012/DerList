@@ -1,15 +1,6 @@
 import type { Metadata } from 'next';
-
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Card, CardContent } from '@/components/ui/Card';
-import { requireUser } from '@/lib/auth';
-import { formatDate } from '@/lib/format';
-import { prisma } from '@/lib/prisma';
-import { siteConfig } from '@/lib/site-config';
 import {
   Archive,
   ArrowLeft,
@@ -23,9 +14,16 @@ import {
   Pencil,
   Plus,
 } from 'lucide-react';
-
+import { requireUser } from '@/lib/auth';
+import { formatDate } from '@/lib/format';
+import { prisma } from '@/lib/prisma';
+import { siteConfig } from '@/lib/site-config';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card, CardContent } from '@/components/ui/Card';
 import { duplicateWishlistAction, toggleArchiveAction } from '../actions';
 import { AddItemPanel } from './AddItemPanel';
+import { AIOrganizer } from './AIOrganizer';
 import { CategoryView } from './CategoryView';
 import { DeleteWishlistButton } from './DeleteWishlistButton';
 import { ItemRow } from './ItemRow';
@@ -105,19 +103,21 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
   }
 
   // Filter items
-  const filteredItems = filter === 'all'
-    ? sortedItems
-    : filter === 'purchased'
-      ? sortedItems.filter((i) => i.purchased)
-      : filter === 'unpurchased'
-        ? sortedItems.filter((i) => !i.purchased)
-        : sortedItems;
+  const filteredItems =
+    filter === 'all'
+      ? sortedItems
+      : filter === 'purchased'
+        ? sortedItems.filter((i) => i.purchased)
+        : filter === 'unpurchased'
+          ? sortedItems.filter((i) => !i.purchased)
+          : sortedItems;
 
   const unpurchased = filteredItems.filter((i) => !i.purchased);
   const purchased = filteredItems.filter((i) => i.purchased);
-  const shareUrl = wishlist.visibility !== 'PRIVATE'
-    ? `${siteConfig.url}/u/${wishlist.owner.username}/wishlist/${wishlist.slug}`
-    : null;
+  const shareUrl =
+    wishlist.visibility !== 'PRIVATE'
+      ? `${siteConfig.url}/u/${wishlist.owner.username}/wishlist/${wishlist.slug}`
+      : null;
 
   // Determine if any items have categories (for showing category view toggle)
   const hasCategories = serializedItems.some((i) => i.category);
@@ -134,15 +134,19 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
           </Button>
           <div className="flex items-center gap-3 overflow-hidden">
             <span
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface text-lg"
-              style={wishlist.color ? { backgroundColor: `${wishlist.color}20`, color: wishlist.color } : undefined}
+              className="bg-surface flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg"
+              style={
+                wishlist.color
+                  ? { backgroundColor: `${wishlist.color}20`, color: wishlist.color }
+                  : undefined
+              }
             >
               {wishlist.icon || '📋'}
             </span>
             <div className="flex flex-col overflow-hidden">
-              <h1 className="truncate text-xl font-semibold text-foreground">{wishlist.title}</h1>
+              <h1 className="text-foreground truncate text-xl font-semibold">{wishlist.title}</h1>
               {wishlist.description && (
-                <p className="truncate text-sm text-muted-foreground">{wishlist.description}</p>
+                <p className="text-muted-foreground truncate text-sm">{wishlist.description}</p>
               )}
             </div>
           </div>
@@ -152,10 +156,11 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
         <div className="flex flex-wrap items-center gap-2">
           <VisibilityBadge visibility={wishlist.visibility} />
           {wishlist.archived && <Badge variant="warning">Archived</Badge>}
-          <span className="text-xs text-muted-foreground">
+          <span className="text-muted-foreground text-xs">
             {serializedItems.length} items · Updated {formatDate(wishlist.updatedAt)}
           </span>
           <div className="ml-auto flex flex-wrap gap-2">
+            <AIOrganizer wishlistId={id} itemCount={serializedItems.length} />
             <Button asChild size="sm" variant="secondary">
               <Link href={`/wishlists/${id}/edit`}>
                 <Pencil className="h-3.5 w-3.5" aria-hidden />
@@ -181,9 +186,9 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
 
         {/* Share URL */}
         {shareUrl && (
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2">
-            <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="truncate text-xs text-muted-foreground">{shareUrl}</span>
+          <div className="border-border bg-surface flex items-center gap-2 rounded-lg border px-3 py-2">
+            <ExternalLink className="text-muted-foreground h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span className="text-muted-foreground truncate text-xs">{shareUrl}</span>
           </div>
         )}
 
@@ -200,46 +205,105 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
       <RatingExplainer />
 
       {/* ─── Top 3 Most Wanted ─── */}
-      {unpurchased.length >= 3 && (
-        <TopMostWanted items={unpurchased} />
-      )}
+      {unpurchased.length >= 3 && <TopMostWanted items={unpurchased} />}
 
       {/* ─── Stats summary ─── */}
-      {serializedItems.length > 0 && (
-        <WishlistStats items={serializedItems} />
-      )}
+      {serializedItems.length > 0 && <WishlistStats items={serializedItems} />}
 
       {/* ─── Sort/Filter/View controls ─── */}
       {serializedItems.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
           {/* Sort */}
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-medium text-muted-foreground">Sort:</span>
-            <div className="flex gap-0.5 rounded-lg border border-border bg-surface p-0.5">
-              <SortLink id={id} current={sort} value="position" label="Default" filter={filter} view={view} />
-              <SortLink id={id} current={sort} value="price-desc" label="Price ↓" filter={filter} view={view} />
-              <SortLink id={id} current={sort} value="price-asc" label="Price ↑" filter={filter} view={view} />
-              <SortLink id={id} current={sort} value="name" label="Name" filter={filter} view={view} />
-              <SortLink id={id} current={sort} value="priority" label="Priority ⭐" filter={filter} view={view} />
-              <SortLink id={id} current={sort} value="newest" label="Newest" filter={filter} view={view} />
+            <span className="text-muted-foreground text-[11px] font-medium">Sort:</span>
+            <div className="border-border bg-surface flex gap-0.5 rounded-lg border p-0.5">
+              <SortLink
+                id={id}
+                current={sort}
+                value="position"
+                label="Default"
+                filter={filter}
+                view={view}
+              />
+              <SortLink
+                id={id}
+                current={sort}
+                value="price-desc"
+                label="Price ↓"
+                filter={filter}
+                view={view}
+              />
+              <SortLink
+                id={id}
+                current={sort}
+                value="price-asc"
+                label="Price ↑"
+                filter={filter}
+                view={view}
+              />
+              <SortLink
+                id={id}
+                current={sort}
+                value="name"
+                label="Name"
+                filter={filter}
+                view={view}
+              />
+              <SortLink
+                id={id}
+                current={sort}
+                value="priority"
+                label="Priority ⭐"
+                filter={filter}
+                view={view}
+              />
+              <SortLink
+                id={id}
+                current={sort}
+                value="newest"
+                label="Newest"
+                filter={filter}
+                view={view}
+              />
             </div>
           </div>
 
           {/* Filter */}
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-medium text-muted-foreground">Show:</span>
-            <div className="flex gap-0.5 rounded-lg border border-border bg-surface p-0.5">
-              <FilterLink id={id} current={filter} value="all" label="All" sort={sort} view={view} />
-              <FilterLink id={id} current={filter} value="unpurchased" label="Wanted" sort={sort} view={view} />
-              <FilterLink id={id} current={filter} value="purchased" label="Purchased" sort={sort} view={view} />
+            <span className="text-muted-foreground text-[11px] font-medium">Show:</span>
+            <div className="border-border bg-surface flex gap-0.5 rounded-lg border p-0.5">
+              <FilterLink
+                id={id}
+                current={filter}
+                value="all"
+                label="All"
+                sort={sort}
+                view={view}
+              />
+              <FilterLink
+                id={id}
+                current={filter}
+                value="unpurchased"
+                label="Wanted"
+                sort={sort}
+                view={view}
+              />
+              <FilterLink
+                id={id}
+                current={filter}
+                value="purchased"
+                label="Purchased"
+                sort={sort}
+                view={view}
+              />
             </div>
           </div>
 
           {/* View mode toggle (only if items have categories) */}
           {hasCategories && (
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-medium text-muted-foreground">View:</span>
-              <div className="flex gap-0.5 rounded-lg border border-border bg-surface p-0.5">
+              <span className="text-muted-foreground text-[11px] font-medium">View:</span>
+              <div className="border-border bg-surface flex gap-0.5 rounded-lg border p-0.5">
                 <ViewLink id={id} current={view} value="list" sort={sort} filter={filter}>
                   <List className="h-3.5 w-3.5" />
                 </ViewLink>
@@ -262,18 +326,16 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
         </Button>
       </div>
 
-      {showAddForm && (
-        <AddItemPanel wishlistId={id} />
-      )}
+      {showAddForm && <AddItemPanel wishlistId={id} />}
 
       {/* ─── Items ─── */}
       {serializedItems.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
-            <Package className="h-10 w-10 text-muted-foreground/40" />
+            <Package className="text-muted-foreground/40 h-10 w-10" />
             <div className="flex flex-col gap-1">
-              <p className="text-sm font-medium text-foreground">No items yet</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-foreground text-sm font-medium">No items yet</p>
+              <p className="text-muted-foreground text-xs">
                 Add items to this wishlist to start tracking things you want.
               </p>
             </div>
@@ -304,8 +366,8 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
           {/* Purchased (always flat list) */}
           {purchased.length > 0 && (
             <div className="flex flex-col gap-2">
-              <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <CheckCircle2 className="h-4 w-4 text-success" aria-hidden />
+              <h2 className="text-muted-foreground flex items-center gap-2 text-sm font-medium">
+                <CheckCircle2 className="text-success h-4 w-4" aria-hidden />
                 Purchased ({purchased.length})
               </h2>
               <div className="flex flex-col gap-2 opacity-70">
@@ -322,9 +384,7 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
           {/* Unpurchased */}
           {unpurchased.length > 0 && (
             <div className="flex flex-col gap-2">
-              <h2 className="text-sm font-medium text-foreground">
-                Items ({unpurchased.length})
-              </h2>
+              <h2 className="text-foreground text-sm font-medium">Items ({unpurchased.length})</h2>
               <div className="flex flex-col gap-2">
                 {unpurchased.map((item) => (
                   <ItemRow key={item.id} item={item} wishlistId={id} />
@@ -336,8 +396,8 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
           {/* Purchased */}
           {purchased.length > 0 && (
             <div className="flex flex-col gap-2">
-              <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <CheckCircle2 className="h-4 w-4 text-success" aria-hidden />
+              <h2 className="text-muted-foreground flex items-center gap-2 text-sm font-medium">
+                <CheckCircle2 className="text-success h-4 w-4" aria-hidden />
                 Purchased ({purchased.length})
               </h2>
               <div className="flex flex-col gap-2 opacity-70">
@@ -351,7 +411,7 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
       )}
 
       {/* ─── Delete zone ─── */}
-      <div className="border-t border-border pt-6">
+      <div className="border-border border-t pt-6">
         <DeleteWishlistButton wishlistId={id} />
       </div>
     </div>
@@ -369,10 +429,23 @@ function VisibilityBadge({ visibility }: { visibility: string }) {
     PRIVATE: { variant: 'default', label: 'Private' },
   };
   const { variant, label } = map[visibility] ?? map.PRIVATE;
-  return <Badge variant={variant} className="text-[10px]">{label}</Badge>;
+  return (
+    <Badge variant={variant} className="text-[10px]">
+      {label}
+    </Badge>
+  );
 }
 
-function WishlistStats({ items }: { items: Array<{ currentPrice: string | null; currency: string; purchased: boolean; retailer: string | null }> }) {
+function WishlistStats({
+  items,
+}: {
+  items: Array<{
+    currentPrice: string | null;
+    currency: string;
+    purchased: boolean;
+    retailer: string | null;
+  }>;
+}) {
   const totalItems = items.length;
   const purchasedCount = items.filter((i) => i.purchased).length;
   const remaining = totalItems - purchasedCount;
@@ -385,17 +458,22 @@ function WishlistStats({ items }: { items: Array<{ currentPrice: string | null; 
   const retailers = [...new Set(items.map((i) => i.retailer).filter(Boolean))] as string[];
 
   return (
-    <div className="grid gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="border-border bg-card grid gap-3 rounded-xl border p-4 sm:grid-cols-2 lg:grid-cols-5">
       <StatCell label="Items" value={String(totalItems)} />
       <StatCell label="Value" value={totalValue > 0 ? `$${totalValue.toFixed(2)}` : '—'} />
       <StatCell label="Purchased" value={String(purchasedCount)} accent="text-success" />
       <StatCell label="Remaining" value={String(remaining)} accent="text-accent" />
       <div className="flex flex-col gap-0.5 sm:col-span-2 lg:col-span-1">
-        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Retailers</span>
+        <span className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+          Retailers
+        </span>
         {retailers.length > 0 ? (
-          <span className="truncate text-xs text-foreground">{retailers.slice(0, 3).join(' · ')}{retailers.length > 3 ? ` +${retailers.length - 3}` : ''}</span>
+          <span className="text-foreground truncate text-xs">
+            {retailers.slice(0, 3).join(' · ')}
+            {retailers.length > 3 ? ` +${retailers.length - 3}` : ''}
+          </span>
         ) : (
-          <span className="text-xs text-muted-foreground">—</span>
+          <span className="text-muted-foreground text-xs">—</span>
         )}
       </div>
     </div>
@@ -405,13 +483,31 @@ function WishlistStats({ items }: { items: Array<{ currentPrice: string | null; 
 function StatCell({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className={`text-sm font-semibold tabular-nums ${accent ?? 'text-foreground'}`}>{value}</span>
+      <span className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
+        {label}
+      </span>
+      <span className={`text-sm font-semibold tabular-nums ${accent ?? 'text-foreground'}`}>
+        {value}
+      </span>
     </div>
   );
 }
 
-function SortLink({ id, current, value, label, filter, view }: { id: string; current: string; value: string; label: string; filter: string; view: string }) {
+function SortLink({
+  id,
+  current,
+  value,
+  label,
+  filter,
+  view,
+}: {
+  id: string;
+  current: string;
+  value: string;
+  label: string;
+  filter: string;
+  view: string;
+}) {
   const params = new URLSearchParams();
   if (value !== 'position') params.set('sort', value);
   if (filter !== 'all') params.set('filter', filter);
@@ -428,7 +524,21 @@ function SortLink({ id, current, value, label, filter, view }: { id: string; cur
   );
 }
 
-function FilterLink({ id, current, value, label, sort, view }: { id: string; current: string; value: string; label: string; sort: string; view: string }) {
+function FilterLink({
+  id,
+  current,
+  value,
+  label,
+  sort,
+  view,
+}: {
+  id: string;
+  current: string;
+  value: string;
+  label: string;
+  sort: string;
+  view: string;
+}) {
   const params = new URLSearchParams();
   if (sort !== 'position') params.set('sort', sort);
   if (value !== 'all') params.set('filter', value);
@@ -445,7 +555,21 @@ function FilterLink({ id, current, value, label, sort, view }: { id: string; cur
   );
 }
 
-function ViewLink({ id, current, value, sort, filter, children }: { id: string; current: string; value: string; sort: string; filter: string; children: React.ReactNode }) {
+function ViewLink({
+  id,
+  current,
+  value,
+  sort,
+  filter,
+  children,
+}: {
+  id: string;
+  current: string;
+  value: string;
+  sort: string;
+  filter: string;
+  children: React.ReactNode;
+}) {
   const params = new URLSearchParams();
   if (sort !== 'position') params.set('sort', sort);
   if (filter !== 'all') params.set('filter', filter);

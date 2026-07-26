@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Star, Sparkles } from 'lucide-react';
+import { Sparkles, Star } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Tooltip } from '@/components/ui/Tooltip';
 
@@ -17,8 +17,8 @@ const PRIORITY_LABELS: Record<number, string> = {
 const PRIORITY_TOOLTIP_LABELS: Record<number, string> = {
   1: 'Want',
   2: 'Really Want',
-  3: 'I NEED This',
-  4: 'O.M.G. MUST HAVE!!',
+  3: 'Need This',
+  4: 'Must Have!',
 };
 
 interface WishlistPriorityProps {
@@ -90,7 +90,11 @@ export function WishlistPriority({
           const filled = star <= displayValue;
           const isPopping = justSelected !== null && star <= justSelected;
           return (
-            <Tooltip key={star} content={`${'\u2B50'.repeat(star)} ${PRIORITY_TOOLTIP_LABELS[star]}`} side="top">
+            <Tooltip
+              key={star}
+              content={`${'\u2B50'.repeat(star)} ${PRIORITY_TOOLTIP_LABELS[star]}`}
+              side="top"
+            >
               <button
                 type="button"
                 role="radio"
@@ -99,10 +103,10 @@ export function WishlistPriority({
                 disabled={disabled}
                 className={cn(
                   'rounded-sm p-0.5 transition-all duration-150',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+                  'focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
                   !disabled && 'cursor-pointer hover:scale-110',
                   disabled && 'cursor-default opacity-70',
-                  isPopping && 'scale-125',
+                  isPopping && 'scale-125'
                 )}
                 onClick={() => handleSelect(star)}
                 onMouseEnter={() => !disabled && setHoverValue(star)}
@@ -117,7 +121,7 @@ export function WishlistPriority({
                     'transition-all duration-150',
                     filled
                       ? 'fill-yellow-400 text-yellow-400 drop-shadow-[0_0_3px_rgba(250,204,21,0.4)]'
-                      : 'fill-transparent text-muted-foreground/40',
+                      : 'text-muted-foreground/40 fill-transparent'
                   )}
                 />
               </button>
@@ -127,18 +131,20 @@ export function WishlistPriority({
 
         {/* Sparkle animation for 4-star selection */}
         {sparkle && (
-          <span className="pointer-events-none absolute -right-1 -top-1 animate-ping">
+          <span className="pointer-events-none absolute -top-1 -right-1 animate-ping">
             <Sparkles className="h-3 w-3 text-yellow-300" />
           </span>
         )}
       </div>
 
       {showLabel && (
-        <span className={cn(
-          'font-medium text-muted-foreground transition-all duration-150',
-          size === 'md' ? 'text-xs' : 'text-[10px]',
-          displayValue === 4 && 'text-yellow-400/90',
-        )}>
+        <span
+          className={cn(
+            'text-muted-foreground font-medium transition-all duration-150',
+            size === 'md' ? 'text-xs' : 'text-[10px]',
+            displayValue === 4 && 'text-yellow-400/90'
+          )}
+        >
           {PRIORITY_LABELS[displayValue] ?? 'Want'}
         </span>
       )}
@@ -150,9 +156,18 @@ export function WishlistPriority({
  * Read-only priority display (no interaction).
  * Shows stars + label inline.
  */
-export function WishlistPriorityDisplay({ value, showLabel = true }: { value: number; showLabel?: boolean }) {
+export function WishlistPriorityDisplay({
+  value,
+  showLabel = true,
+}: {
+  value: number;
+  showLabel?: boolean;
+}) {
   return (
-    <div className="inline-flex items-center gap-1.5" aria-label={`Priority: ${PRIORITY_LABELS[value] ?? 'Want'}`}>
+    <div
+      className="inline-flex items-center gap-1.5"
+      aria-label={`Priority: ${PRIORITY_LABELS[value] ?? 'Want'}`}
+    >
       <div className="inline-flex items-center gap-0.5">
         {[1, 2, 3, 4].map((star) => (
           <Star
@@ -161,16 +176,18 @@ export function WishlistPriorityDisplay({ value, showLabel = true }: { value: nu
               'h-3 w-3',
               star <= value
                 ? 'fill-yellow-400 text-yellow-400'
-                : 'fill-transparent text-muted-foreground/30',
+                : 'text-muted-foreground/30 fill-transparent'
             )}
           />
         ))}
       </div>
       {showLabel && (
-        <span className={cn(
-          'text-[10px] font-medium text-muted-foreground',
-          value === 4 && 'text-yellow-400/90',
-        )}>
+        <span
+          className={cn(
+            'text-muted-foreground text-[10px] font-medium',
+            value === 4 && 'text-yellow-400/90'
+          )}
+        >
           {PRIORITY_LABELS[value]}
         </span>
       )}

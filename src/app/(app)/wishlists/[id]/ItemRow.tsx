@@ -8,15 +8,13 @@ import {
   Circle,
   Copy,
   ExternalLink,
-  MoreHorizontal,
   Package,
   Pencil,
-  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { WishlistPriority } from '@/components/ui/WishlistPriority';
 import { ProductEditorDrawer } from '@/components/product/ProductEditorDrawer';
-import { deleteItemAction, togglePurchasedAction } from './item-actions';
+import { togglePurchasedAction } from './item-actions';
 import { updateStarPriorityAction } from './priority-action';
 
 interface ItemRowProps {
@@ -67,7 +65,6 @@ function getRetailerStyle(retailer: string | null): string {
 }
 
 export function ItemRow({ item, wishlistId }: ItemRowProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
 
@@ -242,39 +239,6 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
               >
                 <Pencil className="h-3 w-3" /> Edit
               </Button>
-
-              {/* More */}
-              <div className="relative ml-auto">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 rounded-lg p-0"
-                  onClick={() => setMenuOpen((o) => !o)}
-                  aria-label="More"
-                >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </Button>
-                {menuOpen && (
-                  <div className="border-border bg-card animate-scale-in absolute top-full right-0 z-20 mt-1 w-36 rounded-xl border p-1 shadow-xl">
-                    <form
-                      action={async (fd) => {
-                        if (!window.confirm('Delete this item?')) return;
-                        await deleteItemAction(fd);
-                        setMenuOpen(false);
-                      }}
-                    >
-                      <input type="hidden" name="itemId" value={item.id} />
-                      <input type="hidden" name="wishlistId" value={wishlistId} />
-                      <button
-                        type="submit"
-                        className="text-danger hover:bg-danger/10 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" /> Remove
-                      </button>
-                    </form>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </div>

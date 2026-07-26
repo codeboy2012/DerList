@@ -604,6 +604,8 @@ export function ProductEditorDrawer({
             if (handleBeforeClose()) onClose();
           }}
           onDelete={() => setDeleteConfirm(true)}
+          onAiAutofill={handleAiIdentify}
+          aiLoading={data.aiConfidence === 'loading'}
         />
       }
     >
@@ -1861,12 +1863,16 @@ function DrawerFooter({
   onSaveClose,
   onCancel,
   onDelete,
+  onAiAutofill,
+  aiLoading,
 }: {
   saveStatus: SaveStatus;
   onSave: () => void;
   onSaveClose: () => void;
   onCancel: () => void;
   onDelete: () => void;
+  onAiAutofill: () => void;
+  aiLoading: boolean;
 }) {
   const isSaving = saveStatus === 'saving';
   return (
@@ -1874,6 +1880,21 @@ function DrawerFooter({
       <div className="flex items-center gap-2">
         <Button type="button" variant="danger" size="sm" onClick={onDelete} className="gap-1.5">
           <Trash2 className="h-3.5 w-3.5" /> Delete
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={onAiAutofill}
+          disabled={aiLoading}
+          className="gap-1.5"
+        >
+          {aiLoading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="h-3.5 w-3.5" />
+          )}
+          AI Autofill
         </Button>
       </div>
       <div className="flex items-center gap-2">
