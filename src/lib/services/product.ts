@@ -179,13 +179,17 @@ Only return the JSON object, nothing else.`,
   }
 
   /**
-   * Enrich a product draft with additional data from providers.
-   * Fills in missing fields (price, image, brand) without overwriting existing data.
+   * Enrich a product draft with additional data from providers + AI.
+   * Fills in missing fields without overwriting existing data.
+   *
+   * Steps:
+   * 1. Try search providers for price/image/retailer
+   * 2. Run AI enrichment for specs, descriptions, sellers, identifiers
    */
   async enrich(draft: ProductDraft, userId: string): Promise<ProductDraft> {
     const enriched = { ...draft };
 
-    // Try to fill price if missing
+    // Step 1: Search provider enrichment (price, image, retailer)
     if (!enriched.currentPrice && enriched.title) {
       try {
         const searchProvider = await this.providers.getSearchProvider(userId);
@@ -201,8 +205,58 @@ Only return the JSON object, nothing else.`,
           }
         }
       } catch {
-        // Enrichment is best-effort
+        // Search enrichment is best-effort
       }
+    }
+
+    // Step 2: AI enrichment (best-effort, non-blocking for basic flow)
+    try {
+      const { EnrichmentService } = await import('./enrichment');
+      const enrichmentService = new EnrichmentService(this.providers);
+      const aiResult = await enrichmentService.enrichProduct(
+        {
+          title: enriched.title,
+          brand: enriched.brand,
+          category: enriched.category,
+          description: enriched.description,
+          url: enriched.url,
+          retailer: enriched.retailer,
+          currentPrice: enriched.currentPrice,
+          originalPrice: enriched.originalPrice,
+          image: enriched.image,
+          sku: enriched.sku,
+          asin: enriched.asin,
+          upc: enriched.upc,
+          mpn: enriched.mpn,
+        },
+        userId
+      );
+
+      // Smart merge AI results into draft (only fill empty fields)
+      if (aiResult.confidence > 0) {
+        enriched.brand ??= aiResult.brand;
+        enriched.category ??= aiResult.category || aiResult.suggestedCategory;
+        enriched.description ??= aiResult.description;
+        enriched.sku ??= aiResult.sku;
+        enriched.asin ??= aiResult.asin;
+        enriched.upc ??= aiResult.upc;
+        enriched.mpn ??= aiResult.mpn;
+        if (!enriched.currentPrice && aiResult.currentPrice) {
+          enriched.currentPrice = aiResult.currentPrice;
+        }
+        if (!enriched.originalPrice && aiResult.msrp) {
+          enriched.originalPrice = aiResult.msrp;
+        }
+        if (!enriched.image && aiResult.images && aiResult.images.length > 0) {
+          enriched.image = aiResult.images[0];
+        }
+        // Boost confidence if AI provided good data
+        if (aiResult.confidence >= 70) {
+          enriched.confidence = Math.max(enriched.confidence, aiResult.confidence);
+        }
+      }
+    } catch {
+      // AI enrichment is best-effort — don't fail the whole identify flow
     }
 
     return enriched;

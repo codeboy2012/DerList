@@ -17,4 +17,12 @@ export type { AssistantResponse } from './assistant';
 export { ProviderSettingsService, AVAILABLE_PROVIDERS } from './provider-settings';
 export type { ProviderInfo, TestResult } from './provider-settings';
 
+export { EnrichmentService } from './enrichment';
+export type {
+  EnrichmentInput,
+  EnrichmentResult,
+  EnrichmentSeller,
+  EnrichmentSpec,
+} from './enrichment';
+
 export { createServices } from './create';

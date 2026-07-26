@@ -7,6 +7,7 @@
 
 import { getProviderManager } from '@/lib/providers';
 import { AssistantService } from './assistant';
+import { EnrichmentService } from './enrichment';
 import { ProductService } from './product';
 import { ProviderSettingsService } from './provider-settings';
 import { WishlistService } from './wishlist';
@@ -21,11 +22,13 @@ export function createServices() {
   const wishlistService = new WishlistService();
   const assistantService = new AssistantService(providers, productService);
   const providerSettingsService = new ProviderSettingsService(providers);
+  const enrichmentService = new EnrichmentService(providers);
 
   return {
     products: productService,
     wishlists: wishlistService,
     assistant: assistantService,
     providerSettings: providerSettingsService,
+    enrichment: enrichmentService,
   };
 }
