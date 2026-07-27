@@ -163,9 +163,9 @@ export class BraveSearchProvider {
 
     const data = await this.request(`/web/search?${params}`);
 
-    return (data?.web?.results ?? [])
+    return ((data?.web?.results ?? []) as Record<string, unknown>[])
       .slice(0, this.maxResults)
-      .map((r: { [k: string]: unknown }) => ({
+      .map((r: Record<string, unknown>) => ({
         title: String(r.title ?? ''),
         url: String(r.url ?? ''),
         description: String(r.description ?? ''),
@@ -187,14 +187,16 @@ export class BraveSearchProvider {
 
     const data = await this.request(`/images/search?${params}`);
 
-    return (data?.results ?? []).slice(0, 10).map((r: { [k: string]: unknown }) => ({
-      url: String(r.url ?? (r.properties as { url?: string })?.url ?? ''),
-      thumbnail: String((r.thumbnail as { src?: string })?.src ?? r.url ?? ''),
-      title: String(r.title ?? ''),
-      source: String(r.source ?? ''),
-      width: Number((r.properties as { width?: number })?.width ?? 0),
-      height: Number((r.properties as { height?: number })?.height ?? 0),
-    }));
+    return ((data?.results ?? []) as Record<string, unknown>[])
+      .slice(0, 10)
+      .map((r: Record<string, unknown>) => ({
+        url: String(r.url ?? (r.properties as { url?: string })?.url ?? ''),
+        thumbnail: String((r.thumbnail as { src?: string })?.src ?? r.url ?? ''),
+        title: String(r.title ?? ''),
+        source: String(r.source ?? ''),
+        width: Number((r.properties as { width?: number })?.width ?? 0),
+        height: Number((r.properties as { height?: number })?.height ?? 0),
+      }));
   }
 
   /**
@@ -209,13 +211,15 @@ export class BraveSearchProvider {
 
     const data = await this.request(`/news/search?${params}`);
 
-    return (data?.results ?? []).slice(0, 5).map((r: { [k: string]: unknown }) => ({
-      title: String(r.title ?? ''),
-      url: String(r.url ?? ''),
-      description: String(r.description ?? ''),
-      source: String((r.meta_url as { hostname?: string })?.hostname ?? ''),
-      age: String(r.age ?? ''),
-    }));
+    return ((data?.results ?? []) as Record<string, unknown>[])
+      .slice(0, 5)
+      .map((r: Record<string, unknown>) => ({
+        title: String(r.title ?? ''),
+        url: String(r.url ?? ''),
+        description: String(r.description ?? ''),
+        source: String((r.meta_url as { hostname?: string })?.hostname ?? ''),
+        age: String(r.age ?? ''),
+      }));
   }
 
   /**
@@ -255,7 +259,9 @@ export class BraveSearchProvider {
 
   // ─── Private ───
 
-  private async request(path: string): Promise<{ [k: string]: unknown }> {
+  private async request(
+    path: string
+  ): Promise<Record<string, unknown> & { web?: { results?: unknown[] }; results?: unknown[] }> {
     const response = await fetch(`${BRAVE_BASE_URL}${path}`, {
       headers: {
         Accept: 'application/json',
