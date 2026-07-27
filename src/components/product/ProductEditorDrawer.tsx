@@ -513,8 +513,16 @@ export function ProductEditorDrawer({
   }, [item.id, toast, onDelete, onClose]);
 
   // ─── AI Identify ───
-  const handleAiIdentify = async () => {
-    if (!data.title.trim()) return;
+  const handleAiIdentify = async (): Promise<{
+    modelUsed?: string;
+    provider?: string;
+    confidence?: number;
+    specs?: number;
+    images?: number;
+    sellers?: number;
+    tags?: number;
+  } | null> => {
+    if (!data.title.trim()) return null;
     updateField('aiConfidence', 'loading');
     try {
       const res = await fetch('/api/products/enrich', {
@@ -647,13 +655,24 @@ export function ProductEditorDrawer({
         }
 
         toast.success('AI Autofill complete');
+        return {
+          modelUsed: result.modelUsed || result.enrichment?.modelUsed || undefined,
+          provider: 'OpenRouter',
+          confidence: result.enrichment?.confidence || undefined,
+          specs: result.enrichment?.specifications?.length || undefined,
+          images: result.enrichment?.images?.length || undefined,
+          sellers: result.enrichment?.sellers?.length || undefined,
+          tags: result.enrichment?.tags?.length || undefined,
+        };
       } else {
         updateField('aiConfidence', '');
         toast.error(result.error || 'Could not enrich product');
+        return null;
       }
     } catch {
       updateField('aiConfidence', '');
       toast.error('AI Autofill failed');
+      return null;
     }
   };
 
@@ -889,20 +908,26 @@ export function ProductEditorDrawer({
         onEnrich={async (): Promise<EnrichmentProgressResult> => {
           const startTime = Date.now();
           try {
-            await handleAiIdentify();
-            const duration = Math.round((Date.now() - startTime) / 1000);
-            return {
-              success: true,
-              summary: {
-                specifications: data.specs.length,
-                images: data.images.length,
-                sellers: data.sellers.length,
-                fields: Object.values(data).filter((v) => v && v !== '' && v !== 'loading').length,
-                duration,
-                provider: 'OpenRouter',
-                model: data.aiConfidence !== 'loading' ? 'Auto' : undefined,
-              },
-            };
+            const result = await handleAiIdentify();
+            const duration = parseFloat(((Date.now() - startTime) / 1000).toFixed(1));
+            if (result) {
+              return {
+                success: true,
+                summary: {
+                  specifications: result.specs,
+                  images: result.images,
+                  sellers: result.sellers,
+                  tags: result.tags,
+                  fields: Object.values(data).filter((v) => v && v !== '' && v !== 'loading')
+                    .length,
+                  duration,
+                  confidence: result.confidence,
+                  provider: result.provider,
+                  model: result.modelUsed,
+                },
+              };
+            }
+            return { success: false, error: 'No results returned' };
           } catch (err) {
             return {
               success: false,

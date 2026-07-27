@@ -144,8 +144,14 @@ export function EnrichmentProgress({
       if (cancelledRef.current) return;
       const elapsedSec = (Date.now() - startTime) / 1000;
       setElapsed(parseFloat(elapsedSec.toFixed(1)));
+    }, 500);
 
-      // Rotate activity message every 2.5s
+    // Activity rotation (separate slower interval)
+    const activityInterval = setInterval(() => {
+      if (cancelledRef.current) return;
+      const elapsedSec = (Date.now() - startTime) / 1000;
+
+      // Rotate activity message
       actIdx = (actIdx + 1) % ACTIVITIES.length;
       setActivity(ACTIVITIES[actIdx]);
       if (elapsedSec > 2) addActivity(ACTIVITIES[actIdx]);
@@ -211,6 +217,7 @@ export function EnrichmentProgress({
       }
     } finally {
       if (timerRef.current) clearInterval(timerRef.current);
+      clearInterval(activityInterval);
     }
   }, [onEnrich, addActivity, toast]);
 
