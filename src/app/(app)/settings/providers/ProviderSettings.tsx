@@ -633,9 +633,11 @@ function AddProviderCard({
                 field.name === 'model' &&
                 (provider.id === 'openrouter' || provider.id === 'openai')
               ) {
-                const isAuto = !config[field.name];
+                const modelMode = config._modelMode ?? (config[field.name] ? 'manual' : 'auto');
+                const manualModel = config._manualModel ?? config[field.name] ?? '';
                 const defaultModel =
                   provider.id === 'openrouter' ? 'openrouter/free' : 'gpt-4o-mini';
+                const isAuto = modelMode === 'auto';
                 const examples =
                   provider.id === 'openrouter'
                     ? [
@@ -645,11 +647,22 @@ function AddProviderCard({
                       ]
                     : ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo'];
 
+                const setMode = (mode: string) => {
+                  setConfig((prev) => ({
+                    ...prev,
+                    _modelMode: mode,
+                    _manualModel: prev._manualModel ?? prev.model ?? '',
+                    model: mode === 'auto' ? '' : (prev._manualModel ?? prev.model ?? ''),
+                  }));
+                };
+
+                const setManualModel = (value: string) => {
+                  setConfig((prev) => ({ ...prev, _manualModel: value, model: value }));
+                };
+
                 return (
                   <div key={field.name} className="space-y-3">
                     <label className="text-sm font-medium">AI Model</label>
-
-                    {/* Auto/Manual radio */}
                     <div className="space-y-2">
                       <label
                         className={cn(
@@ -661,7 +674,7 @@ function AddProviderCard({
                           type="radio"
                           name={`model-mode-${provider.id}`}
                           checked={isAuto}
-                          onChange={() => setConfig((prev) => ({ ...prev, model: '' }))}
+                          onChange={() => setMode('auto')}
                           className="h-4 w-4"
                         />
                         <div className="flex-1">
@@ -669,17 +682,12 @@ function AddProviderCard({
                           <p className="text-muted-foreground mt-0.5 text-xs">
                             DerList selects the best available model automatically.
                           </p>
-                          {isAuto && (
-                            <p className="text-accent mt-1 text-xs">
-                              Uses:{' '}
-                              <code className="bg-surface rounded px-1.5 py-0.5">
-                                {defaultModel}
-                              </code>
-                            </p>
-                          )}
+                          <p className="text-accent mt-1 text-xs">
+                            Uses:{' '}
+                            <code className="bg-surface rounded px-1.5 py-0.5">{defaultModel}</code>
+                          </p>
                         </div>
                       </label>
-
                       <label
                         className={cn(
                           'flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 transition-colors',
@@ -692,27 +700,25 @@ function AddProviderCard({
                           type="radio"
                           name={`model-mode-${provider.id}`}
                           checked={!isAuto}
-                          onChange={() => setConfig((prev) => ({ ...prev, model: defaultModel }))}
+                          onChange={() => setMode('manual')}
                           className="mt-0.5 h-4 w-4"
                         />
                         <div className="flex-1 space-y-2">
-                          <span className="text-sm font-medium">Select Manually</span>
-                          {!isAuto && (
-                            <>
-                              <Input
-                                type="text"
-                                value={config[field.name] ?? ''}
-                                onChange={(e) =>
-                                  setConfig((prev) => ({ ...prev, model: e.target.value }))
-                                }
-                                placeholder={examples[0]}
-                                className="font-mono text-sm"
-                              />
-                              <p className="text-muted-foreground text-[11px]">
-                                Examples: {examples.join(', ')}
-                              </p>
-                            </>
-                          )}
+                          <span className="text-sm font-medium">Manual</span>
+                          <Input
+                            type="text"
+                            value={manualModel}
+                            onChange={(e) => setManualModel(e.target.value)}
+                            placeholder={examples[0]}
+                            className={cn(
+                              'font-mono text-sm',
+                              isAuto && 'cursor-not-allowed opacity-50'
+                            )}
+                            disabled={isAuto}
+                          />
+                          <p className="text-muted-foreground text-[11px]">
+                            Examples: {examples.join(', ')}
+                          </p>
                         </div>
                       </label>
                     </div>
