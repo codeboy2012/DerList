@@ -719,7 +719,6 @@ export function ProductEditorDrawer({
   );
 
   // ─── Pricing calculations ───
-  const pricing = useMemo(() => calcPricing(data), [data]);
 
   // ─── Render ───
   return (
@@ -812,7 +811,7 @@ export function ProductEditorDrawer({
               expanded={sections.pricing}
               onToggle={() => toggleSection('pricing')}
             >
-              <PricingSection data={data} updateField={updateField} pricing={pricing} />
+              <PricingSection data={data} updateField={updateField} />
             </CollapsibleSection>
 
             <CollapsibleSection
@@ -1157,17 +1156,94 @@ function ProductInfoSection({
 // Pricing Section (with live calculations)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PricingSection({
-  data,
-  updateField,
-  pricing,
-}: {
-  data: ProductEditorData;
-  updateField: UpdateFn;
-  pricing: { savings: string; savingsPercent: number; total: string };
-}) {
+function PricingSection({ data, updateField }: { data: ProductEditorData; updateField: UpdateFn }) {
+  // Smart calculator: track last edited field to avoid circular updates
+  const handlePriceChange = (field: string, value: string) => {
+    updateField(field as keyof ProductEditorData, value);
+
+    const current =
+      field === 'currentPrice' ? parseFloat(value) || 0 : parseFloat(data.currentPrice) || 0;
+    const original =
+      field === 'originalPrice' ? parseFloat(value) || 0 : parseFloat(data.originalPrice) || 0;
+    const discount =
+      field === 'discountPercent' ? parseFloat(value) || 0 : parseFloat(data.discountPercent) || 0;
+    const deal = field === 'dealAmount' ? parseFloat(value) || 0 : parseFloat(data.dealAmount) || 0;
+
+    // Rule 1: Current + Original → calculate Discount % and Deal Amount
+    if (field === 'currentPrice' || field === 'originalPrice') {
+      const c = field === 'currentPrice' ? parseFloat(value) || 0 : current;
+      const o = field === 'originalPrice' ? parseFloat(value) || 0 : original;
+      if (o > 0 && c > 0 && o > c) {
+        const pct = Math.round(((o - c) / o) * 100);
+        const savings = (o - c).toFixed(2);
+        updateField('discountPercent', String(pct));
+        updateField('dealAmount', savings);
+      } else if (o > 0 && c > 0 && o <= c) {
+        // Rule 7: no fake discounts
+        updateField('discountPercent', '');
+        updateField('dealAmount', '');
+      }
+    }
+
+    // Rule 2: Original + Discount % → calculate Current Price
+    if (field === 'discountPercent' && original > 0 && discount > 0) {
+      const newCurrent = (original * (1 - discount / 100)).toFixed(2);
+      updateField('currentPrice', newCurrent);
+      updateField('dealAmount', (original - parseFloat(newCurrent)).toFixed(2));
+    }
+
+    // Rule 3: Original + Deal Amount → calculate Current Price
+    if (field === 'dealAmount' && original > 0 && deal > 0) {
+      const newCurrent = (original - deal).toFixed(2);
+      updateField('currentPrice', newCurrent);
+      updateField('discountPercent', String(Math.round((deal / original) * 100)));
+    }
+
+    // Rule 4: Current + Deal Amount → calculate Original
+    if (field === 'dealAmount' && current > 0 && deal > 0 && !original) {
+      const newOriginal = (current + deal).toFixed(2);
+      updateField('originalPrice', newOriginal);
+      updateField('discountPercent', String(Math.round((deal / (current + deal)) * 100)));
+    }
+
+    // Rule 5: Current + Discount % → calculate Original
+    if (field === 'discountPercent' && current > 0 && discount > 0 && !original) {
+      const newOriginal = (current / (1 - discount / 100)).toFixed(2);
+      updateField('originalPrice', newOriginal);
+      updateField('dealAmount', (parseFloat(newOriginal) - current).toFixed(2));
+    }
+
+    // Auto-calculate Final Total
+    const shipping = parseFloat(data.shippingCost) || 0;
+    const tax = parseFloat(data.tax) || 0;
+    const basePrice = field === 'currentPrice' ? parseFloat(value) || 0 : current;
+    if (basePrice > 0) {
+      updateField('finalTotal', (basePrice + shipping + tax).toFixed(2));
+    }
+  };
+
+  // Recalculate total when shipping/tax change
+  const handleCostChange = (field: string, value: string) => {
+    updateField(field as keyof ProductEditorData, value);
+    const price = parseFloat(data.currentPrice) || 0;
+    const shipping =
+      field === 'shippingCost' ? parseFloat(value) || 0 : parseFloat(data.shippingCost) || 0;
+    const tax = field === 'tax' ? parseFloat(value) || 0 : parseFloat(data.tax) || 0;
+    if (price > 0) {
+      updateField('finalTotal', (price + shipping + tax).toFixed(2));
+    }
+  };
+
   const priceInvalid =
     data.currentPrice !== '' && (isNaN(Number(data.currentPrice)) || Number(data.currentPrice) < 0);
+  const current = parseFloat(data.currentPrice) || 0;
+  const original = parseFloat(data.originalPrice) || 0;
+  const shipping = parseFloat(data.shippingCost) || 0;
+  const tax = parseFloat(data.tax) || 0;
+  const savings = original > current && current > 0 ? original - current : 0;
+  const savingsPercent = original > 0 && savings > 0 ? Math.round((savings / original) * 100) : 0;
+  const total = current + shipping + tax;
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -1175,7 +1251,7 @@ function PricingSection({
           <FieldLabel label="Current Price" />
           <Input
             value={data.currentPrice}
-            onChange={(e) => updateField('currentPrice', e.target.value)}
+            onChange={(e) => handlePriceChange('currentPrice', e.target.value)}
             type="number"
             step="0.01"
             min="0"
@@ -1187,51 +1263,43 @@ function PricingSection({
           )}
         </div>
         <div>
-          <FieldLabel label="Original Price" />
+          <FieldLabel label="Original Price (MSRP)" />
           <Input
             value={data.originalPrice}
-            onChange={(e) => updateField('originalPrice', e.target.value)}
+            onChange={(e) => handlePriceChange('originalPrice', e.target.value)}
             type="number"
             step="0.01"
             min="0"
-            placeholder="MSRP"
-          />
-        </div>
-        <div>
-          <FieldLabel label="Sale Price" />
-          <Input
-            value={data.salePrice}
-            onChange={(e) => updateField('salePrice', e.target.value)}
-            type="number"
-            step="0.01"
-            min="0"
-            placeholder="0.00"
-          />
-        </div>
-        <div>
-          <FieldLabel label="Deal Amount" />
-          <Input
-            value={data.dealAmount}
-            onChange={(e) => updateField('dealAmount', e.target.value)}
-            placeholder="e.g. $50 off"
+            placeholder="MSRP / List Price"
           />
         </div>
         <div>
           <FieldLabel label="Discount %" />
           <Input
             value={data.discountPercent}
-            onChange={(e) => updateField('discountPercent', e.target.value)}
+            onChange={(e) => handlePriceChange('discountPercent', e.target.value)}
             type="number"
             min="0"
             max="100"
-            placeholder="0"
+            placeholder="Auto-calculated"
           />
         </div>
         <div>
-          <FieldLabel label="Shipping Cost" />
+          <FieldLabel label="Deal Amount ($)" />
+          <Input
+            value={data.dealAmount}
+            onChange={(e) => handlePriceChange('dealAmount', e.target.value)}
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="Auto-calculated"
+          />
+        </div>
+        <div>
+          <FieldLabel label="Shipping" />
           <Input
             value={data.shippingCost}
-            onChange={(e) => updateField('shippingCost', e.target.value)}
+            onChange={(e) => handleCostChange('shippingCost', e.target.value)}
             type="number"
             step="0.01"
             min="0"
@@ -1242,7 +1310,7 @@ function PricingSection({
           <FieldLabel label="Tax" />
           <Input
             value={data.tax}
-            onChange={(e) => updateField('tax', e.target.value)}
+            onChange={(e) => handleCostChange('tax', e.target.value)}
             type="number"
             step="0.01"
             min="0"
@@ -1266,47 +1334,36 @@ function PricingSection({
             className="font-mono"
           />
         </div>
-        <div>
-          <FieldLabel label="Final Total" />
-          <Input
-            value={data.finalTotal}
-            onChange={(e) => updateField('finalTotal', e.target.value)}
-            type="number"
-            step="0.01"
-            min="0"
-            placeholder="Calculated total"
-          />
-        </div>
       </div>
 
-      {/* Live pricing summary */}
-      {parseFloat(data.currentPrice) > 0 && (
-        <div className="bg-surface/50 space-y-1 rounded-lg p-3">
+      {/* Live Summary */}
+      {current > 0 && (
+        <div className="bg-surface/50 space-y-1.5 rounded-lg p-3">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Subtotal</span>
-            <span className="font-medium">${parseFloat(data.currentPrice).toFixed(2)}</span>
+            <span className="font-medium tabular-nums">${current.toFixed(2)}</span>
           </div>
-          {parseFloat(data.shippingCost) > 0 && (
+          {savings > 0 && (
+            <div className="text-success flex justify-between text-sm">
+              <span>Savings ({savingsPercent}%)</span>
+              <span className="tabular-nums">-${savings.toFixed(2)}</span>
+            </div>
+          )}
+          {shipping > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">+ Shipping</span>
-              <span>${parseFloat(data.shippingCost).toFixed(2)}</span>
+              <span className="tabular-nums">${shipping.toFixed(2)}</span>
             </div>
           )}
-          {parseFloat(data.tax) > 0 && (
+          {tax > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">+ Tax</span>
-              <span>${parseFloat(data.tax).toFixed(2)}</span>
+              <span className="tabular-nums">${tax.toFixed(2)}</span>
             </div>
           )}
-          {pricing.savingsPercent > 0 && (
-            <div className="text-success flex justify-between text-sm">
-              <span>Savings ({pricing.savingsPercent}%)</span>
-              <span>-${pricing.savings}</span>
-            </div>
-          )}
-          <div className="border-border flex justify-between border-t pt-1 text-sm font-semibold">
-            <span>Total</span>
-            <span>${pricing.total}</span>
+          <div className="border-border flex justify-between border-t pt-1.5 text-sm font-semibold">
+            <span>Final Total</span>
+            <span className="tabular-nums">${total.toFixed(2)}</span>
           </div>
         </div>
       )}
