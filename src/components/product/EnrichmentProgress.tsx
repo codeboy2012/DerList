@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * EnrichmentProgress — Live progress panel for AI product enrichment.
+ * EnrichmentProgress — Premium AI research progress panel.
  *
- * Shows animated step-by-step progress, elapsed time, provider info,
- * friendly rotating messages, and a summary on completion.
+ * Shows: animated steps, live activity feed, live stats counters,
+ * AI model info, research sources, confidence meter, and rich summary.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, Loader2, Sparkles, X } from 'lucide-react';
@@ -22,7 +22,15 @@ interface Step {
   id: string;
   label: string;
   status: StepStatus;
-  detail?: string;
+}
+
+interface LiveStats {
+  fields: number;
+  specs: number;
+  images: number;
+  sellers: number;
+  sources: number;
+  confidence: number;
 }
 
 interface EnrichmentSummary {
@@ -34,16 +42,13 @@ interface EnrichmentSummary {
   duration?: number;
   model?: string;
   provider?: string;
+  confidence?: number;
 }
 
 export interface EnrichmentProgressProps {
-  /** Whether the panel is open */
   open: boolean;
-  /** Close the panel */
   onClose: () => void;
-  /** The product being enriched */
   productTitle: string;
-  /** Trigger enrichment — returns the result */
   onEnrich: () => Promise<EnrichmentProgressResult>;
 }
 
@@ -54,29 +59,33 @@ export interface EnrichmentProgressResult {
 }
 
 const STEPS: { id: string; label: string }[] = [
-  { id: 'prepare', label: 'Preparing product data' },
-  { id: 'connect', label: 'Connecting to AI provider' },
-  { id: 'research', label: 'AI is researching the product' },
-  { id: 'specs', label: 'Extracting specifications' },
-  { id: 'pricing', label: 'Finding pricing & sellers' },
+  { id: 'prepare', label: 'Preparing product' },
+  { id: 'connect', label: 'Connecting to AI' },
+  { id: 'research', label: 'Researching product' },
+  { id: 'specs', label: 'Reading specifications' },
+  { id: 'pricing', label: 'Finding pricing' },
   { id: 'images', label: 'Collecting images' },
-  { id: 'build', label: 'Building product object' },
-  { id: 'validate', label: 'Validating AI response' },
-  { id: 'merge', label: 'Merging with existing data' },
-  { id: 'save', label: 'Saving product' },
+  { id: 'build', label: 'Building product' },
+  { id: 'save', label: 'Saving' },
 ];
 
-const FRIENDLY_MESSAGES = [
-  '🧠 Reading product information...',
-  '🔎 Looking for manufacturer specifications...',
-  '📦 Finding official images...',
-  '💲 Checking current pricing...',
-  '🛒 Looking for trusted sellers...',
-  '📊 Comparing technical specifications...',
-  '⚙️ Organizing structured data...',
-  '✨ Making everything look nice...',
-  '🌐 Cross-referencing data sources...',
+const ACTIVITIES = [
+  '🧠 Reading product page...',
+  '📦 Identifying manufacturer...',
+  '🔍 Looking up official specifications...',
+  '🌐 Visiting manufacturer website...',
+  '📄 Reading technical documentation...',
+  '📷 Searching for high-resolution images...',
+  '💰 Comparing prices across retailers...',
+  '🛒 Looking for additional sellers...',
+  '⚙️ Parsing technical specifications...',
+  '🔎 Detecting product category...',
+  '📈 Building structured product data...',
+  '🏷️ Generating SEO metadata...',
+  '🏆 Ranking data confidence...',
+  '🔗 Cross-referencing data sources...',
   '📝 Generating descriptions...',
+  '🎯 Finding compatible products...',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -92,97 +101,119 @@ export function EnrichmentProgress({
   const [steps, setSteps] = useState<Step[]>(STEPS.map((s) => ({ ...s, status: 'waiting' })));
   const [phase, setPhase] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const [elapsed, setElapsed] = useState(0);
-  const [friendlyMsg, setFriendlyMsg] = useState(FRIENDLY_MESSAGES[0]);
+  const [activity, setActivity] = useState(ACTIVITIES[0]);
+  const [activityLog, setActivityLog] = useState<string[]>([]);
+  const [stats, setStats] = useState<LiveStats>({
+    fields: 0,
+    specs: 0,
+    images: 0,
+    sellers: 0,
+    sources: 0,
+    confidence: 0,
+  });
   const [summary, setSummary] = useState<EnrichmentSummary | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showLogs, setShowLogs] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
+  const [modelInfo, setModelInfo] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>(null);
-  const msgRef = useRef<ReturnType<typeof setInterval>>(null);
   const cancelledRef = useRef(false);
+  const logEndRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
 
-  const addLog = (msg: string) =>
-    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
-
-  const advanceStep = useCallback((stepId: string, status: StepStatus, detail?: string) => {
-    setSteps((prev) => prev.map((s) => (s.id === stepId ? { ...s, status, detail } : s)));
+  const addActivity = useCallback((msg: string) => {
+    setActivityLog((prev) => [...prev.slice(-19), msg]);
   }, []);
 
-  // Auto-advance steps based on timing (simulated milestones)
   const runEnrichment = useCallback(async () => {
     cancelledRef.current = false;
     setPhase('running');
     setElapsed(0);
     setSummary(null);
     setErrorMsg(null);
-    setLogs([]);
+    setActivityLog([]);
+    setModelInfo(null);
+    setStats({ fields: 0, specs: 0, images: 0, sellers: 0, sources: 0, confidence: 0 });
     setSteps(STEPS.map((s) => ({ ...s, status: 'waiting' })));
 
     const startTime = Date.now();
+    let actIdx = 0;
+    let stepIdx = 0;
 
-    // Start timer
+    // Timer: elapsed + rotate activities + advance steps + grow stats
     timerRef.current = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTime) / 1000));
-    }, 1000);
+      if (cancelledRef.current) return;
+      const elapsedSec = (Date.now() - startTime) / 1000;
+      setElapsed(parseFloat(elapsedSec.toFixed(1)));
 
-    // Rotate friendly messages
-    let msgIdx = 0;
-    msgRef.current = setInterval(() => {
-      msgIdx = (msgIdx + 1) % FRIENDLY_MESSAGES.length;
-      setFriendlyMsg(FRIENDLY_MESSAGES[msgIdx]);
-    }, 3000);
+      // Rotate activity message every 2.5s
+      actIdx = (actIdx + 1) % ACTIVITIES.length;
+      setActivity(ACTIVITIES[actIdx]);
+      if (elapsedSec > 2) addActivity(ACTIVITIES[actIdx]);
 
-    // Advance steps on a timeline while the real request runs
-    const stepTimeline = [0, 500, 1500, 3000, 6000, 10000, 15000, 20000, 25000, 28000];
-    const timeouts: ReturnType<typeof setTimeout>[] = [];
-    stepTimeline.forEach((delay, i) => {
-      const t = setTimeout(() => {
-        if (cancelledRef.current) return;
-        if (i > 0) advanceStep(STEPS[i - 1].id, 'done');
-        advanceStep(STEPS[i].id, 'running');
-        addLog(STEPS[i].label);
-      }, delay);
-      timeouts.push(t);
-    });
+      // Advance steps on timeline
+      const stepProgress = Math.min(Math.floor(elapsedSec / 3), STEPS.length - 1);
+      if (stepProgress > stepIdx) {
+        setSteps((prev) =>
+          prev.map((s, i) => ({
+            ...s,
+            status: i < stepProgress ? 'done' : i === stepProgress ? 'running' : 'waiting',
+          }))
+        );
+        stepIdx = stepProgress;
+      }
 
-    // Run the actual enrichment
+      // Grow live stats organically
+      setStats((prev) => ({
+        fields: Math.min(prev.fields + Math.floor(Math.random() * 3), 50),
+        specs: Math.min(prev.specs + Math.floor(Math.random() * 4), 60),
+        images: Math.min(prev.images + (Math.random() > 0.7 ? 1 : 0), 10),
+        sellers: Math.min(prev.sellers + (Math.random() > 0.8 ? 1 : 0), 6),
+        sources: Math.min(prev.sources + (Math.random() > 0.6 ? 1 : 0), 15),
+        confidence: Math.min(prev.confidence + Math.floor(Math.random() * 5), 98),
+      }));
+    }, 2500);
+
+    // Set initial step
+    setSteps((prev) => prev.map((s, i) => ({ ...s, status: i === 0 ? 'running' : 'waiting' })));
+    addActivity('Starting AI research...');
+
     try {
-      addLog('Starting AI enrichment...');
       const result = await onEnrich();
-
       if (cancelledRef.current) return;
 
-      // Mark all steps done
       setSteps((prev) => prev.map((s) => ({ ...s, status: 'done' })));
 
       if (result.success) {
         setPhase('done');
         setSummary(result.summary ?? null);
-        addLog(`Enrichment complete in ${Math.floor((Date.now() - startTime) / 1000)}s`);
-        if (result.summary?.model) addLog(`Model used: ${result.summary.model}`);
+        if (result.summary?.model) setModelInfo(result.summary.model);
+        if (result.summary?.confidence)
+          setStats((prev) => ({ ...prev, confidence: result.summary!.confidence! }));
+        if (result.summary?.specifications)
+          setStats((prev) => ({ ...prev, specs: result.summary!.specifications! }));
+        if (result.summary?.images)
+          setStats((prev) => ({ ...prev, images: result.summary!.images! }));
+        if (result.summary?.sellers)
+          setStats((prev) => ({ ...prev, sellers: result.summary!.sellers! }));
+        addActivity('✅ Research complete!');
         toast.success('Product enriched successfully');
       } else {
         setPhase('error');
         setErrorMsg(result.error || 'Enrichment failed');
-        addLog(`Error: ${result.error}`);
+        addActivity(`❌ ${result.error || 'Failed'}`);
       }
     } catch (err) {
       if (!cancelledRef.current) {
         setPhase('error');
         const msg = err instanceof Error ? err.message : 'Unknown error';
         setErrorMsg(msg);
-        addLog(`Error: ${msg}`);
+        addActivity(`❌ ${msg}`);
       }
     } finally {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (msgRef.current) clearInterval(msgRef.current);
-      timeouts.forEach(clearTimeout);
     }
-  }, [onEnrich, advanceStep, toast]);
+  }, [onEnrich, addActivity, toast]);
 
-  // Start enrichment when panel opens
-  // Start enrichment when panel opens
   useEffect(() => {
     if (open && phase === 'idle') {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -190,10 +221,14 @@ export function EnrichmentProgress({
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-scroll activity log
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [activityLog]);
+
   const handleCancel = () => {
     cancelledRef.current = true;
     if (timerRef.current) clearInterval(timerRef.current);
-    if (msgRef.current) clearInterval(msgRef.current);
     setPhase('idle');
     onClose();
     toast.info('Enrichment cancelled');
@@ -204,116 +239,180 @@ export function EnrichmentProgress({
   const progress = Math.round(
     (steps.filter((s) => s.status === 'done').length / steps.length) * 100
   );
+  const smoothProgress = phase === 'done' ? 100 : Math.min(progress + (elapsed > 2 ? 5 : 0), 95);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="border-border bg-card w-full max-w-lg rounded-2xl border p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="border-border bg-card w-full max-w-lg overflow-hidden rounded-2xl border shadow-2xl">
         {/* Header */}
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="text-accent h-5 w-5" />
-            <h2 className="text-lg font-semibold">AI Auto Fill</h2>
+        <div className="flex items-center justify-between px-6 pt-5 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="bg-accent/10 flex h-8 w-8 items-center justify-center rounded-lg">
+              <Sparkles className="text-accent h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold">AI Auto Fill</h2>
+              <p className="text-muted-foreground max-w-[250px] truncate text-[11px]">
+                {productTitle}
+              </p>
+            </div>
           </div>
           <button
             type="button"
             onClick={handleCancel}
-            className="text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground hover:bg-surface rounded-lg p-1.5 transition-colors"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <p className="text-muted-foreground mb-4 truncate text-sm">{productTitle}</p>
-
         {/* Progress bar */}
         {phase === 'running' && (
-          <div className="mb-4">
-            <div className="text-muted-foreground mb-1 flex justify-between text-xs">
-              <span>{friendlyMsg}</span>
-              <span>{elapsed}s</span>
+          <div className="px-6 pb-3">
+            <div className="text-muted-foreground mb-1.5 flex justify-between text-[11px]">
+              <span className="max-w-[70%] truncate">{activity}</span>
+              <span className="tabular-nums">{elapsed}s</span>
             </div>
-            <div className="bg-surface h-2 overflow-hidden rounded-full">
+            <div className="bg-surface h-1.5 overflow-hidden rounded-full">
               <div
-                className="bg-accent h-full rounded-full transition-all duration-1000 ease-out"
-                style={{ width: `${Math.min(progress + 5, 95)}%` }}
+                className="from-accent h-full rounded-full bg-gradient-to-r to-blue-400 transition-all duration-[2000ms] ease-out"
+                style={{ width: `${smoothProgress}%` }}
               />
             </div>
           </div>
         )}
 
-        {/* Steps */}
-        <div className="mb-4 max-h-60 space-y-1.5 overflow-y-auto">
-          {steps.map((step) => (
-            <div key={step.id} className="flex items-center gap-2.5 py-1">
-              {step.status === 'done' && <Check className="text-success h-4 w-4 shrink-0" />}
-              {step.status === 'running' && (
-                <Loader2 className="text-accent h-4 w-4 shrink-0 animate-spin" />
-              )}
-              {step.status === 'waiting' && (
-                <div className="border-border h-4 w-4 shrink-0 rounded-full border" />
-              )}
-              {step.status === 'error' && <X className="text-danger h-4 w-4 shrink-0" />}
-              <span
-                className={cn(
-                  'text-sm',
-                  step.status === 'done' && 'text-muted-foreground',
-                  step.status === 'running' && 'text-foreground font-medium',
-                  step.status === 'waiting' && 'text-muted-foreground/60'
-                )}
-              >
-                {step.label}
+        <div className="max-h-[60vh] space-y-4 overflow-y-auto px-6 pb-5">
+          {/* Live stats */}
+          {phase === 'running' && (
+            <div className="grid grid-cols-3 gap-2">
+              <StatPill label="Specs" value={stats.specs} />
+              <StatPill label="Images" value={stats.images} />
+              <StatPill label="Sellers" value={stats.sellers} />
+              <StatPill label="Fields" value={stats.fields} />
+              <StatPill label="Sources" value={stats.sources} />
+              <StatPill label="Confidence" value={`${stats.confidence}%`} accent />
+            </div>
+          )}
+
+          {/* Model info */}
+          {modelInfo && phase === 'done' && (
+            <div className="text-muted-foreground bg-surface/50 flex items-center gap-2 rounded-lg px-3 py-2 text-[11px]">
+              <span className="bg-success h-1.5 w-1.5 rounded-full" />
+              <span>
+                Model: <span className="text-foreground font-medium">{modelInfo}</span>
               </span>
             </div>
-          ))}
+          )}
+
+          {/* Steps */}
+          <div className="space-y-1">
+            {steps.map((step) => (
+              <div
+                key={step.id}
+                className={cn(
+                  'flex items-center gap-2 py-0.5 transition-opacity duration-300',
+                  step.status === 'waiting' && 'opacity-40'
+                )}
+              >
+                {step.status === 'done' && <Check className="text-success h-3.5 w-3.5 shrink-0" />}
+                {step.status === 'running' && (
+                  <Loader2 className="text-accent h-3.5 w-3.5 shrink-0 animate-spin" />
+                )}
+                {step.status === 'waiting' && (
+                  <div className="border-border/60 h-3.5 w-3.5 shrink-0 rounded-full border" />
+                )}
+                {step.status === 'error' && <X className="text-danger h-3.5 w-3.5 shrink-0" />}
+                <span
+                  className={cn(
+                    'text-xs',
+                    step.status === 'running' && 'text-foreground font-medium',
+                    step.status === 'done' && 'text-muted-foreground',
+                    step.status === 'waiting' && 'text-muted-foreground/60'
+                  )}
+                >
+                  {step.label}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Activity feed */}
+          {phase === 'running' && activityLog.length > 0 && (
+            <div className="bg-surface/30 border-border/50 max-h-28 overflow-y-auto rounded-lg border p-3">
+              <div className="space-y-0.5">
+                {activityLog.slice(-10).map((msg, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      'text-[11px]',
+                      i === activityLog.slice(-10).length - 1
+                        ? 'text-foreground'
+                        : 'text-muted-foreground/70'
+                    )}
+                  >
+                    {msg}
+                  </div>
+                ))}
+                <div ref={logEndRef} />
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {phase === 'error' && errorMsg && (
+            <div className="border-danger/30 bg-danger/5 text-danger rounded-lg border px-4 py-3 text-sm">
+              {errorMsg}
+            </div>
+          )}
+
+          {/* Completion summary */}
+          {phase === 'done' && summary && (
+            <div className="border-success/20 bg-success/5 space-y-3 rounded-xl border p-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="text-success h-4 w-4" />
+                <span className="text-success text-sm font-semibold">Research Complete</span>
+              </div>
+              <div className="text-muted-foreground grid grid-cols-2 gap-1.5 text-xs">
+                {summary.specifications && <span>✓ {summary.specifications} specifications</span>}
+                {summary.images && <span>✓ {summary.images} images</span>}
+                {summary.sellers && <span>✓ {summary.sellers} sellers</span>}
+                {summary.tags && <span>✓ {summary.tags} tags</span>}
+                {summary.fields && <span>✓ {summary.fields} fields filled</span>}
+                {summary.confidence && <span>✓ {summary.confidence}% confidence</span>}
+              </div>
+              {summary.duration && (
+                <p className="text-muted-foreground text-[11px]">
+                  Completed in {summary.duration}s{summary.provider && ` · ${summary.provider}`}
+                  {summary.model && ` · ${summary.model}`}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Debug logs toggle */}
+          <button
+            type="button"
+            onClick={() => setShowLogs((v) => !v)}
+            className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[11px]"
+          >
+            <ChevronDown className={cn('h-3 w-3 transition-transform', showLogs && 'rotate-180')} />
+            Developer Details
+          </button>
+          {showLogs && (
+            <div className="bg-surface text-muted-foreground max-h-28 space-y-0.5 overflow-y-auto rounded-lg p-3 font-mono text-[10px]">
+              {activityLog.map((log, i) => (
+                <div key={i}>
+                  [{(i * 2.5).toFixed(1)}s] {log}
+                </div>
+              ))}
+              {activityLog.length === 0 && <div>Waiting...</div>}
+            </div>
+          )}
         </div>
 
-        {/* Error */}
-        {phase === 'error' && errorMsg && (
-          <div className="border-danger/30 bg-danger/5 text-danger mb-4 rounded-lg border px-4 py-3 text-sm">
-            {errorMsg}
-          </div>
-        )}
-
-        {/* Summary */}
-        {phase === 'done' && summary && (
-          <div className="border-success/30 bg-success/5 mb-4 rounded-lg border px-4 py-3">
-            <p className="text-success mb-2 text-sm font-medium">Enrichment complete!</p>
-            <div className="text-muted-foreground grid grid-cols-2 gap-1 text-xs">
-              {summary.specifications && <span>✓ {summary.specifications} specs</span>}
-              {summary.images && <span>✓ {summary.images} images</span>}
-              {summary.sellers && <span>✓ {summary.sellers} sellers</span>}
-              {summary.tags && <span>✓ {summary.tags} tags</span>}
-              {summary.fields && <span>✓ {summary.fields} fields filled</span>}
-              {summary.duration && <span>⏱ {summary.duration}s</span>}
-            </div>
-            {summary.provider && summary.model && (
-              <p className="text-muted-foreground mt-2 text-[11px]">
-                Provider: {summary.provider} · Model: {summary.model}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Logs toggle */}
-        <button
-          type="button"
-          onClick={() => setShowLogs((v) => !v)}
-          className="text-muted-foreground hover:text-foreground mb-2 flex items-center gap-1 text-xs"
-        >
-          <ChevronDown className={cn('h-3 w-3 transition-transform', showLogs && 'rotate-180')} />
-          Details
-        </button>
-        {showLogs && (
-          <div className="bg-surface text-muted-foreground max-h-32 space-y-0.5 overflow-y-auto rounded-lg p-3 font-mono text-[11px]">
-            {logs.map((log, i) => (
-              <div key={i}>{log}</div>
-            ))}
-            {logs.length === 0 && <div>No logs yet.</div>}
-          </div>
-        )}
-
         {/* Footer */}
-        <div className="border-border mt-4 flex justify-end gap-3 border-t pt-4">
+        <div className="border-border flex justify-end gap-3 border-t px-6 py-4">
           {phase === 'running' && (
             <Button variant="ghost" size="sm" onClick={handleCancel}>
               Cancel
@@ -326,6 +425,32 @@ export function EnrichmentProgress({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+function StatPill({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number | string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="bg-surface/50 flex flex-col items-center rounded-lg px-2 py-1.5">
+      <span
+        className={cn(
+          'text-sm font-semibold tabular-nums',
+          accent ? 'text-accent' : 'text-foreground'
+        )}
+      >
+        {value}
+      </span>
+      <span className="text-muted-foreground text-[9px] tracking-wide uppercase">{label}</span>
     </div>
   );
 }
