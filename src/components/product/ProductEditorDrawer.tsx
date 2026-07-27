@@ -35,6 +35,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { useToast } from '@/components/ui/Toast';
+import { EnrichmentProgress, type EnrichmentProgressResult } from './EnrichmentProgress';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -297,6 +298,7 @@ export function ProductEditorDrawer({
   const [error, setError] = useState<string | null>(null);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [enrichOpen, setEnrichOpen] = useState(false);
   const [sections, setSections] = useState<Record<string, boolean>>({
     info: true,
     pricing: true,
@@ -723,8 +725,8 @@ export function ProductEditorDrawer({
             if (handleBeforeClose()) onClose();
           }}
           onDelete={() => setDeleteConfirm(true)}
-          onAiAutofill={handleAiIdentify}
-          aiLoading={data.aiConfidence === 'loading'}
+          onAiAutofill={() => setEnrichOpen(true)}
+          aiLoading={enrichOpen}
         />
       }
     >
@@ -879,6 +881,36 @@ export function ProductEditorDrawer({
           </div>
         </div>
       )}
+      {/* Enrichment Progress Panel */}
+      <EnrichmentProgress
+        open={enrichOpen}
+        onClose={() => setEnrichOpen(false)}
+        productTitle={data.title}
+        onEnrich={async (): Promise<EnrichmentProgressResult> => {
+          const startTime = Date.now();
+          try {
+            await handleAiIdentify();
+            const duration = Math.round((Date.now() - startTime) / 1000);
+            return {
+              success: true,
+              summary: {
+                specifications: data.specs.length,
+                images: data.images.length,
+                sellers: data.sellers.length,
+                fields: Object.values(data).filter((v) => v && v !== '' && v !== 'loading').length,
+                duration,
+                provider: 'OpenRouter',
+                model: data.aiConfidence !== 'loading' ? 'Auto' : undefined,
+              },
+            };
+          } catch (err) {
+            return {
+              success: false,
+              error: err instanceof Error ? err.message : 'Enrichment failed',
+            };
+          }
+        }}
+      />
     </Drawer>
   );
 }
