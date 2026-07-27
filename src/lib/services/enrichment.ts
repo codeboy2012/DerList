@@ -281,91 +281,87 @@ function getSpecTemplate(category: string, title: string): string[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Prompt Builder
+// Enrichment Cache
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildEnrichmentPrompt(input: EnrichmentInput): Message[] {
+const enrichmentCache = new Map<string, { result: EnrichmentResult; cachedAt: number }>();
+const ENRICHMENT_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+function getEnrichmentCacheKey(input: EnrichmentInput): string {
+  return [input.title, input.url, input.sku, input.asin, input.upc]
+    .filter(Boolean)
+    .join('|')
+    .toLowerCase()
+    .slice(0, 200);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Prompt Builder (Optimized — only requests missing fields)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildEnrichmentPrompt(input: EnrichmentInput): {
+  messages: Message[];
+  estimatedTokens: number;
+} {
   const specFields = getSpecTemplate(input.category || '', input.title);
 
-  const existingFields: string[] = [];
-  if (input.brand) existingFields.push(`Brand: ${input.brand}`);
-  if (input.category) existingFields.push(`Category: ${input.category}`);
-  if (input.description) existingFields.push(`Description: ${input.description}`);
-  if (input.currentPrice) existingFields.push(`Price: $${input.currentPrice}`);
-  if (input.retailer) existingFields.push(`Retailer: ${input.retailer}`);
-  if (input.sku) existingFields.push(`SKU: ${input.sku}`);
-  if (input.asin) existingFields.push(`ASIN: ${input.asin}`);
-  if (input.upc) existingFields.push(`UPC: ${input.upc}`);
-  if (input.mpn) existingFields.push(`MPN: ${input.mpn}`);
+  // Determine which fields are already filled (skip these in the request)
+  const filled: string[] = [];
+  const missing: string[] = [];
 
-  const systemPrompt = `You are a comprehensive product intelligence assistant. Given a product name and any known information, research and fill in ALL possible fields with accurate data.
+  if (input.brand) filled.push('brand');
+  else missing.push('brand');
+  if (input.category) filled.push('category');
+  else missing.push('category');
+  if (input.description) filled.push('description');
+  else missing.push('description');
+  if (input.currentPrice) filled.push('price');
+  else missing.push('price/msrp');
+  if (input.sku) filled.push('sku');
+  else missing.push('sku');
+  if (input.asin) filled.push('asin');
+  else missing.push('asin');
+  if (input.upc) filled.push('upc');
+  else missing.push('upc');
+  if (input.mpn) filled.push('mpn');
+  else missing.push('mpn');
 
-RULES:
-- Return ONLY a JSON object. No markdown, no explanation outside JSON.
-- Include a confidence score (0-100) for each major field in "fieldConfidence".
-- Never fabricate prices, UPCs, or URLs. Only include data you're confident about.
-- For specifications, use the exact field names provided when applicable.
-- For sellers, only include retailers that realistically carry this product.
-- Omit any field you cannot confidently determine.
-- Pros/cons should be factual, not marketing language.
+  // Always request these (can't easily pre-fill)
+  missing.push('specifications', 'tags', 'pros/cons', 'sellers');
 
-SPECIFICATIONS to fill (category-specific):
-${specFields.map((s) => `- ${s}`).join('\n')}
+  // Compact system prompt — no verbose JSON examples
+  const systemPrompt = `Product enrichment AI. Return ONLY JSON. No markdown. No explanation.
 
-Return this JSON structure:
-{
-  "title": "Official/best product name",
-  "brand": "Brand name",
-  "model": "Model number",
-  "category": "Primary category",
-  "subCategory": "Subcategory",
-  "description": "3-4 sentence factual product description",
-  "shortDescription": "One-line summary",
-  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-  "searchKeywords": ["keyword1", "keyword2", "alternate name"],
-  "sku": "SKU if known",
-  "upc": "UPC/EAN if known",
-  "asin": "Amazon ASIN if known",
-  "mpn": "Manufacturer Part Number",
-  "msrp": 0.00,
-  "currentPrice": 0.00,
-  "salePrice": 0.00,
-  "availability": "In Stock | Out of Stock | Preorder | Discontinued",
-  "images": ["primary_image_url"],
-  "sellers": [
-    {"name": "Retailer", "url": "product_url", "price": 0.00, "shipping": "Free", "availability": "In Stock"}
-  ],
-  "specifications": [
-    {"key": "Spec Name", "value": "value", "unit": "unit"}
-  ],
-  "pros": ["Advantage 1", "Advantage 2", "Advantage 3"],
-  "cons": ["Disadvantage 1", "Disadvantage 2"],
-  "buyingAdvice": ["Best for gaming", "Good value at this price point"],
-  "similarProducts": ["Alternative Product 1", "Alternative Product 2"],
-  "seoTitle": "Product Name - Brand | Category",
-  "seoDescription": "SEO-optimized description under 160 characters",
-  "confidence": 85,
-  "fieldConfidence": {
-    "brand": 99, "model": 95, "price": 80, "specs": 85, "description": 90
-  },
-  "reasoning": "Brief explanation of data sources and confidence",
-  "suggestedTitle": "Better title if current is incomplete",
-  "suggestedCategory": "Better category if applicable"
-}`;
+Fill ONLY these missing fields: ${missing.join(', ')}
+${filled.length > 0 ? `Already known (DO NOT regenerate): ${filled.join(', ')}` : ''}
 
-  const userContent = [
-    `Product: ${input.title}`,
-    existingFields.length > 0 ? `\nKnown information:\n${existingFields.join('\n')}` : '',
-    input.url ? `\nURL: ${input.url}` : '',
-    '\nResearch this product thoroughly. Fill every field you can determine with confidence. Include specifications, pricing, retailers, pros/cons, and buying advice. Return JSON only.',
-  ]
-    .filter(Boolean)
-    .join('');
+Specs to extract: ${specFields.slice(0, 8).join(', ')}
 
-  return [
-    { role: 'system' as const, content: systemPrompt },
-    { role: 'user' as const, content: userContent },
+JSON keys: title, brand, model, category, subCategory, description, shortDescription, tags[], searchKeywords[], sku, upc, asin, mpn, msrp, currentPrice, salePrice, availability, sellers[{name,url,price,shipping,availability}], specifications[{key,value,unit}], pros[], cons[], buyingAdvice[], similarProducts[], confidence, fieldConfidence{}, reasoning
+
+Rules: Never invent prices/UPCs/URLs. Omit uncertain fields. Confidence 0-100.`;
+
+  // Compact user message
+  const parts = [`"${input.title}"`];
+  if (input.brand) parts.push(`brand:${input.brand}`);
+  if (input.currentPrice) parts.push(`$${input.currentPrice}`);
+  if (input.retailer) parts.push(`@${input.retailer}`);
+  if (input.url) parts.push(input.url);
+
+  const messages: Message[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: parts.join(' ') },
   ];
+
+  // Estimate required output tokens based on missing fields
+  let estimatedTokens = 600; // base
+  if (missing.includes('description')) estimatedTokens += 200;
+  if (missing.includes('specifications')) estimatedTokens += 400;
+  if (missing.includes('sellers')) estimatedTokens += 300;
+  if (missing.includes('pros/cons')) estimatedTokens += 200;
+  estimatedTokens = Math.min(estimatedTokens, 2500);
+
+  return { messages, estimatedTokens };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -478,26 +474,58 @@ export class EnrichmentService {
 
   /**
    * Enrich a single product with AI.
-   * Uses smart failover across all configured AI providers.
+   * Uses smart failover, caching, and dynamic token estimation.
    */
   async enrichProduct(input: EnrichmentInput, userId: string): Promise<EnrichmentResult> {
+    // Check enrichment cache first
+    const cacheKey = getEnrichmentCacheKey(input);
+    const cached = enrichmentCache.get(cacheKey);
+    if (cached && Date.now() - cached.cachedAt < ENRICHMENT_CACHE_TTL) {
+      return { ...cached.result, modelUsed: `${cached.result.modelUsed} (cached)` };
+    }
+
     const aiProviders = await this.providers.getAIProviders(userId);
 
     if (aiProviders.length === 0) {
       return { confidence: 0, reasoning: 'No AI provider configured.' };
     }
 
-    const messages = buildEnrichmentPrompt(input);
+    const { messages, estimatedTokens } = buildEnrichmentPrompt(input);
+    const startTime = Date.now();
 
-    return withSmartFailover(aiProviders, async (provider) => {
+    const result = await withSmartFailover(aiProviders, async (provider) => {
       const response = await provider.chat(messages, {
-        maxTokens: 3000,
-        temperature: 0.2,
+        maxTokens: estimatedTokens,
+        temperature: 0.15,
         json: true,
       });
 
-      return this.parseEnrichmentResponse(response.content, provider.name);
+      const parsed = this.parseEnrichmentResponse(response.content, provider.name);
+
+      // Log performance metrics
+      const elapsed = Date.now() - startTime;
+      if (process.env.NODE_ENV === 'development') {
+        console.log(
+          `[Enrichment] ${input.title.slice(0, 40)} | ${elapsed}ms | ${estimatedTokens} max tokens | ${provider.name}`
+        );
+      }
+
+      return parsed;
     });
+
+    // Cache successful results
+    if (result.confidence > 0) {
+      enrichmentCache.set(cacheKey, { result, cachedAt: Date.now() });
+      // Evict if too large
+      if (enrichmentCache.size > 200) {
+        const oldest = [...enrichmentCache.entries()].sort(
+          (a, b) => a[1].cachedAt - b[1].cachedAt
+        )[0];
+        if (oldest) enrichmentCache.delete(oldest[0]);
+      }
+    }
+
+    return result;
   }
 
   /**
