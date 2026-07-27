@@ -393,6 +393,20 @@ export const AI_PROVIDERS: CatalogEntry[] = [
 
 export const SEARCH_PROVIDERS: CatalogEntry[] = [
   {
+    id: 'brave',
+    name: 'Brave Search',
+    category: 'search',
+    description: 'Web, image, news, and video search with rich results and LLM context.',
+    website: 'https://brave.com/search/api',
+    requiredConfig: [{ key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'BSA...' }],
+    optionalConfig: [
+      { key: 'maxResults', label: 'Max Results', type: 'text', placeholder: '8' },
+      { key: 'enableImages', label: 'Enable Images', type: 'text', placeholder: 'true' },
+    ],
+    free: true,
+    freeTier: '2,000 queries/month free',
+  },
+  {
     id: 'serpapi',
     name: 'SerpAPI',
     category: 'search',
