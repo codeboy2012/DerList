@@ -71,7 +71,7 @@ const AVAILABLE: AvailableProvider[] = [
         name: 'model',
         label: 'Default Model (optional)',
         type: 'text',
-        placeholder: 'Auto (Recommended) — leave blank for best free model',
+        placeholder: 'Auto (Free Recommended) — leave blank for free models',
       },
     ],
   },
