@@ -3,15 +3,11 @@
 /**
  * EnrichmentProgress — Premium AI research progress panel.
  *
- * Fixes applied:
- * - Duration uses backend-reported value (summary.duration), NOT UI timer
- * - Model shows actual responding model, not "OpenRouter" repeated
- * - Confidence shows as label (Excellent/High/Medium/Low) with bar
- * - Stats animate upward smoothly
- * - Confidence doesn't appear until completion
+ * Shows: animated steps, live activity feed, live stats counters,
+ * AI model info, and rich completion summary with real metrics.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, Loader2, Sparkles, X } from 'lucide-react';
+import { Check, Loader2, Sparkles, X } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
@@ -43,7 +39,7 @@ interface EnrichmentSummary {
   duration?: number;
   model?: string;
   provider?: string;
-  confidence?: number;
+  sources?: number;
 }
 
 export interface EnrichmentProgressProps {
@@ -87,14 +83,6 @@ const ACTIVITIES = [
   '🔗 Cross-referencing sources...',
 ];
 
-function getConfidenceLabel(c: number): { label: string; color: string; emoji: string } {
-  if (c >= 90) return { label: 'Excellent', color: 'text-success', emoji: '🟢' };
-  if (c >= 70) return { label: 'High', color: 'text-success', emoji: '🟢' };
-  if (c >= 50) return { label: 'Medium', color: 'text-warning', emoji: '🟡' };
-  if (c >= 30) return { label: 'Low', color: 'text-orange-400', emoji: '🟠' };
-  return { label: 'Very Low', color: 'text-danger', emoji: '🔴' };
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,7 +107,6 @@ export function EnrichmentProgress({
   });
   const [summary, setSummary] = useState<EnrichmentSummary | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [showLogs, setShowLogs] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval>>(null);
   const cancelledRef = useRef(false);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -300,7 +287,7 @@ export function EnrichmentProgress({
         )}
 
         <div className="max-h-[55vh] space-y-4 overflow-y-auto px-6 pb-5">
-          {/* Live stats (during enrichment, no confidence yet) */}
+          {/* Live stats */}
           {phase === 'running' && (
             <div className="grid grid-cols-5 gap-1.5">
               <StatPill label="Fields" value={stats.fields} />
@@ -399,20 +386,12 @@ export function EnrichmentProgress({
                 )}
               </div>
 
-              {/* Confidence */}
-              {summary.confidence != null &&
-                summary.confidence > 0 &&
-                (() => {
-                  const conf = getConfidenceLabel(summary.confidence);
-                  return (
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground text-xs">Confidence:</span>
-                      <span className={cn('text-xs font-medium', conf.color)}>
-                        {conf.emoji} {conf.label} ({summary.confidence}%)
-                      </span>
-                    </div>
-                  );
-                })()}
+              {/* Sources */}
+              {(summary.sources ?? 0) > 0 && (
+                <div className="text-muted-foreground text-xs">
+                  ✓ {summary.sources} sources visited
+                </div>
+              )}
 
               {/* Provider & Model (separate lines, never duplicated) */}
               <div className="border-border/50 text-muted-foreground space-y-1 border-t pt-2.5 text-[11px]">
@@ -433,26 +412,6 @@ export function EnrichmentProgress({
                   </div>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* Developer Details */}
-          <button
-            type="button"
-            onClick={() => setShowLogs((v) => !v)}
-            className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[11px]"
-          >
-            <ChevronDown className={cn('h-3 w-3 transition-transform', showLogs && 'rotate-180')} />
-            Developer Details
-          </button>
-          {showLogs && (
-            <div className="bg-surface text-muted-foreground max-h-28 space-y-0.5 overflow-y-auto rounded-lg p-3 font-mono text-[10px]">
-              {activityLog.map((log, i) => (
-                <div key={i}>
-                  [{((i + 1) * 2).toFixed(1)}s] {log}
-                </div>
-              ))}
-              {activityLog.length === 0 && <div>Waiting...</div>}
             </div>
           )}
         </div>
