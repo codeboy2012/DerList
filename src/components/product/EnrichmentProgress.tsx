@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * EnrichmentProgress — AI Research Experience.
+ * EnrichmentProgress — Polished AI Research Experience.
  *
- * Renders real backend events as a live research timeline.
- * Every entry comes from actual backend work — zero fake progress.
+ * No developer logs. No debug info. Just clean research UX.
+ * Shows: current activity → live discoveries → research summary.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, Sparkles, X } from 'lucide-react';
@@ -22,6 +22,18 @@ interface ResearchEvent {
   icon?: string;
   timestamp: number;
   data?: Record<string, unknown>;
+}
+
+interface Summary {
+  specs: number;
+  images: number;
+  sellers: number;
+  sources: number;
+  fields: number;
+  identifiers: number;
+  duration: number;
+  model: string;
+  provider: string;
 }
 
 export interface EnrichmentProgressProps {
@@ -58,41 +70,26 @@ export function EnrichmentProgress({
   onComplete,
 }: EnrichmentProgressProps) {
   const [phase, setPhase] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
-  const [currentActivity, setCurrentActivity] = useState<{ message: string; icon: string }>({
-    message: 'Starting research...',
-    icon: '🧠',
-  });
-  const [timeline, setTimeline] = useState<ResearchEvent[]>([]);
-  const [stats, setStats] = useState<Record<string, number>>({});
+  const [activity, setActivity] = useState({ message: 'Starting research...', icon: '🧠' });
+  const [discoveries, setDiscoveries] = useState<{ icon: string; message: string }[]>([]);
   const [sources, setSources] = useState<string[]>([]);
   const [elapsed, setElapsed] = useState(0);
-  const [summary, setSummary] = useState<{
-    specs?: number;
-    images?: number;
-    sellers?: number;
-    sources?: number;
-    fields?: number;
-    identifiers?: number;
-    duration?: number;
-    model?: string;
-    provider?: string;
-  } | null>(null);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>(null);
   const startRef = useRef(0);
-  const timelineEndRef = useRef<HTMLDivElement>(null);
+  const listEndRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
 
   const run = useCallback(async () => {
     setPhase('running');
-    setTimeline([]);
-    setStats({});
+    setDiscoveries([]);
     setSources([]);
     setElapsed(0);
     setSummary(null);
     setErrorMsg(null);
-    setCurrentActivity({ message: 'Starting research...', icon: '🧠' });
+    setActivity({ message: 'Starting research...', icon: '🧠' });
     startRef.current = Date.now();
 
     timerRef.current = setInterval(() => {
@@ -117,7 +114,6 @@ export function EnrichmentProgress({
 
       const reader = res.body?.getReader();
       if (!reader) throw new Error('No response stream');
-
       const decoder = new TextDecoder();
       let buffer = '';
 
@@ -133,66 +129,48 @@ export function EnrichmentProgress({
           try {
             const event: ResearchEvent = JSON.parse(line.slice(6));
 
-            // Update current activity
-            if (event.type === 'activity') {
-              setCurrentActivity({ message: event.message, icon: event.icon || '🔍' });
-            }
-
-            // Add discoveries to timeline
-            if (event.type === 'discovery') {
-              setTimeline((prev) => [...prev, event]);
-            }
-
-            // Track sources
-            if (event.type === 'source') {
+            if (event.type === 'activity')
+              setActivity({ message: event.message, icon: event.icon || '🔍' });
+            if (event.type === 'discovery')
+              setDiscoveries((prev) => [
+                ...prev,
+                { icon: event.icon || '✓', message: event.message },
+              ]);
+            if (event.type === 'source')
               setSources((prev) =>
                 prev.includes(event.message) ? prev : [...prev, event.message]
               );
-            }
 
-            // Update stats
-            if (event.type === 'stat' && event.data) {
-              setStats((prev) => ({ ...prev, ...(event.data as Record<string, number>) }));
-            }
-
-            // Completion
             if (event.type === 'complete') {
               if (timerRef.current) clearInterval(timerRef.current);
               const d = event.data;
               if (d?.duration) setElapsed(d.duration as number);
               setPhase('done');
-              setSummary(
-                d
-                  ? {
-                      specs: d.specs as number,
-                      images: d.images as number,
-                      sellers: d.sellers as number,
-                      sources: d.sources as number,
-                      fields: d.fields as number,
-                      identifiers: d.identifiers as number,
-                      duration: d.duration as number,
-                      model: d.model as string,
-                      provider: d.provider as string,
-                    }
-                  : null
-              );
-              setStats((prev) => ({ ...prev, ...(d as Record<string, number>) }));
+              setSummary({
+                specs: (d?.specs as number) || 0,
+                images: (d?.images as number) || 0,
+                sellers: (d?.sellers as number) || 0,
+                sources: (d?.sources as number) || 0,
+                fields: (d?.fields as number) || 0,
+                identifiers: (d?.identifiers as number) || 0,
+                duration: (d?.duration as number) || 0,
+                model: (d?.model as string) || '',
+                provider: (d?.provider as string) || '',
+              });
               if (d?.result) onComplete(d.result);
               toast.success('Product researched successfully');
             }
 
-            // Error
             if (event.type === 'error') {
               if (timerRef.current) clearInterval(timerRef.current);
               setPhase('error');
               setErrorMsg(event.message);
             }
           } catch {
-            /* skip */
+            /* skip malformed */
           }
         }
       }
-
       if (phase === 'running') {
         if (timerRef.current) clearInterval(timerRef.current);
         setPhase('done');
@@ -211,8 +189,8 @@ export function EnrichmentProgress({
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    timelineEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [timeline]);
+    listEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [discoveries]);
 
   const handleCancel = () => {
     abortRef.current?.abort();
@@ -226,7 +204,7 @@ export function EnrichmentProgress({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="border-border bg-card flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border shadow-2xl">
+      <div className="border-border bg-card flex max-h-[75vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border shadow-2xl">
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between px-5 pt-5 pb-2">
           <div className="flex items-center gap-2.5">
@@ -252,57 +230,35 @@ export function EnrichmentProgress({
           </div>
         </div>
 
-        {/* Current Activity */}
+        {/* Current Activity (shown while running) */}
         {phase === 'running' && (
           <div className="border-border/50 flex items-center gap-3 border-b px-5 py-3">
-            <span className="text-xl">{currentActivity.icon}</span>
-            <div className="min-w-0 flex-1">
-              <p className="text-foreground truncate text-sm font-medium">
-                {currentActivity.message}
-              </p>
-              {sources.length > 0 && (
-                <p className="text-muted-foreground mt-0.5 text-[10px]">
-                  Sources: {sources.slice(-3).join(' · ')}
-                </p>
-              )}
-            </div>
+            <span className="text-2xl">{activity.icon}</span>
+            <p className="text-foreground flex-1 truncate text-sm font-medium">
+              {activity.message}
+            </p>
             <Loader2 className="text-accent h-4 w-4 shrink-0 animate-spin" />
           </div>
         )}
 
-        {/* Content area */}
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-3">
-          {/* Live Stats */}
-          {Object.keys(stats).length > 0 && phase === 'running' && (
-            <div className="flex flex-wrap gap-2">
-              {stats.specs > 0 && <Pill label="Specs" value={stats.specs} />}
-              {stats.images > 0 && <Pill label="Images" value={stats.images} />}
-              {stats.sellers > 0 && <Pill label="Sellers" value={stats.sellers} />}
-              {stats.sources > 0 && <Pill label="Sources" value={stats.sources} />}
-              {stats.identifiers > 0 && <Pill label="IDs" value={stats.identifiers} />}
-              {stats.prices > 0 && <Pill label="Prices" value={stats.prices} />}
-            </div>
-          )}
-
-          {/* Timeline */}
-          {timeline.length > 0 && (
-            <div className="space-y-1">
-              {timeline.map((event, i) => (
+        {/* Content */}
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          {/* Live discoveries (running state) */}
+          {phase === 'running' && discoveries.length > 0 && (
+            <div className="space-y-1.5">
+              {discoveries.slice(-10).map((d, i) => (
                 <div
                   key={i}
                   className={cn(
-                    'animate-in fade-in flex items-start gap-2 py-0.5 duration-300',
-                    i === timeline.length - 1 ? 'opacity-100' : 'opacity-60'
+                    'flex items-center gap-2.5 transition-opacity duration-300',
+                    i === discoveries.slice(-10).length - 1 ? 'opacity-100' : 'opacity-50'
                   )}
                 >
-                  <span className="mt-0.5 shrink-0 text-sm">{event.icon || '✓'}</span>
-                  <span className="text-foreground text-xs">{event.message}</span>
-                  <span className="text-muted-foreground/50 ml-auto shrink-0 text-[9px] tabular-nums">
-                    {event.timestamp}s
-                  </span>
+                  <span className="shrink-0 text-base">{d.icon}</span>
+                  <span className="text-foreground text-[13px]">{d.message}</span>
                 </div>
               ))}
-              <div ref={timelineEndRef} />
+              <div ref={listEndRef} />
             </div>
           )}
 
@@ -313,26 +269,54 @@ export function EnrichmentProgress({
             </div>
           )}
 
-          {/* Completion */}
+          {/* ─── Completion: Research Summary ─── */}
           {phase === 'done' && summary && (
-            <div className="border-success/20 bg-success/5 space-y-3 rounded-xl border p-4">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">✅</span>
-                <span className="text-success text-sm font-semibold">
+            <div className="space-y-5">
+              {/* Success header */}
+              <div className="flex items-center gap-2.5">
+                <span className="text-2xl">✅</span>
+                <span className="text-foreground text-base font-semibold">
                   Product Successfully Researched
                 </span>
               </div>
-              <div className="text-muted-foreground grid grid-cols-2 gap-1.5 text-xs">
-                {(summary.specs as number) > 0 && <span>✓ {summary.specs} specifications</span>}
-                {(summary.images as number) > 0 && <span>✓ {summary.images} images</span>}
-                {(summary.sellers as number) > 0 && <span>✓ {summary.sellers} retailers</span>}
-                {(summary.sources as number) > 0 && <span>✓ {summary.sources} sources</span>}
-                {(summary.fields as number) > 0 && <span>✓ {summary.fields} fields filled</span>}
-                {(summary.identifiers as number) > 0 && (
-                  <span>✓ {summary.identifiers} identifiers</span>
+
+              {/* What was found (large readable list) */}
+              <div className="space-y-2">
+                {summary.fields > 0 && (
+                  <SummaryRow icon="📋" text={`${summary.fields} fields completed`} />
+                )}
+                {summary.specs > 0 && (
+                  <SummaryRow icon="⚙️" text={`${summary.specs} specifications found`} />
+                )}
+                {summary.images > 0 && (
+                  <SummaryRow icon="🖼️" text={`${summary.images} images collected`} />
+                )}
+                {summary.sellers > 0 && (
+                  <SummaryRow
+                    icon="🛒"
+                    text={`${summary.sellers} ${summary.sellers === 1 ? 'seller' : 'sellers'} found`}
+                  />
+                )}
+                {summary.identifiers > 0 && (
+                  <SummaryRow icon="🏷️" text={`${summary.identifiers} identifiers verified`} />
+                )}
+                {summary.sources > 0 && (
+                  <SummaryRow icon="🌐" text={`${summary.sources} sources visited`} />
                 )}
               </div>
-              <div className="border-border/40 text-muted-foreground space-y-0.5 border-t pt-2 text-[11px]">
+
+              {/* Sources */}
+              {sources.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+                    Sources
+                  </span>
+                  <p className="text-foreground text-xs">{sources.join(' · ')}</p>
+                </div>
+              )}
+
+              {/* Meta */}
+              <div className="border-border/40 text-muted-foreground space-y-1.5 border-t pt-3 text-[12px]">
                 <div>
                   Completed in{' '}
                   <span className="text-foreground font-medium">{summary.duration}s</span>
@@ -345,7 +329,7 @@ export function EnrichmentProgress({
                 {summary.model && summary.model !== summary.provider && (
                   <div>
                     Model:{' '}
-                    <span className="text-foreground font-mono text-[10px]">{summary.model}</span>
+                    <span className="text-foreground font-mono text-[11px]">{summary.model}</span>
                   </div>
                 )}
               </div>
@@ -371,11 +355,11 @@ export function EnrichmentProgress({
   );
 }
 
-function Pill({ label, value }: { label: string; value: number }) {
+function SummaryRow({ icon, text }: { icon: string; text: string }) {
   return (
-    <span className="bg-surface/60 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px]">
-      <span className="text-foreground font-semibold tabular-nums">{value}</span>
-      <span className="text-muted-foreground">{label}</span>
-    </span>
+    <div className="flex items-center gap-2.5">
+      <span className="text-base">{icon}</span>
+      <span className="text-foreground text-sm">{text}</span>
+    </div>
   );
 }
