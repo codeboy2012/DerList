@@ -97,6 +97,7 @@ export interface EnrichmentSpec {
   key: string;
   value: string;
   unit?: string;
+  group?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -303,63 +304,49 @@ function buildEnrichmentPrompt(input: EnrichmentInput): {
   messages: Message[];
   estimatedTokens: number;
 } {
+  // Build context from everything we already know
+  const context: Record<string, string> = {};
+  if (input.title) context.title = input.title;
+  if (input.brand) context.brand = input.brand;
+  if (input.category) context.category = input.category;
+  if (input.description) context.description = input.description.slice(0, 200);
+  if (input.url) context.url = input.url;
+  if (input.retailer) context.retailer = input.retailer;
+  if (input.currentPrice) context.currentPrice = `$${input.currentPrice}`;
+  if (input.originalPrice) context.originalPrice = `$${input.originalPrice}`;
+  if (input.sku) context.sku = input.sku;
+  if (input.asin) context.asin = input.asin;
+  if (input.upc) context.upc = input.upc;
+  if (input.mpn) context.mpn = input.mpn;
+  if (input.image) context.image = input.image;
+
   const specFields = getSpecTemplate(input.category || '', input.title);
 
-  // Determine which fields are already filled (skip these in the request)
-  const filled: string[] = [];
-  const missing: string[] = [];
+  const systemPrompt = `You are a Product Intelligence Agent. Your job: research a product completely and return ONE comprehensive JSON object.
 
-  if (input.brand) filled.push('brand');
-  else missing.push('brand');
-  if (input.category) filled.push('category');
-  else missing.push('category');
-  if (input.description) filled.push('description');
-  else missing.push('description');
-  if (input.currentPrice) filled.push('price');
-  else missing.push('price/msrp');
-  if (input.sku) filled.push('sku');
-  else missing.push('sku');
-  if (input.asin) filled.push('asin');
-  else missing.push('asin');
-  if (input.upc) filled.push('upc');
-  else missing.push('upc');
-  if (input.mpn) filled.push('mpn');
-  else missing.push('mpn');
+RULES:
+- Return ONLY valid JSON. No markdown, no explanations, no code fences.
+- Use the URL and identifiers to determine the EXACT product.
+- Return null for any field you cannot confidently determine.
+- NEVER invent prices, URLs, UPCs, or retailer data.
+- Prefer manufacturer data over retailer data.
+- Specifications must be category-specific and complete.
 
-  // Always request these (can't easily pre-fill)
-  missing.push('specifications', 'tags', 'pros/cons', 'sellers');
+Category-specific specs to include: ${specFields.join(', ')}
 
-  // Compact system prompt — no verbose JSON examples
-  const systemPrompt = `Product enrichment AI. Return ONLY JSON. No markdown. No explanation.
+Return this structure:
+{"title":null,"brand":null,"manufacturer":null,"model":null,"category":null,"subCategory":null,"sku":null,"upc":null,"asin":null,"mpn":null,"releaseYear":null,"availability":null,"description":null,"shortDescription":null,"seoTitle":null,"seoDescription":null,"msrp":null,"currentPrice":null,"salePrice":null,"sellers":[{"name":"","url":"","price":null,"shipping":"","availability":""}],"images":[],"specifications":[{"key":"","value":"","unit":"","group":""}],"pros":[],"cons":[],"buyingAdvice":[],"similarProducts":[],"tags":[],"searchKeywords":[],"compatibility":[],"confidence":0,"fieldConfidence":{}}`;
 
-Fill ONLY these missing fields: ${missing.join(', ')}
-${filled.length > 0 ? `Already known (DO NOT regenerate): ${filled.join(', ')}` : ''}
-
-Specs to extract: ${specFields.slice(0, 8).join(', ')}
-
-JSON keys: title, brand, model, category, subCategory, description, shortDescription, tags[], searchKeywords[], sku, upc, asin, mpn, msrp, currentPrice, salePrice, availability, sellers[{name,url,price,shipping,availability}], specifications[{key,value,unit}], pros[], cons[], buyingAdvice[], similarProducts[], confidence, fieldConfidence{}, reasoning
-
-Rules: Never invent prices/UPCs/URLs. Omit uncertain fields. Confidence 0-100.`;
-
-  // Compact user message
-  const parts = [`"${input.title}"`];
-  if (input.brand) parts.push(`brand:${input.brand}`);
-  if (input.currentPrice) parts.push(`$${input.currentPrice}`);
-  if (input.retailer) parts.push(`@${input.retailer}`);
-  if (input.url) parts.push(input.url);
+  // Single user message with all known context
+  const userMessage = `Research this product completely:\n${JSON.stringify(context)}`;
 
   const messages: Message[] = [
     { role: 'system', content: systemPrompt },
-    { role: 'user', content: parts.join(' ') },
+    { role: 'user', content: userMessage },
   ];
 
-  // Estimate required output tokens based on missing fields
-  let estimatedTokens = 600; // base
-  if (missing.includes('description')) estimatedTokens += 200;
-  if (missing.includes('specifications')) estimatedTokens += 400;
-  if (missing.includes('sellers')) estimatedTokens += 300;
-  if (missing.includes('pros/cons')) estimatedTokens += 200;
-  estimatedTokens = Math.min(estimatedTokens, 2500);
+  // Estimate tokens: comprehensive research needs more space
+  const estimatedTokens = Math.min(800 + (input.url ? 500 : 0) + specFields.length * 30, 3000);
 
   return { messages, estimatedTokens };
 }
@@ -695,7 +682,7 @@ export class EnrichmentService {
 
       return {
         title: parsed.title || undefined,
-        brand: parsed.brand || undefined,
+        brand: parsed.brand || parsed.manufacturer || undefined,
         model: parsed.model || undefined,
         category: parsed.category || undefined,
         subCategory: parsed.subCategory || parsed.subcategory || undefined,
@@ -737,6 +724,7 @@ export class EnrichmentService {
                 key: String(s.key || ''),
                 value: String(s.value || ''),
                 unit: String(s.unit || ''),
+                group: s.group ? String(s.group) : undefined,
               }))
               .filter((s: EnrichmentSpec) => s.key && s.value)
           : undefined,
