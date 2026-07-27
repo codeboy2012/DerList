@@ -71,7 +71,7 @@ const AVAILABLE: AvailableProvider[] = [
         name: 'model',
         label: 'Default Model (optional)',
         type: 'text',
-        placeholder: 'meta-llama/llama-3.1-8b-instruct:free',
+        placeholder: 'Auto (Recommended) — leave blank for best free model',
       },
     ],
   },
