@@ -627,21 +627,117 @@ function AddProviderCard({
           )}
 
           <div className="space-y-4">
-            {provider.fields.map((field) => (
-              <div key={field.name} className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium">
-                  <Key className="text-muted-foreground h-3.5 w-3.5" />
-                  {field.label}
-                </label>
-                <Input
-                  type={field.type === 'password' ? 'password' : 'text'}
-                  value={config[field.name] ?? ''}
-                  onChange={(e) => setConfig((prev) => ({ ...prev, [field.name]: e.target.value }))}
-                  placeholder={field.placeholder}
-                  className="font-mono text-sm"
-                />
-              </div>
-            ))}
+            {provider.fields.map((field) => {
+              // Special model selector for AI providers
+              if (
+                field.name === 'model' &&
+                (provider.id === 'openrouter' || provider.id === 'openai')
+              ) {
+                const isAuto = !config[field.name];
+                const defaultModel =
+                  provider.id === 'openrouter' ? 'openrouter/free' : 'gpt-4o-mini';
+                const examples =
+                  provider.id === 'openrouter'
+                    ? [
+                        'google/gemma-3-27b-it:free',
+                        'meta-llama/llama-4-maverick:free',
+                        'mistralai/mistral-small-3.1-24b-instruct:free',
+                      ]
+                    : ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo'];
+
+                return (
+                  <div key={field.name} className="space-y-3">
+                    <label className="text-sm font-medium">AI Model</label>
+
+                    {/* Auto/Manual radio */}
+                    <div className="space-y-2">
+                      <label
+                        className={cn(
+                          'flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-colors',
+                          isAuto ? 'border-accent bg-accent/5' : 'border-border hover:bg-surface/50'
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name={`model-mode-${provider.id}`}
+                          checked={isAuto}
+                          onChange={() => setConfig((prev) => ({ ...prev, model: '' }))}
+                          className="h-4 w-4"
+                        />
+                        <div className="flex-1">
+                          <span className="text-sm font-medium">Automatic (Recommended)</span>
+                          <p className="text-muted-foreground mt-0.5 text-xs">
+                            DerList selects the best available model automatically.
+                          </p>
+                          {isAuto && (
+                            <p className="text-accent mt-1 text-xs">
+                              Uses:{' '}
+                              <code className="bg-surface rounded px-1.5 py-0.5">
+                                {defaultModel}
+                              </code>
+                            </p>
+                          )}
+                        </div>
+                      </label>
+
+                      <label
+                        className={cn(
+                          'flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 transition-colors',
+                          !isAuto
+                            ? 'border-accent bg-accent/5'
+                            : 'border-border hover:bg-surface/50'
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name={`model-mode-${provider.id}`}
+                          checked={!isAuto}
+                          onChange={() => setConfig((prev) => ({ ...prev, model: defaultModel }))}
+                          className="mt-0.5 h-4 w-4"
+                        />
+                        <div className="flex-1 space-y-2">
+                          <span className="text-sm font-medium">Select Manually</span>
+                          {!isAuto && (
+                            <>
+                              <Input
+                                type="text"
+                                value={config[field.name] ?? ''}
+                                onChange={(e) =>
+                                  setConfig((prev) => ({ ...prev, model: e.target.value }))
+                                }
+                                placeholder={examples[0]}
+                                className="font-mono text-sm"
+                              />
+                              <p className="text-muted-foreground text-[11px]">
+                                Examples: {examples.join(', ')}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={field.name} className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <Key className="text-muted-foreground h-3.5 w-3.5" />
+                    {field.label}
+                  </label>
+                  <Input
+                    type={field.type === 'password' ? 'password' : 'text'}
+                    value={config[field.name] ?? ''}
+                    onChange={(e) =>
+                      setConfig((prev) => ({ ...prev, [field.name]: e.target.value }))
+                    }
+                    placeholder={field.placeholder}
+                    className="font-mono text-sm"
+                  />
+                </div>
+              );
+            })}
           </div>
 
           <div className="mt-5 flex items-center gap-3">
