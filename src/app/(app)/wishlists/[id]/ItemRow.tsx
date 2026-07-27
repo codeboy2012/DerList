@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { WishlistPriority } from '@/components/ui/WishlistPriority';
 import { ProductEditorDrawer } from '@/components/product/ProductEditorDrawer';
+import { ProductPrice } from '@/components/product/ProductPrice';
 import { togglePurchasedAction } from './item-actions';
 import { updateStarPriorityAction } from './priority-action';
 
@@ -149,28 +150,16 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
 
               {/* Price */}
               {price != null && (
-                <div className="shrink-0 text-right">
-                  <span
-                    className={`text-lg leading-tight font-bold tabular-nums ${
-                      item.purchased ? 'text-muted-foreground' : 'text-foreground'
-                    }`}
-                  >
-                    ${price.toFixed(2)}
-                  </span>
-                  {item.originalPrice != null && Number(item.originalPrice) > price && (
-                    <span className="text-muted-foreground block text-[10px] line-through">
-                      ${Number(item.originalPrice).toFixed(2)}
-                    </span>
-                  )}
-                  {!(item.originalPrice != null && Number(item.originalPrice) > price) && (
-                    <span className="text-muted-foreground block text-[10px]">{item.currency}</span>
-                  )}
-                  {item.dealInfo && (
-                    <span className="mt-0.5 inline-block rounded-full bg-green-500/10 px-1.5 py-0.5 text-[9px] font-medium text-green-400">
-                      {item.dealInfo}
-                    </span>
-                  )}
-                </div>
+                <ProductPrice
+                  price={price}
+                  originalPrice={
+                    item.originalPrice != null ? Number(item.originalPrice) : undefined
+                  }
+                  currency={item.currency}
+                  dealInfo={item.dealInfo}
+                  purchased={item.purchased}
+                  size="md"
+                />
               )}
             </div>
 

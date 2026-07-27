@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/Button';
 import { Container } from '@/components/ui/Container';
 import { Logo } from '@/components/ui/Logo';
 import { WishlistPriorityDisplay } from '@/components/ui/WishlistPriority';
+import { ProductPrice } from '@/components/product/ProductPrice';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data Loading
@@ -499,23 +500,14 @@ function PublicItemCard({ item }: { item: PublicItem }) {
 
             {/* Price */}
             {price != null && (
-              <div className="shrink-0 text-right">
-                <span
-                  className={`text-lg leading-tight font-bold tabular-nums ${item.purchased ? 'text-muted-foreground' : 'text-foreground'}`}
-                >
-                  ${price.toFixed(2)}
-                </span>
-                {item.originalPrice != null && Number(item.originalPrice) > price && (
-                  <span className="text-muted-foreground block text-[10px] line-through">
-                    ${Number(item.originalPrice).toFixed(2)}
-                  </span>
-                )}
-                {item.dealInfo && (
-                  <span className="mt-0.5 inline-block rounded-full bg-green-500/10 px-1.5 py-0.5 text-[9px] font-medium text-green-400">
-                    {item.dealInfo}
-                  </span>
-                )}
-              </div>
+              <ProductPrice
+                price={price}
+                originalPrice={item.originalPrice != null ? Number(item.originalPrice) : undefined}
+                currency={item.currency}
+                dealInfo={item.dealInfo}
+                purchased={item.purchased}
+                size="md"
+              />
             )}
           </div>
 
