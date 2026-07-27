@@ -35,7 +35,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { useToast } from '@/components/ui/Toast';
-import { EnrichmentProgress, type EnrichmentProgressResult } from './EnrichmentProgress';
+import { EnrichmentProgress } from './EnrichmentProgress';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -905,34 +905,36 @@ export function ProductEditorDrawer({
         open={enrichOpen}
         onClose={() => setEnrichOpen(false)}
         productTitle={data.title}
-        onEnrich={async (): Promise<EnrichmentProgressResult> => {
-          const startTime = Date.now();
-          try {
-            const result = await handleAiIdentify();
-            const duration = parseFloat(((Date.now() - startTime) / 1000).toFixed(1));
-            if (result) {
-              return {
-                success: true,
-                summary: {
-                  specifications: result.specs,
-                  images: result.images,
-                  sellers: result.sellers,
-                  tags: result.tags,
-                  fields: Object.values(data).filter((v) => v && v !== '' && v !== 'loading')
-                    .length,
-                  duration,
-                  confidence: result.confidence,
-                  provider: result.provider,
-                  model: result.modelUsed,
-                },
-              };
+        productData={{
+          title: data.title,
+          brand: data.brand || undefined,
+          category: data.category || undefined,
+          description: data.description || undefined,
+          url: data.url || undefined,
+          retailer: data.sellers.find((s) => s.isPreferred)?.name || undefined,
+          currentPrice: data.currentPrice ? parseFloat(data.currentPrice) : undefined,
+          originalPrice: data.originalPrice ? parseFloat(data.originalPrice) : undefined,
+          image: data.images[0] || undefined,
+          sku: data.sku || undefined,
+          asin: data.asin || undefined,
+          upc: data.upc || undefined,
+          mpn: data.mpn || undefined,
+        }}
+        onComplete={(result) => {
+          // Apply enrichment result to editor state
+          if (result && typeof result === 'object') {
+            const r = result as Record<string, unknown>;
+            if (r.brand && !data.brand) updateField('brand', String(r.brand));
+            if (r.model && !data.model) updateField('model', String(r.model));
+            if (r.category && !data.category) {
+              updateField('category', String(r.category));
+              updateField('wishlistCategory', String(r.category));
             }
-            return { success: false, error: 'No results returned' };
-          } catch (err) {
-            return {
-              success: false,
-              error: err instanceof Error ? err.message : 'Enrichment failed',
-            };
+            if (r.description && !data.description)
+              updateField('description', String(r.description));
+            if (r.tags && Array.isArray(r.tags))
+              updateField('tags', (r.tags as string[]).join(', '));
+            setSaveStatus('unsaved');
           }
         }}
       />

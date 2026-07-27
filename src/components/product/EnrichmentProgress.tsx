@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * EnrichmentProgress — Premium AI research progress panel.
+ * EnrichmentProgress — Real-time AI progress panel powered by SSE.
  *
- * Shows: animated steps, live activity feed, live stats counters,
- * AI model info, and rich completion summary with real metrics.
+ * Every status message comes from actual backend events.
+ * No fake timers. No rotating messages. No simulated progress.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Loader2, Sparkles, X } from 'lucide-react';
@@ -16,18 +16,19 @@ import { useToast } from '@/components/ui/Toast';
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-type StepStatus = 'waiting' | 'running' | 'done' | 'error';
-interface Step {
-  id: string;
-  label: string;
-  status: StepStatus;
-}
-interface LiveStats {
-  fields: number;
-  specs: number;
-  images: number;
-  sellers: number;
-  sources: number;
+interface EnrichProgressEvent {
+  stage: string;
+  message: string;
+  percent: number;
+  model?: string;
+  provider?: string;
+  success?: boolean;
+  duration?: number;
+  specifications?: number;
+  images?: number;
+  sellers?: number;
+  tags?: number;
+  fields?: number;
 }
 
 interface EnrichmentSummary {
@@ -46,7 +47,24 @@ export interface EnrichmentProgressProps {
   open: boolean;
   onClose: () => void;
   productTitle: string;
-  onEnrich: () => Promise<EnrichmentProgressResult>;
+  /** Product data to send for enrichment */
+  productData: {
+    title: string;
+    brand?: string;
+    category?: string;
+    description?: string;
+    url?: string;
+    retailer?: string;
+    currentPrice?: number;
+    originalPrice?: number;
+    image?: string;
+    sku?: string;
+    asin?: string;
+    upc?: string;
+    mpn?: string;
+  };
+  /** Called with the enrichment result when complete */
+  onComplete: (result: unknown) => void;
 }
 
 export interface EnrichmentProgressResult {
@@ -54,34 +72,6 @@ export interface EnrichmentProgressResult {
   error?: string;
   summary?: EnrichmentSummary;
 }
-
-const STEPS: { id: string; label: string }[] = [
-  { id: 'prepare', label: 'Preparing product' },
-  { id: 'connect', label: 'Connecting to AI' },
-  { id: 'research', label: 'Researching product' },
-  { id: 'specs', label: 'Reading specifications' },
-  { id: 'pricing', label: 'Finding pricing' },
-  { id: 'images', label: 'Collecting images' },
-  { id: 'build', label: 'Building product' },
-  { id: 'save', label: 'Saving' },
-];
-
-const ACTIVITIES = [
-  '🧠 Analyzing product page...',
-  '📦 Identifying manufacturer...',
-  '🔍 Extracting specifications...',
-  '🌐 Checking manufacturer website...',
-  '📷 Downloading product images...',
-  '💰 Comparing retailer prices...',
-  '🛒 Finding additional sellers...',
-  '⚙️ Parsing structured data...',
-  '🔎 Detecting category & model...',
-  '📈 Building product metadata...',
-  '🏷️ Generating tags & keywords...',
-  '🎯 Finding compatible products...',
-  '📄 Validating identifiers...',
-  '🔗 Cross-referencing sources...',
-];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
@@ -91,147 +81,131 @@ export function EnrichmentProgress({
   open,
   onClose,
   productTitle,
-  onEnrich,
+  productData,
+  onComplete,
 }: EnrichmentProgressProps) {
-  const [steps, setSteps] = useState<Step[]>(STEPS.map((s) => ({ ...s, status: 'waiting' })));
   const [phase, setPhase] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const [events, setEvents] = useState<EnrichProgressEvent[]>([]);
+  const [currentMessage, setCurrentMessage] = useState('Preparing...');
+  const [percent, setPercent] = useState(0);
   const [elapsed, setElapsed] = useState(0);
-  const [activity, setActivity] = useState(ACTIVITIES[0]);
-  const [activityLog, setActivityLog] = useState<string[]>([]);
-  const [stats, setStats] = useState<LiveStats>({
-    fields: 0,
-    specs: 0,
-    images: 0,
-    sellers: 0,
-    sources: 0,
-  });
   const [summary, setSummary] = useState<EnrichmentSummary | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [modelUsed, setModelUsed] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>(null);
-  const cancelledRef = useRef(false);
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const startTimeRef = useRef(0);
   const toast = useToast();
 
-  const addLog = useCallback((msg: string) => {
-    setActivityLog((prev) => [...prev.slice(-19), msg]);
-  }, []);
-
   const runEnrichment = useCallback(async () => {
-    cancelledRef.current = false;
     setPhase('running');
+    setEvents([]);
+    setCurrentMessage('Connecting...');
+    setPercent(0);
     setElapsed(0);
     setSummary(null);
     setErrorMsg(null);
-    setActivityLog([]);
-    setStats({ fields: 0, specs: 0, images: 0, sellers: 0, sources: 0 });
-    setSteps(STEPS.map((s) => ({ ...s, status: 'waiting' })));
+    setModelUsed(null);
+    startTimeRef.current = Date.now();
 
-    const startTime = Date.now();
-    let actIdx = 0;
-    let stepIdx = 0;
-
-    // Fast timer for elapsed display
+    // Elapsed timer (real, 200ms updates)
     timerRef.current = setInterval(() => {
-      if (cancelledRef.current) return;
-      setElapsed(parseFloat(((Date.now() - startTime) / 1000).toFixed(1)));
+      setElapsed(parseFloat(((Date.now() - startTimeRef.current) / 1000).toFixed(1)));
     }, 200);
 
-    // Activity rotation + step advancement + stat growth
-    const activityInterval = setInterval(() => {
-      if (cancelledRef.current) return;
-      const sec = (Date.now() - startTime) / 1000;
-
-      actIdx = (actIdx + 1) % ACTIVITIES.length;
-      setActivity(ACTIVITIES[actIdx]);
-      if (sec > 1.5) addLog(ACTIVITIES[actIdx]);
-
-      // Advance steps
-      const nextStep = Math.min(Math.floor(sec / 3.5), STEPS.length - 1);
-      if (nextStep > stepIdx) {
-        setSteps((prev) =>
-          prev.map((s, i) => ({
-            ...s,
-            status: i < nextStep ? 'done' : i === nextStep ? 'running' : 'waiting',
-          }))
-        );
-        stepIdx = nextStep;
-      }
-
-      // Grow stats (smooth small increments)
-      setStats((prev) => ({
-        fields: Math.min(prev.fields + 1 + Math.floor(Math.random() * 2), 45),
-        specs: Math.min(prev.specs + 1 + Math.floor(Math.random() * 3), 55),
-        images: Math.min(prev.images + (Math.random() > 0.6 ? 1 : 0), 8),
-        sellers: Math.min(prev.sellers + (Math.random() > 0.75 ? 1 : 0), 5),
-        sources: Math.min(prev.sources + (Math.random() > 0.5 ? 1 : 0), 12),
-      }));
-    }, 2000);
-
-    setSteps((prev) => prev.map((s, i) => ({ ...s, status: i === 0 ? 'running' : 'waiting' })));
-    addLog('Starting AI research...');
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
-      const result = await onEnrich();
-      if (cancelledRef.current) return;
+      const res = await fetch('/api/products/enrich-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product: productData }),
+        signal: controller.signal,
+      });
 
-      // Stop timers IMMEDIATELY
-      if (timerRef.current) clearInterval(timerRef.current);
-      clearInterval(activityInterval);
-
-      // Freeze elapsed at the exact backend duration (source of truth)
-      if (result.summary?.duration) {
-        setElapsed(result.summary.duration);
-      } else {
-        setElapsed(parseFloat(((Date.now() - startTime) / 1000).toFixed(1)));
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(err.error || `HTTP ${res.status}`);
       }
 
-      setSteps((prev) => prev.map((s) => ({ ...s, status: 'done' })));
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No response stream');
 
-      if (result.success) {
-        setPhase('done');
-        setSummary(result.summary ?? null);
-        // Set final stats from backend
-        if (result.summary) {
-          setStats({
-            fields: result.summary.fields ?? 0,
-            specs: result.summary.specifications ?? 0,
-            images: result.summary.images ?? 0,
-            sellers: result.summary.sellers ?? 0,
-            sources: 0,
-          });
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const json = line.slice(6);
+          try {
+            const event: EnrichProgressEvent = JSON.parse(json);
+            setEvents((prev) => [...prev, event]);
+            setCurrentMessage(event.message);
+            if (event.percent >= 0) setPercent(event.percent);
+            if (event.model) setModelUsed(event.model);
+
+            if (event.stage === 'complete' && event.success) {
+              if (timerRef.current) clearInterval(timerRef.current);
+              setElapsed(
+                event.duration ??
+                  parseFloat(((Date.now() - startTimeRef.current) / 1000).toFixed(1))
+              );
+              setPhase('done');
+              setSummary({
+                specifications: event.specifications,
+                images: event.images,
+                sellers: event.sellers,
+                tags: event.tags,
+                fields: event.fields,
+                duration: event.duration,
+                model: event.model,
+                provider: event.provider,
+              });
+              // Pass result back to parent
+              onComplete((event as unknown as Record<string, unknown>).result);
+              toast.success('Product enriched successfully');
+            }
+
+            if (event.stage === 'error') {
+              if (timerRef.current) clearInterval(timerRef.current);
+              setPhase('error');
+              setErrorMsg(event.message);
+            }
+          } catch {
+            /* skip malformed events */
+          }
         }
-        addLog(`✅ Research complete!`);
-        toast.success('Product enriched successfully');
-      } else {
-        setPhase('error');
-        setErrorMsg(result.error || 'Enrichment failed');
-        addLog(`❌ ${result.error || 'Failed'}`);
+      }
+
+      // If stream ended without explicit complete/error
+      if (phase === 'running') {
+        if (timerRef.current) clearInterval(timerRef.current);
+        setPhase('done');
       }
     } catch (err) {
       if (timerRef.current) clearInterval(timerRef.current);
-      clearInterval(activityInterval);
-      if (!cancelledRef.current) {
-        setPhase('error');
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        setErrorMsg(msg);
-        addLog(`❌ ${msg}`);
-      }
+      if ((err as Error).name === 'AbortError') return;
+      setPhase('error');
+      setErrorMsg(err instanceof Error ? err.message : 'Connection failed');
     }
-  }, [onEnrich, addLog, toast]);
+  }, [productData, onComplete, toast]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (open && phase === 'idle') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      runEnrichment();
-    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open && phase === 'idle') runEnrichment();
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activityLog]);
-
   const handleCancel = () => {
-    cancelledRef.current = true;
+    abortRef.current?.abort();
     if (timerRef.current) clearInterval(timerRef.current);
     setPhase('idle');
     onClose();
@@ -239,11 +213,6 @@ export function EnrichmentProgress({
   };
 
   if (!open) return null;
-
-  const progress = Math.round(
-    (steps.filter((s) => s.status === 'done').length / steps.length) * 100
-  );
-  const smoothProgress = phase === 'done' ? 100 : Math.min(progress + 5, 95);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -270,85 +239,69 @@ export function EnrichmentProgress({
           </button>
         </div>
 
-        {/* Progress bar + elapsed */}
+        {/* Progress bar + current message */}
         {phase === 'running' && (
           <div className="px-6 pb-3">
             <div className="text-muted-foreground mb-1.5 flex justify-between text-[11px]">
-              <span className="max-w-[70%] truncate">{activity}</span>
+              <span className="max-w-[75%] truncate">{currentMessage}</span>
               <span className="font-mono tabular-nums">{elapsed}s</span>
             </div>
             <div className="bg-surface h-1.5 overflow-hidden rounded-full">
               <div
-                className="from-accent h-full rounded-full bg-gradient-to-r to-blue-400 transition-all duration-[1500ms] ease-out"
-                style={{ width: `${smoothProgress}%` }}
+                className="from-accent h-full rounded-full bg-gradient-to-r to-blue-400 transition-all duration-500 ease-out"
+                style={{ width: `${percent}%` }}
               />
             </div>
           </div>
         )}
 
         <div className="max-h-[55vh] space-y-4 overflow-y-auto px-6 pb-5">
-          {/* Live stats */}
-          {phase === 'running' && (
+          {/* Live stats (from real events) */}
+          {phase === 'running' && events.length > 2 && (
             <div className="grid grid-cols-5 gap-1.5">
-              <StatPill label="Fields" value={stats.fields} />
-              <StatPill label="Specs" value={stats.specs} />
-              <StatPill label="Images" value={stats.images} />
-              <StatPill label="Sellers" value={stats.sellers} />
-              <StatPill label="Sources" value={stats.sources} />
+              <StatPill label="Events" value={events.length} />
+              <StatPill
+                label="Specs"
+                value={events.find((e) => e.specifications)?.specifications ?? 0}
+              />
+              <StatPill label="Images" value={events.find((e) => e.images)?.images ?? 0} />
+              <StatPill label="Sellers" value={events.find((e) => e.sellers)?.sellers ?? 0} />
+              <StatPill label="Fields" value={events.find((e) => e.fields)?.fields ?? 0} />
             </div>
           )}
 
-          {/* Steps */}
+          {/* Real event log */}
           <div className="space-y-0.5">
-            {steps.map((step) => (
+            {events.slice(-12).map((event, i) => (
               <div
-                key={step.id}
+                key={i}
                 className={cn(
-                  'flex items-center gap-2 py-0.5 transition-all duration-300',
-                  step.status === 'waiting' && 'opacity-30'
+                  'flex items-center gap-2 py-0.5',
+                  i === events.slice(-12).length - 1 ? 'opacity-100' : 'opacity-50'
                 )}
               >
-                {step.status === 'done' && <Check className="text-success h-3.5 w-3.5 shrink-0" />}
-                {step.status === 'running' && (
+                {event.stage === 'complete' ? (
+                  <Check className="text-success h-3.5 w-3.5 shrink-0" />
+                ) : event.stage === 'error' ? (
+                  <X className="text-danger h-3.5 w-3.5 shrink-0" />
+                ) : event.percent >= 0 && i === events.slice(-12).length - 1 ? (
                   <Loader2 className="text-accent h-3.5 w-3.5 shrink-0 animate-spin" />
+                ) : (
+                  <Check className="text-muted-foreground/40 h-3.5 w-3.5 shrink-0" />
                 )}
-                {step.status === 'waiting' && (
-                  <div className="border-border/50 h-3.5 w-3.5 shrink-0 rounded-full border" />
-                )}
-                {step.status === 'error' && <X className="text-danger h-3.5 w-3.5 shrink-0" />}
                 <span
                   className={cn(
                     'text-xs',
-                    step.status === 'running' && 'text-foreground font-medium',
-                    step.status === 'done' && 'text-muted-foreground',
-                    step.status === 'waiting' && 'text-muted-foreground/50'
+                    i === events.slice(-12).length - 1
+                      ? 'text-foreground'
+                      : 'text-muted-foreground/70'
                   )}
                 >
-                  {step.label}
+                  {event.message}
                 </span>
               </div>
             ))}
           </div>
-
-          {/* Activity feed */}
-          {phase === 'running' && activityLog.length > 0 && (
-            <div className="bg-surface/30 border-border/40 max-h-24 overflow-y-auto rounded-lg border p-2.5">
-              {activityLog.slice(-8).map((msg, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    'py-0.5 text-[11px]',
-                    i === activityLog.slice(-8).length - 1
-                      ? 'text-foreground'
-                      : 'text-muted-foreground/60'
-                  )}
-                >
-                  {msg}
-                </div>
-              ))}
-              <div ref={logEndRef} />
-            </div>
-          )}
 
           {/* Error */}
           {phase === 'error' && errorMsg && (
@@ -357,15 +310,13 @@ export function EnrichmentProgress({
             </div>
           )}
 
-          {/* ─── Completion Card ─── */}
+          {/* Completion */}
           {phase === 'done' && summary && (
             <div className="border-success/20 bg-success/5 space-y-3 rounded-xl border p-4">
               <div className="flex items-center gap-2">
                 <Sparkles className="text-success h-4 w-4" />
                 <span className="text-success text-sm font-semibold">Research Complete</span>
               </div>
-
-              {/* Stats grid */}
               <div className="grid grid-cols-2 gap-1.5 text-xs">
                 {(summary.fields ?? 0) > 0 && (
                   <span className="text-muted-foreground">✓ {summary.fields} fields filled</span>
@@ -385,15 +336,6 @@ export function EnrichmentProgress({
                   <span className="text-muted-foreground">✓ {summary.tags} tags</span>
                 )}
               </div>
-
-              {/* Sources */}
-              {(summary.sources ?? 0) > 0 && (
-                <div className="text-muted-foreground text-xs">
-                  ✓ {summary.sources} sources visited
-                </div>
-              )}
-
-              {/* Provider & Model (separate lines, never duplicated) */}
               <div className="border-border/50 text-muted-foreground space-y-1 border-t pt-2.5 text-[11px]">
                 {summary.duration != null && (
                   <div>
@@ -405,10 +347,10 @@ export function EnrichmentProgress({
                     Provider: <span className="text-foreground">{summary.provider}</span>
                   </div>
                 )}
-                {summary.model && summary.model !== summary.provider && (
+                {modelUsed && modelUsed !== summary.provider && (
                   <div>
                     Model:{' '}
-                    <span className="text-foreground font-mono text-[10px]">{summary.model}</span>
+                    <span className="text-foreground font-mono text-[10px]">{modelUsed}</span>
                   </div>
                 )}
               </div>
