@@ -1,13 +1,13 @@
 'use client';
 
 /**
- * EnrichmentProgress — Real-time AI progress panel powered by SSE.
+ * EnrichmentProgress — AI Research Experience.
  *
- * Every status message comes from actual backend events.
- * No fake timers. No rotating messages. No simulated progress.
+ * Renders real backend events as a live research timeline.
+ * Every entry comes from actual backend work — zero fake progress.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Loader2, Sparkles, X } from 'lucide-react';
+import { Loader2, Sparkles, X } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
@@ -16,38 +16,18 @@ import { useToast } from '@/components/ui/Toast';
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface EnrichProgressEvent {
-  stage: string;
+interface ResearchEvent {
+  type: 'activity' | 'discovery' | 'stat' | 'source' | 'complete' | 'error';
   message: string;
-  percent: number;
-  model?: string;
-  provider?: string;
-  success?: boolean;
-  duration?: number;
-  specifications?: number;
-  images?: number;
-  sellers?: number;
-  tags?: number;
-  fields?: number;
-}
-
-interface EnrichmentSummary {
-  specifications?: number;
-  images?: number;
-  sellers?: number;
-  tags?: number;
-  fields?: number;
-  duration?: number;
-  model?: string;
-  provider?: string;
-  sources?: number;
+  icon?: string;
+  timestamp: number;
+  data?: Record<string, unknown>;
 }
 
 export interface EnrichmentProgressProps {
   open: boolean;
   onClose: () => void;
   productTitle: string;
-  /** Product data to send for enrichment */
   productData: {
     title: string;
     brand?: string;
@@ -63,14 +43,7 @@ export interface EnrichmentProgressProps {
     upc?: string;
     mpn?: string;
   };
-  /** Called with the enrichment result when complete */
   onComplete: (result: unknown) => void;
-}
-
-export interface EnrichmentProgressResult {
-  success: boolean;
-  error?: string;
-  summary?: EnrichmentSummary;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -85,32 +58,45 @@ export function EnrichmentProgress({
   onComplete,
 }: EnrichmentProgressProps) {
   const [phase, setPhase] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
-  const [events, setEvents] = useState<EnrichProgressEvent[]>([]);
-  const [currentMessage, setCurrentMessage] = useState('Preparing...');
-  const [percent, setPercent] = useState(0);
+  const [currentActivity, setCurrentActivity] = useState<{ message: string; icon: string }>({
+    message: 'Starting research...',
+    icon: '🧠',
+  });
+  const [timeline, setTimeline] = useState<ResearchEvent[]>([]);
+  const [stats, setStats] = useState<Record<string, number>>({});
+  const [sources, setSources] = useState<string[]>([]);
   const [elapsed, setElapsed] = useState(0);
-  const [summary, setSummary] = useState<EnrichmentSummary | null>(null);
+  const [summary, setSummary] = useState<{
+    specs?: number;
+    images?: number;
+    sellers?: number;
+    sources?: number;
+    fields?: number;
+    identifiers?: number;
+    duration?: number;
+    model?: string;
+    provider?: string;
+  } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [modelUsed, setModelUsed] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>(null);
-  const startTimeRef = useRef(0);
+  const startRef = useRef(0);
+  const timelineEndRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
 
-  const runEnrichment = useCallback(async () => {
+  const run = useCallback(async () => {
     setPhase('running');
-    setEvents([]);
-    setCurrentMessage('Connecting...');
-    setPercent(0);
+    setTimeline([]);
+    setStats({});
+    setSources([]);
     setElapsed(0);
     setSummary(null);
     setErrorMsg(null);
-    setModelUsed(null);
-    startTimeRef.current = Date.now();
+    setCurrentActivity({ message: 'Starting research...', icon: '🧠' });
+    startRef.current = Date.now();
 
-    // Elapsed timer (real, 200ms updates)
     timerRef.current = setInterval(() => {
-      setElapsed(parseFloat(((Date.now() - startTimeRef.current) / 1000).toFixed(1)));
+      setElapsed(parseFloat(((Date.now() - startRef.current) / 1000).toFixed(1)));
     }, 200);
 
     const controller = new AbortController();
@@ -138,55 +124,75 @@ export function EnrichmentProgress({
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n\n');
         buffer = lines.pop() || '';
 
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
-          const json = line.slice(6);
           try {
-            const event: EnrichProgressEvent = JSON.parse(json);
-            setEvents((prev) => [...prev, event]);
-            setCurrentMessage(event.message);
-            if (event.percent >= 0) setPercent(event.percent);
-            if (event.model) setModelUsed(event.model);
+            const event: ResearchEvent = JSON.parse(line.slice(6));
 
-            if (event.stage === 'complete' && event.success) {
-              if (timerRef.current) clearInterval(timerRef.current);
-              setElapsed(
-                event.duration ??
-                  parseFloat(((Date.now() - startTimeRef.current) / 1000).toFixed(1))
-              );
-              setPhase('done');
-              setSummary({
-                specifications: event.specifications,
-                images: event.images,
-                sellers: event.sellers,
-                tags: event.tags,
-                fields: event.fields,
-                duration: event.duration,
-                model: event.model,
-                provider: event.provider,
-              });
-              // Pass result back to parent
-              onComplete((event as unknown as Record<string, unknown>).result);
-              toast.success('Product enriched successfully');
+            // Update current activity
+            if (event.type === 'activity') {
+              setCurrentActivity({ message: event.message, icon: event.icon || '🔍' });
             }
 
-            if (event.stage === 'error') {
+            // Add discoveries to timeline
+            if (event.type === 'discovery') {
+              setTimeline((prev) => [...prev, event]);
+            }
+
+            // Track sources
+            if (event.type === 'source') {
+              setSources((prev) =>
+                prev.includes(event.message) ? prev : [...prev, event.message]
+              );
+            }
+
+            // Update stats
+            if (event.type === 'stat' && event.data) {
+              setStats((prev) => ({ ...prev, ...(event.data as Record<string, number>) }));
+            }
+
+            // Completion
+            if (event.type === 'complete') {
+              if (timerRef.current) clearInterval(timerRef.current);
+              const d = event.data;
+              if (d?.duration) setElapsed(d.duration as number);
+              setPhase('done');
+              setSummary(
+                d
+                  ? {
+                      specs: d.specs as number,
+                      images: d.images as number,
+                      sellers: d.sellers as number,
+                      sources: d.sources as number,
+                      fields: d.fields as number,
+                      identifiers: d.identifiers as number,
+                      duration: d.duration as number,
+                      model: d.model as string,
+                      provider: d.provider as string,
+                    }
+                  : null
+              );
+              setStats((prev) => ({ ...prev, ...(d as Record<string, number>) }));
+              if (d?.result) onComplete(d.result);
+              toast.success('Product researched successfully');
+            }
+
+            // Error
+            if (event.type === 'error') {
               if (timerRef.current) clearInterval(timerRef.current);
               setPhase('error');
               setErrorMsg(event.message);
             }
           } catch {
-            /* skip malformed events */
+            /* skip */
           }
         }
       }
 
-      // If stream ended without explicit complete/error
       if (phase === 'running') {
         if (timerRef.current) clearInterval(timerRef.current);
         setPhase('done');
@@ -201,107 +207,104 @@ export function EnrichmentProgress({
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (open && phase === 'idle') runEnrichment();
+    if (open && phase === 'idle') run();
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    timelineEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [timeline]);
 
   const handleCancel = () => {
     abortRef.current?.abort();
     if (timerRef.current) clearInterval(timerRef.current);
     setPhase('idle');
     onClose();
-    toast.info('Enrichment cancelled');
+    toast.info('Research cancelled');
   };
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="border-border bg-card w-full max-w-lg overflow-hidden rounded-2xl border shadow-2xl">
+      <div className="border-border bg-card flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-3">
+        <div className="flex shrink-0 items-center justify-between px-5 pt-5 pb-2">
           <div className="flex items-center gap-2.5">
-            <div className="bg-accent/10 flex h-8 w-8 items-center justify-center rounded-lg">
-              <Sparkles className="text-accent h-4 w-4" />
-            </div>
+            <Sparkles className="text-accent h-5 w-5" />
             <div>
-              <h2 className="text-sm font-semibold">AI Auto Fill</h2>
-              <p className="text-muted-foreground max-w-[250px] truncate text-[11px]">
+              <h2 className="text-sm font-semibold">AI Research</h2>
+              <p className="text-muted-foreground max-w-[220px] truncate text-[11px]">
                 {productTitle}
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="text-muted-foreground hover:text-foreground hover:bg-surface rounded-lg p-1.5 transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground font-mono text-[11px] tabular-nums">
+              {elapsed}s
+            </span>
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="text-muted-foreground hover:text-foreground hover:bg-surface rounded-lg p-1"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
-        {/* Progress bar + current message */}
+        {/* Current Activity */}
         {phase === 'running' && (
-          <div className="px-6 pb-3">
-            <div className="text-muted-foreground mb-1.5 flex justify-between text-[11px]">
-              <span className="max-w-[75%] truncate">{currentMessage}</span>
-              <span className="font-mono tabular-nums">{elapsed}s</span>
+          <div className="border-border/50 flex items-center gap-3 border-b px-5 py-3">
+            <span className="text-xl">{currentActivity.icon}</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-foreground truncate text-sm font-medium">
+                {currentActivity.message}
+              </p>
+              {sources.length > 0 && (
+                <p className="text-muted-foreground mt-0.5 text-[10px]">
+                  Sources: {sources.slice(-3).join(' · ')}
+                </p>
+              )}
             </div>
-            <div className="bg-surface h-1.5 overflow-hidden rounded-full">
-              <div
-                className="from-accent h-full rounded-full bg-gradient-to-r to-blue-400 transition-all duration-500 ease-out"
-                style={{ width: `${percent}%` }}
-              />
-            </div>
+            <Loader2 className="text-accent h-4 w-4 shrink-0 animate-spin" />
           </div>
         )}
 
-        <div className="max-h-[55vh] space-y-4 overflow-y-auto px-6 pb-5">
-          {/* Live stats (from real events) */}
-          {phase === 'running' && events.length > 2 && (
-            <div className="grid grid-cols-5 gap-1.5">
-              <StatPill label="Events" value={events.length} />
-              <StatPill
-                label="Specs"
-                value={events.find((e) => e.specifications)?.specifications ?? 0}
-              />
-              <StatPill label="Images" value={events.find((e) => e.images)?.images ?? 0} />
-              <StatPill label="Sellers" value={events.find((e) => e.sellers)?.sellers ?? 0} />
-              <StatPill label="Fields" value={events.find((e) => e.fields)?.fields ?? 0} />
+        {/* Content area */}
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-3">
+          {/* Live Stats */}
+          {Object.keys(stats).length > 0 && phase === 'running' && (
+            <div className="flex flex-wrap gap-2">
+              {stats.specs > 0 && <Pill label="Specs" value={stats.specs} />}
+              {stats.images > 0 && <Pill label="Images" value={stats.images} />}
+              {stats.sellers > 0 && <Pill label="Sellers" value={stats.sellers} />}
+              {stats.sources > 0 && <Pill label="Sources" value={stats.sources} />}
+              {stats.identifiers > 0 && <Pill label="IDs" value={stats.identifiers} />}
+              {stats.prices > 0 && <Pill label="Prices" value={stats.prices} />}
             </div>
           )}
 
-          {/* Real event log */}
-          <div className="space-y-0.5">
-            {events.slice(-12).map((event, i) => (
-              <div
-                key={i}
-                className={cn(
-                  'flex items-center gap-2 py-0.5',
-                  i === events.slice(-12).length - 1 ? 'opacity-100' : 'opacity-50'
-                )}
-              >
-                {event.stage === 'complete' ? (
-                  <Check className="text-success h-3.5 w-3.5 shrink-0" />
-                ) : event.stage === 'error' ? (
-                  <X className="text-danger h-3.5 w-3.5 shrink-0" />
-                ) : event.percent >= 0 && i === events.slice(-12).length - 1 ? (
-                  <Loader2 className="text-accent h-3.5 w-3.5 shrink-0 animate-spin" />
-                ) : (
-                  <Check className="text-muted-foreground/40 h-3.5 w-3.5 shrink-0" />
-                )}
-                <span
+          {/* Timeline */}
+          {timeline.length > 0 && (
+            <div className="space-y-1">
+              {timeline.map((event, i) => (
+                <div
+                  key={i}
                   className={cn(
-                    'text-xs',
-                    i === events.slice(-12).length - 1
-                      ? 'text-foreground'
-                      : 'text-muted-foreground/70'
+                    'animate-in fade-in flex items-start gap-2 py-0.5 duration-300',
+                    i === timeline.length - 1 ? 'opacity-100' : 'opacity-60'
                   )}
                 >
-                  {event.message}
-                </span>
-              </div>
-            ))}
-          </div>
+                  <span className="mt-0.5 shrink-0 text-sm">{event.icon || '✓'}</span>
+                  <span className="text-foreground text-xs">{event.message}</span>
+                  <span className="text-muted-foreground/50 ml-auto shrink-0 text-[9px] tabular-nums">
+                    {event.timestamp}s
+                  </span>
+                </div>
+              ))}
+              <div ref={timelineEndRef} />
+            </div>
+          )}
 
           {/* Error */}
           {phase === 'error' && errorMsg && (
@@ -314,43 +317,35 @@ export function EnrichmentProgress({
           {phase === 'done' && summary && (
             <div className="border-success/20 bg-success/5 space-y-3 rounded-xl border p-4">
               <div className="flex items-center gap-2">
-                <Sparkles className="text-success h-4 w-4" />
-                <span className="text-success text-sm font-semibold">Research Complete</span>
+                <span className="text-lg">✅</span>
+                <span className="text-success text-sm font-semibold">
+                  Product Successfully Researched
+                </span>
               </div>
-              <div className="grid grid-cols-2 gap-1.5 text-xs">
-                {(summary.fields ?? 0) > 0 && (
-                  <span className="text-muted-foreground">✓ {summary.fields} fields filled</span>
-                )}
-                {(summary.specifications ?? 0) > 0 && (
-                  <span className="text-muted-foreground">
-                    ✓ {summary.specifications} specifications
-                  </span>
-                )}
-                {(summary.images ?? 0) > 0 && (
-                  <span className="text-muted-foreground">✓ {summary.images} images</span>
-                )}
-                {(summary.sellers ?? 0) > 0 && (
-                  <span className="text-muted-foreground">✓ {summary.sellers} sellers</span>
-                )}
-                {(summary.tags ?? 0) > 0 && (
-                  <span className="text-muted-foreground">✓ {summary.tags} tags</span>
+              <div className="text-muted-foreground grid grid-cols-2 gap-1.5 text-xs">
+                {(summary.specs as number) > 0 && <span>✓ {summary.specs} specifications</span>}
+                {(summary.images as number) > 0 && <span>✓ {summary.images} images</span>}
+                {(summary.sellers as number) > 0 && <span>✓ {summary.sellers} retailers</span>}
+                {(summary.sources as number) > 0 && <span>✓ {summary.sources} sources</span>}
+                {(summary.fields as number) > 0 && <span>✓ {summary.fields} fields filled</span>}
+                {(summary.identifiers as number) > 0 && (
+                  <span>✓ {summary.identifiers} identifiers</span>
                 )}
               </div>
-              <div className="border-border/50 text-muted-foreground space-y-1 border-t pt-2.5 text-[11px]">
-                {summary.duration != null && (
-                  <div>
-                    Time: <span className="text-foreground font-medium">{summary.duration}s</span>
-                  </div>
-                )}
+              <div className="border-border/40 text-muted-foreground space-y-0.5 border-t pt-2 text-[11px]">
+                <div>
+                  Completed in{' '}
+                  <span className="text-foreground font-medium">{summary.duration}s</span>
+                </div>
                 {summary.provider && (
                   <div>
                     Provider: <span className="text-foreground">{summary.provider}</span>
                   </div>
                 )}
-                {modelUsed && modelUsed !== summary.provider && (
+                {summary.model && summary.model !== summary.provider && (
                   <div>
                     Model:{' '}
-                    <span className="text-foreground font-mono text-[10px]">{modelUsed}</span>
+                    <span className="text-foreground font-mono text-[10px]">{summary.model}</span>
                   </div>
                 )}
               </div>
@@ -359,7 +354,7 @@ export function EnrichmentProgress({
         </div>
 
         {/* Footer */}
-        <div className="border-border flex justify-end gap-3 border-t px-6 py-4">
+        <div className="border-border flex shrink-0 justify-end gap-3 border-t px-5 py-3">
           {phase === 'running' && (
             <Button variant="ghost" size="sm" onClick={handleCancel}>
               Cancel
@@ -376,11 +371,11 @@ export function EnrichmentProgress({
   );
 }
 
-function StatPill({ label, value }: { label: string; value: number }) {
+function Pill({ label, value }: { label: string; value: number }) {
   return (
-    <div className="bg-surface/40 flex flex-col items-center rounded-lg px-1.5 py-1.5">
-      <span className="text-foreground text-sm font-semibold tabular-nums">{value}</span>
-      <span className="text-muted-foreground text-[8px] tracking-wider uppercase">{label}</span>
-    </div>
+    <span className="bg-surface/60 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px]">
+      <span className="text-foreground font-semibold tabular-nums">{value}</span>
+      <span className="text-muted-foreground">{label}</span>
+    </span>
   );
 }
