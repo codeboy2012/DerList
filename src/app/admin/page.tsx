@@ -1,14 +1,5 @@
 import type { Metadata } from 'next';
-
 import Link from 'next/link';
-
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { getActionLabel } from '@/lib/audit';
-import { prisma } from '@/lib/prisma';
-import { siteConfig } from '@/lib/site-config';
-import { formatDate } from '@/lib/format';
 import {
   Clock,
   Key,
@@ -20,6 +11,15 @@ import {
   UserMinus,
   Users,
 } from 'lucide-react';
+import { getActionLabel } from '@/lib/audit';
+import { formatDate } from '@/lib/format';
+import { prisma } from '@/lib/prisma';
+import { siteConfig } from '@/lib/site-config';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: `Dashboard — ${siteConfig.name} Admin`,
@@ -118,21 +118,20 @@ async function getRecentAuditLogs() {
 }
 
 export default async function AdminDashboardPage() {
-  const [stats, recentUsers, recentInvitations, recentWaitlist, recentLogs] =
-    await Promise.all([
-      getDashboardStats(),
-      getRecentUsers(),
-      getRecentInvitations(),
-      getRecentWaitlist(),
-      getRecentAuditLogs(),
-    ]);
+  const [stats, recentUsers, recentInvitations, recentWaitlist, recentLogs] = await Promise.all([
+    getDashboardStats(),
+    getRecentUsers(),
+    getRecentInvitations(),
+    getRecentWaitlist(),
+    getRecentAuditLogs(),
+  ]);
 
   return (
     <div className="flex flex-col gap-8">
       {/* Page header */}
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="text-foreground text-xl font-semibold">Dashboard</h1>
+        <p className="text-muted-foreground text-sm">
           Overview of your {siteConfig.name} instance.
         </p>
       </div>
@@ -227,21 +226,16 @@ export default async function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             {recentUsers.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No users yet.</p>
+              <p className="text-muted-foreground text-xs">No users yet.</p>
             ) : (
               <div className="space-y-3">
                 {recentUsers.map((user) => (
-                  <div
-                    key={user.id}
-                    className="flex items-center justify-between gap-3"
-                  >
+                  <div key={user.id} className="flex items-center justify-between gap-3">
                     <div className="flex flex-col gap-0.5 overflow-hidden">
-                      <span className="truncate text-sm font-medium text-foreground">
+                      <span className="text-foreground truncate text-sm font-medium">
                         {user.displayName}
                       </span>
-                      <span className="truncate text-xs text-muted-foreground">
-                        {user.email}
-                      </span>
+                      <span className="text-muted-foreground truncate text-xs">{user.email}</span>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <RoleBadge role={user.role} />
@@ -264,26 +258,20 @@ export default async function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             {recentInvitations.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No invitations yet.</p>
+              <p className="text-muted-foreground text-xs">No invitations yet.</p>
             ) : (
               <div className="space-y-3">
                 {recentInvitations.map((inv) => (
-                  <div
-                    key={inv.id}
-                    className="flex items-center justify-between gap-3"
-                  >
+                  <div key={inv.id} className="flex items-center justify-between gap-3">
                     <div className="flex flex-col gap-0.5 overflow-hidden">
-                      <span className="truncate text-sm font-medium text-foreground">
+                      <span className="text-foreground truncate text-sm font-medium">
                         {inv.email}
                       </span>
-                      <span className="truncate text-xs text-muted-foreground">
+                      <span className="text-muted-foreground truncate text-xs">
                         by {inv.invitedBy.displayName}
                       </span>
                     </div>
-                    <InvitationStatusBadge
-                      acceptedAt={inv.acceptedAt}
-                      expiresAt={inv.expiresAt}
-                    />
+                    <InvitationStatusBadge acceptedAt={inv.acceptedAt} expiresAt={inv.expiresAt} />
                   </div>
                 ))}
               </div>
@@ -301,21 +289,16 @@ export default async function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             {recentWaitlist.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No waitlist entries yet.</p>
+              <p className="text-muted-foreground text-xs">No waitlist entries yet.</p>
             ) : (
               <div className="space-y-3">
                 {recentWaitlist.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="flex items-center justify-between gap-3"
-                  >
+                  <div key={entry.id} className="flex items-center justify-between gap-3">
                     <div className="flex flex-col gap-0.5 overflow-hidden">
-                      <span className="truncate text-sm font-medium text-foreground">
+                      <span className="text-foreground truncate text-sm font-medium">
                         {entry.name}
                       </span>
-                      <span className="truncate text-xs text-muted-foreground">
-                        {entry.email}
-                      </span>
+                      <span className="text-muted-foreground truncate text-xs">{entry.email}</span>
                     </div>
                     {entry.approvedAt ? (
                       <Badge variant="success">Approved</Badge>
@@ -339,26 +322,24 @@ export default async function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             {recentLogs.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No activity yet.</p>
+              <p className="text-muted-foreground text-xs">No activity yet.</p>
             ) : (
               <div className="space-y-3">
                 {recentLogs.map((log) => (
-                  <div
-                    key={log.id}
-                    className="flex items-center justify-between gap-3"
-                  >
+                  <div key={log.id} className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 overflow-hidden">
-                      <ScrollText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                      <ScrollText
+                        className="text-muted-foreground h-3.5 w-3.5 shrink-0"
+                        aria-hidden
+                      />
                       <div className="flex flex-col gap-0.5 overflow-hidden">
-                        <span className="truncate text-xs font-medium text-foreground">
+                        <span className="text-foreground truncate text-xs font-medium">
                           {getActionLabel(log.action)}
                           {log.targetName && (
-                            <span className="text-muted-foreground">
-                              {' '}— {log.targetName}
-                            </span>
+                            <span className="text-muted-foreground"> — {log.targetName}</span>
                           )}
                         </span>
-                        <span className="truncate text-[11px] text-muted-foreground">
+                        <span className="text-muted-foreground truncate text-[11px]">
                           {log.actorName ?? 'System'} · {formatDate(log.createdAt)}
                         </span>
                       </div>
@@ -399,14 +380,12 @@ function StatCard({
   return (
     <Card>
       <CardContent className="flex items-center gap-4 p-5">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface text-muted-foreground">
+        <span className="bg-surface text-muted-foreground flex h-10 w-10 shrink-0 items-center justify-center rounded-lg">
           {icon}
         </span>
         <div className="flex flex-col gap-0.5">
-          <span className="text-xs font-medium text-muted-foreground">{label}</span>
-          <span className={`text-2xl font-semibold tabular-nums ${valueColor}`}>
-            {value}
-          </span>
+          <span className="text-muted-foreground text-xs font-medium">{label}</span>
+          <span className={`text-2xl font-semibold tabular-nums ${valueColor}`}>{value}</span>
         </div>
       </CardContent>
     </Card>

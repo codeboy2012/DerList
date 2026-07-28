@@ -19,7 +19,7 @@ type NavItem = {
 const items: NavItem[] = [
   { href: '/settings/profile', label: 'Profile', icon: User },
   { href: '/settings/account', label: 'Account', icon: Key },
-  { href: '/settings/providers', label: 'API Providers', icon: Settings },
+  { href: '/settings/integrations', label: 'Integrations', icon: Settings },
 ];
 
 export function SettingsNav() {

@@ -34,6 +34,7 @@ interface EditorPayload {
   purchased?: boolean;
   notes?: string;
   category?: string;
+  parentId?: string | null;
 
   // Extended metadata (stored as JSON in `metadata` column)
   metadata?: ItemMetadata;
@@ -229,6 +230,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (body.currency !== undefined) data.currency = body.currency || 'USD';
   if (body.notes !== undefined) data.notes = body.notes || null;
   if (body.category !== undefined) data.category = body.category || null;
+  if (body.parentId !== undefined) data.parentId = body.parentId || null;
 
   if (body.priority !== undefined) {
     const p = body.priority.toUpperCase();

@@ -1,18 +1,20 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# DerList Production Docker Compose
+# DerList — One-Command Production Deployment
 #
 # Usage:
-#   cp .env.example .env   (fill in secrets)
-#   docker compose up -d
+#   cp .env.example .env   # fill in secrets
+#   docker compose up -d   # done
 #
-# Services:
-#   - app: Next.js application (port 3000)
-#   - db: PostgreSQL 16 (port 5432)
-#   - caddy: Reverse proxy with automatic HTTPS (ports 80, 443)
+# Everything is automatic:
+#   - PostgreSQL starts and becomes healthy
+#   - App waits for DB, runs migrations, generates Prisma Client, then starts
+#   - Caddy provisions HTTPS certificates and proxies traffic
+#
+# No manual commands required. Ever.
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
-  # ── PostgreSQL ──
+  # ─── PostgreSQL ─────────────────────────────────────────────────────────────
   db:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -23,53 +25,55 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-derlist}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    ports:
-      - "5432:5432"
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-derlist} -d ${POSTGRES_DB:-derlist}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - derlist
+    # Not exposed to host by default — access via internal network only.
+    # Uncomment below for local debugging:
+    # ports:
+    #   - "5432:5432"
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '5'
 
-  # ── DerList Application ──
+  # ─── DerList Application ────────────────────────────────────────────────────
   app:
     build:
       context: .
       dockerfile: Dockerfile
+    init: true
     restart: unless-stopped
+    stop_grace_period: 30s
     depends_on:
       db:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-derlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-derlist}
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://derlist.dpdns.org}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      PROVIDER_ENCRYPTION_KEY: ${PROVIDER_ENCRYPTION_KEY:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       NODE_ENV: production
     ports:
-      - "3000:3000"
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
-      interval: 30s
-      timeout: 5s
-      start_period: 15s
-      retries: 3
+      - '${APP_PORT:-3000}:3000'
+    networks:
+      - derlist
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '5'
 
-  # ── Database Migrations (run once) ──
-  migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-derlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-derlist}
-    command: npx prisma migrate deploy
-    restart: "no"
-
-  # ── Caddy Reverse Proxy ──
+  # ─── Caddy — Automatic HTTPS Reverse Proxy ─────────────────────────────────
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -77,15 +81,106 @@ services:
       app:
         condition: service_healthy
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    networks:
+      - derlist
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '5'
 
+  # ─── Optional: Redis (uncomment when needed) ────────────────────────────────
+  # redis:
+  #   image: redis:7-alpine
+  #   restart: unless-stopped
+  #   command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+  #   volumes:
+  #     - redis_data:/data
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 5
+  #   networks:
+  #     - derlist
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "5"
+
+  # ─── Optional: Meilisearch (uncomment when needed) ──────────────────────────
+  # meilisearch:
+  #   image: getmeili/meilisearch:v1.11
+  #   restart: unless-stopped
+  #   environment:
+  #     MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-changeme}
+  #     MEILI_ENV: production
+  #   volumes:
+  #     - meili_data:/meili_data
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:7700/health"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 5
+  #   networks:
+  #     - derlist
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "5"
+
+  # ─── Optional: Ollama (uncomment for local AI) ──────────────────────────────
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   networks:
+  #     - derlist
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "5"
+
+  # ─── Optional: Watchtower (auto-update containers) ──────────────────────────
+  # watchtower:
+  #   image: containrrr/watchtower
+  #   restart: unless-stopped
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   environment:
+  #     WATCHTOWER_CLEANUP: "true"
+  #     WATCHTOWER_POLL_INTERVAL: 86400
+  #   networks:
+  #     - derlist
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "5"
+
+# ─── Volumes ───────────────────────────────────────────────────────────────────
 volumes:
   pgdata:
   caddy_data:
   caddy_config:
+  # redis_data:
+  # meili_data:
+  # ollama_data:
+
+# ─── Network ──────────────────────────────────────────────────────────────────
+networks:
+  derlist:
+    driver: bridge

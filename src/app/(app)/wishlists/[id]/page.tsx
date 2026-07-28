@@ -28,13 +28,21 @@ import { CopyToClipboard } from './CopyToClipboard';
 import { CopyWishlistButton } from './CopyWishlistButton';
 import { DeleteWishlistButton } from './DeleteWishlistButton';
 import { ItemRow } from './ItemRow';
+import { ItemTree, type TreeItem } from './ItemTree';
+import { ItemTreeWrapper } from './ItemTreeWrapper';
 import { RatingExplainer } from './RatingExplainer';
 import { TopMostWanted } from './TopMostWanted';
 import { TopPicksManager } from './TopPicksManager';
 
 interface PageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ add?: string; sort?: string; filter?: string; view?: string }>;
+  searchParams: Promise<{
+    add?: string;
+    sort?: string;
+    filter?: string;
+    view?: string;
+    parentId?: string;
+  }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -53,6 +61,7 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
   const { id } = await params;
   const sp = await searchParams;
   const showAddForm = sp.add === 'true';
+  const addParentId = sp.parentId ?? undefined;
   const sort = sp.sort ?? 'position';
   const filter = sp.filter ?? 'all';
   const view = sp.view ?? 'list'; // 'list' or 'category'
@@ -80,6 +89,7 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
     createdAt: item.createdAt.toISOString(),
     updatedAt: item.updatedAt.toISOString(),
     purchasedAt: item.purchasedAt?.toISOString() ?? null,
+    parentId: item.parentId ?? null,
   }));
 
   // Sort items
@@ -128,6 +138,33 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
   const topPicks: { position: number; itemId: string }[] = Array.isArray(wishlist.topPicks)
     ? (wishlist.topPicks as { position: number; itemId: string }[])
     : [];
+
+  // ── Build tree structure from flat items ──
+  // Items with parentId are nested under their parent; top-level items have parentId === null.
+  function buildTree(items: typeof filteredItems): TreeItem[] {
+    const itemMap = new Map<string, TreeItem>();
+    const roots: TreeItem[] = [];
+
+    // Initialize all items with empty children arrays
+    for (const item of items) {
+      itemMap.set(item.id, { ...item, children: [] });
+    }
+
+    // Assign children to parents
+    for (const item of items) {
+      const node = itemMap.get(item.id)!;
+      if (item.parentId && itemMap.has(item.parentId)) {
+        itemMap.get(item.parentId)!.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+
+    return roots;
+  }
+
+  const treeItems = buildTree(unpurchased);
+  const treePurchased = buildTree(purchased);
 
   return (
     <div className="flex flex-col gap-6">
@@ -355,7 +392,7 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
         </Button>
       </div>
 
-      {showAddForm && <AddItemPanel wishlistId={id} />}
+      {showAddForm && <AddItemPanel wishlistId={id} parentId={addParentId} />}
 
       {/* ─── Items ─── */}
       {serializedItems.length === 0 ? (
@@ -414,11 +451,7 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
           {unpurchased.length > 0 && (
             <div className="flex flex-col gap-2">
               <h2 className="text-foreground text-sm font-medium">Items ({unpurchased.length})</h2>
-              <div className="flex flex-col gap-2">
-                {unpurchased.map((item) => (
-                  <ItemRow key={item.id} item={item} wishlistId={id} />
-                ))}
-              </div>
+              <ItemTreeWrapper items={treeItems} wishlistId={id} />
             </div>
           )}
 
@@ -430,9 +463,7 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
                 Purchased ({purchased.length})
               </h2>
               <div className="flex flex-col gap-2 opacity-70">
-                {purchased.map((item) => (
-                  <ItemRow key={item.id} item={item} wishlistId={id} />
-                ))}
+                <ItemTreeWrapper items={treePurchased} wishlistId={id} />
               </div>
             </div>
           )}

@@ -1169,6 +1169,15 @@ model WishlistItem {
   wishlistCategory   WishlistCategory? @relation(fields: [wishlistCategoryId], references: [id], onDelete: SetNull)
   wishlistCategoryId String?
 
+  // ── Nesting (parent/child tree) ──
+
+  /// Parent item for nested/bundle items. Null = top-level item.
+  parent   WishlistItem?  @relation("ItemChildren", fields: [parentId], references: [id], onDelete: Cascade)
+  parentId String?
+
+  /// Child items nested under this item (unlimited depth).
+  children WishlistItem[] @relation("ItemChildren")
+
   // ── Extended editor data ──
 
   /// JSON blob for extended product editor fields (sellers, specs, images,
@@ -1180,6 +1189,7 @@ model WishlistItem {
   @@index([wishlistId, category])
   @@index([purchased])
   @@index([productId])
+  @@index([parentId])
   @@map("wishlist_items")
 }
 

@@ -41,6 +41,7 @@ export interface WishlistItemCreateInput {
   category?: string;
   productId?: string;
   wishlistCategoryId?: string;
+  parentId?: string;
 }
 
 export interface WishlistItemUpdateInput {
@@ -62,6 +63,7 @@ export interface WishlistItemUpdateInput {
   purchased?: boolean;
   productId?: string | null;
   wishlistCategoryId?: string | null;
+  parentId?: string | null;
 }
 
 export interface CategoryCreateInput {
@@ -103,6 +105,7 @@ export const WishlistRepository = {
 
   /**
    * Get a wishlist with all its items and categories.
+   * Items include nested children (one level deep in query, tree built client-side).
    */
   async findWithItems(id: string, userId: string) {
     return prisma.wishlist.findFirst({
@@ -193,9 +196,9 @@ export const WishlistRepository = {
    * Add an item to a wishlist.
    */
   async addItem(input: WishlistItemCreateInput): Promise<WishlistItem> {
-    // Get next position
+    // Get next position (within the same parent scope)
     const lastItem = await prisma.wishlistItem.findFirst({
-      where: { wishlistId: input.wishlistId },
+      where: { wishlistId: input.wishlistId, parentId: input.parentId ?? null },
       orderBy: { position: 'desc' },
       select: { position: true },
     });
@@ -221,6 +224,7 @@ export const WishlistRepository = {
         category: input.category ?? null,
         productId: input.productId ?? null,
         wishlistCategoryId: input.wishlistCategoryId ?? null,
+        parentId: input.parentId ?? null,
         position,
       },
     });
@@ -291,6 +295,7 @@ export const WishlistRepository = {
     if (data.productId !== undefined) updateData.productId = data.productId;
     if (data.wishlistCategoryId !== undefined)
       updateData.wishlistCategoryId = data.wishlistCategoryId;
+    if (data.parentId !== undefined) updateData.parentId = data.parentId;
 
     if (data.purchased !== undefined) {
       updateData.purchased = data.purchased;

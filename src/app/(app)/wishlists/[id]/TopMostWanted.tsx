@@ -1,4 +1,5 @@
 import { Package, Trophy } from 'lucide-react';
+import { formatDiscount } from '@/utils/format-discount';
 import { WishlistPriorityDisplay } from '@/components/ui/WishlistPriority';
 
 interface TopItem {
@@ -114,11 +115,20 @@ export function TopMostWanted({ items, topPicks }: TopMostWantedProps) {
                 {item.retailer && (
                   <span className="text-muted-foreground text-[10px]">{item.retailer}</span>
                 )}
-                {item.dealInfo && (
-                  <span className="rounded-full bg-green-500/10 px-1.5 py-0.5 text-[9px] font-medium text-green-400">
-                    {item.dealInfo}
-                  </span>
-                )}
+                {(() => {
+                  const discount = formatDiscount({
+                    currentPrice: Number(item.currentPrice) || undefined,
+                    originalPrice: Number(item.originalPrice) || undefined,
+                    dealInfo: item.dealInfo,
+                    currency: 'USD',
+                  });
+                  if (!discount) return null;
+                  return (
+                    <span className="rounded-full bg-green-500/10 px-1.5 py-0.5 text-[9px] font-medium text-green-400">
+                      {discount.label}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
 

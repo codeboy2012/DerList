@@ -11,6 +11,7 @@
  */
 
 import { cn } from '@/utils/cn';
+import { formatDiscount } from '@/utils/format-discount';
 
 interface ProductPriceProps {
   /** Current/sale price */
@@ -49,10 +50,6 @@ export function ProductPrice({
   size = 'md',
 }: ProductPriceProps) {
   const hasDiscount = originalPrice != null && originalPrice > price;
-  const discountPercent = hasDiscount
-    ? Math.round(((originalPrice - price) / originalPrice) * 100)
-    : 0;
-  const savingsAmount = hasDiscount ? originalPrice - price : 0;
 
   const priceText = formatPrice(price, currency);
   const originalText = hasDiscount ? formatPrice(originalPrice, currency) : '';
@@ -99,14 +96,20 @@ export function ProductPrice({
       )}
 
       {/* Discount badge */}
-      {(hasDiscount || dealInfo) && (
-        <span className="mt-0.5 inline-flex items-center rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] leading-none font-semibold whitespace-nowrap text-emerald-400">
-          {dealInfo ||
-            (discountPercent >= 5
-              ? `${discountPercent}% OFF`
-              : `SAVE ${formatPrice(savingsAmount, currency)}`)}
-        </span>
-      )}
+      {(() => {
+        const discount = formatDiscount({
+          currentPrice: price,
+          originalPrice: originalPrice ?? undefined,
+          dealInfo,
+          currency,
+        });
+        if (!discount) return null;
+        return (
+          <span className="mt-0.5 inline-flex items-center rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] leading-none font-semibold whitespace-nowrap text-emerald-400">
+            {discount.label}
+          </span>
+        );
+      })()}
     </div>
   );
 }

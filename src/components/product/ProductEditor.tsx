@@ -44,6 +44,8 @@ export interface ProductEditorProps {
   draft?: ProductEditorDraft;
   /** Wishlist ID to save to */
   wishlistId: string;
+  /** Parent item ID for creating child items */
+  parentId?: string;
   /** Controls save behavior */
   mode: 'create' | 'edit';
   /** Item ID when editing */
@@ -63,6 +65,7 @@ export interface ProductEditorProps {
 export function ProductEditor({
   draft,
   wishlistId,
+  parentId,
   mode,
   itemId,
   onSave,
@@ -170,6 +173,7 @@ export function ProductEditor({
 
     const formData = new FormData();
     formData.set('wishlistId', wishlistId);
+    if (parentId) formData.set('parentId', parentId);
     formData.set('title', title.trim());
     if (description) formData.set('description', description);
     if (url) formData.set('url', url);

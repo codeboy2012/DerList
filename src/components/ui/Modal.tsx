@@ -60,8 +60,8 @@ export function Modal({
   const [mounted, setMounted] = useState(false);
 
   // Only render portal on client
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 

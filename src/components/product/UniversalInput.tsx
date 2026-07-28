@@ -70,10 +70,18 @@ type InputState =
 
 interface UniversalInputProps {
   wishlistId: string;
+  parentId?: string;
   className?: string;
+  /** Called after an item is successfully added (for closing modals, etc.) */
+  onItemAdded?: () => void;
 }
 
-export function UniversalInput({ wishlistId, className }: UniversalInputProps) {
+export function UniversalInput({
+  wishlistId,
+  parentId,
+  className,
+  onItemAdded,
+}: UniversalInputProps) {
   const [input, setInput] = useState('');
   const [state, setState] = useState<InputState>({ phase: 'input' });
 
@@ -141,6 +149,11 @@ export function UniversalInput({ wishlistId, className }: UniversalInputProps) {
     setInput('');
   };
 
+  const handleSaved = () => {
+    handleReset();
+    onItemAdded?.();
+  };
+
   const handleBatchAdd = async () => {
     if (state.phase !== 'batch') return;
 
@@ -154,6 +167,7 @@ export function UniversalInput({ wishlistId, className }: UniversalInputProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             wishlistId,
+            parentId,
             title: draft.title,
             url: draft.url,
             image: draft.image,
@@ -171,8 +185,8 @@ export function UniversalInput({ wishlistId, className }: UniversalInputProps) {
       }
 
       // Reset and reload
-      handleReset();
-      window.location.reload();
+      handleSaved();
+      if (!onItemAdded) window.location.reload();
     } catch {
       setState({ phase: 'error', message: 'Failed to add items. Please try again.' });
     }
@@ -220,8 +234,9 @@ export function UniversalInput({ wishlistId, className }: UniversalInputProps) {
         <ProductEditor
           draft={state.draft}
           wishlistId={wishlistId}
+          parentId={parentId}
           mode="create"
-          onSave={handleReset}
+          onSave={handleSaved}
           onCancel={handleReset}
         />
       </div>

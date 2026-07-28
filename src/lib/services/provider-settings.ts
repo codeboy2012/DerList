@@ -36,6 +36,20 @@ export interface TestResult {
   success: boolean;
   message: string;
   latency?: number;
+  details?: {
+    modelCount?: number;
+    quota?: string;
+    plan?: string;
+    rateLimitRemaining?: number;
+    version?: string;
+    region?: string;
+    httpStatus?: number;
+  };
+  error?: {
+    code?: string;
+    httpStatus?: number;
+    suggestion?: string;
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -147,16 +161,30 @@ export class ProviderSettingsService {
    * Add a new provider configuration.
    */
   async addProvider(input: ProviderConfigCreateInput): Promise<ProviderConfig> {
-    // Validate that the provider ID is known
+    // Validate against the full integration catalog or legacy list
+    const { getIntegrationEntry } = await import('@/lib/providers/registry/integration-catalog');
+    const catalogEntry = getIntegrationEntry(input.providerId);
     const providerInfo = AVAILABLE_PROVIDERS.find((p) => p.id === input.providerId);
-    if (!providerInfo) {
-      throw new Error(`Unknown provider: ${input.providerId}`);
+
+    if (!catalogEntry && !providerInfo) {
+      // Allow custom providers (ID starts with 'custom-')
+      if (!input.providerId.startsWith('custom-')) {
+        throw new Error(`Unknown provider: ${input.providerId}`);
+      }
     }
 
-    // Validate required fields
-    for (const field of providerInfo.requiredFields) {
-      if (!input.config[field.name]) {
-        throw new Error(`${field.label} is required.`);
+    // Validate required fields from catalog if available
+    if (catalogEntry) {
+      for (const field of catalogEntry.requiredConfig) {
+        if (!input.config[field.key]) {
+          throw new Error(`${field.label} is required.`);
+        }
+      }
+    } else if (providerInfo) {
+      for (const field of providerInfo.requiredFields) {
+        if (!input.config[field.name]) {
+          throw new Error(`${field.label} is required.`);
+        }
       }
     }
 
@@ -182,7 +210,8 @@ export class ProviderSettingsService {
   }
 
   /**
-   * Test a provider configuration by making a lightweight request.
+   * Test a provider configuration by making a real API request.
+   * Uses provider-specific test logic from the integration service.
    */
   async testProvider(id: string, userId: string): Promise<TestResult> {
     const config = await ProviderRepository.findById(id, userId);
@@ -190,6 +219,40 @@ export class ProviderSettingsService {
       return { success: false, message: 'Provider not found.' };
     }
 
+    try {
+      const { testProviderConnection } = await import('@/lib/services/integration-service');
+      const { getIntegrationEntry } = await import('@/lib/providers/registry/integration-catalog');
+      const entry = getIntegrationEntry(config.providerId);
+
+      if (entry) {
+        const result = await testProviderConnection(
+          entry,
+          config.config as Record<string, unknown>
+        );
+        await ProviderRepository.updateHealth(id, result.success, result.message);
+        return {
+          success: result.success,
+          message: result.message,
+          latency: result.latencyMs,
+          details: result.details,
+          error: result.error,
+        };
+      }
+
+      // Fallback: legacy test logic for unknown providers
+      return await this.legacyTestProvider(config, userId);
+    } catch (error) {
+      const rawMessage = error instanceof Error ? error.message : 'Test failed.';
+      const message = classifyProviderError(rawMessage);
+      await ProviderRepository.updateHealth(id, false, message);
+      return { success: false, message };
+    }
+  }
+
+  /**
+   * Legacy test logic (kept for backward compat with older provider types).
+   */
+  private async legacyTestProvider(config: ProviderConfig, userId: string): Promise<TestResult> {
     const start = Date.now();
 
     try {
@@ -214,7 +277,6 @@ export class ProviderSettingsService {
           break;
         }
         case 'PRICE': {
-          // Price providers need a real ASIN to test — just verify config is valid
           const provider = await this.providers.getPriceProvider(userId);
           if (!provider || !provider.isAvailable()) {
             return { success: false, message: 'Provider not available.' };
@@ -224,14 +286,12 @@ export class ProviderSettingsService {
       }
 
       const latency = Date.now() - start;
-      await ProviderRepository.updateHealth(id, true);
-
+      await ProviderRepository.updateHealth(config.id, true);
       return { success: true, message: 'Connected', latency };
     } catch (error) {
       const rawMessage = error instanceof Error ? error.message : 'Test failed.';
       const message = classifyProviderError(rawMessage);
-      await ProviderRepository.updateHealth(id, false, message);
-
+      await ProviderRepository.updateHealth(config.id, false, message);
       return { success: false, message };
     }
   }

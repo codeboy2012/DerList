@@ -55,6 +55,7 @@ export async function POST(request: Request) {
   }
 
   const productId = body.productId as string | undefined;
+  const parentId = body.parentId as string | undefined;
   const starPriority = Math.max(1, Math.min(4, Number(body.starPriority) || 1));
 
   // If productId is provided, check for duplicates
@@ -71,9 +72,9 @@ export async function POST(request: Request) {
     }
   }
 
-  // Get next position
+  // Get next position (within the same parent scope)
   const lastItem = await prisma.wishlistItem.findFirst({
-    where: { wishlistId },
+    where: { wishlistId, parentId: parentId ?? null },
     orderBy: { position: 'desc' },
     select: { position: true },
   });
@@ -84,6 +85,7 @@ export async function POST(request: Request) {
     data: {
       wishlistId,
       productId: productId || null,
+      parentId: parentId || null,
       title: title.trim(),
       description: (body.description as string) || null,
       url: (body.url as string) || null,

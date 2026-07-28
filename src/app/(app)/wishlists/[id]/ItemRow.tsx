@@ -9,10 +9,17 @@ import {
   Circle,
   Copy,
   ExternalLink,
+  FolderTree,
+  FolderUp,
+  MoreHorizontal,
   Package,
   Pencil,
+  Plus,
+  Trash2,
 } from 'lucide-react';
+import { cn } from '@/utils/cn';
 import { Button } from '@/components/ui/Button';
+import { Dropdown, type DropdownItem } from '@/components/ui/Dropdown';
 import { WishlistPriority } from '@/components/ui/WishlistPriority';
 import { ProductEditorDrawer } from '@/components/product/ProductEditorDrawer';
 import { ProductPrice } from '@/components/product/ProductPrice';
@@ -38,8 +45,15 @@ interface ItemRowProps {
     purchased: boolean;
     notes: string | null;
     category?: string | null;
+    parentId?: string | null;
   };
   wishlistId: string;
+  onAddChild?: (parentId: string) => void;
+  onContextAction?: (action: string, itemId: string) => void;
+  /** Whether this item has children (renders with bolder styling) */
+  isParent?: boolean;
+  /** Nesting depth (affects padding/scale) */
+  depth?: number;
 }
 
 // Retailer badge colors
@@ -66,7 +80,14 @@ function getRetailerStyle(retailer: string | null): string {
   return retailerStyles[key] ?? 'bg-surface text-muted-foreground border-border';
 }
 
-export function ItemRow({ item, wishlistId }: ItemRowProps) {
+export function ItemRow({
+  item,
+  wishlistId,
+  onAddChild,
+  onContextAction,
+  isParent,
+  depth = 0,
+}: ItemRowProps) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const router = useRouter();
@@ -83,11 +104,14 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
   return (
     <div className="flex flex-col gap-2">
       <article
-        className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 ${
+        className={cn(
+          'group relative overflow-hidden rounded-2xl border transition-all duration-200',
           item.purchased
             ? 'border-border/40 bg-card/50 opacity-75'
-            : 'border-border bg-card hover:border-border-hover hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/10'
-        }`}
+            : 'border-border bg-card hover:border-border-hover hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/5',
+          depth > 0 && 'rounded-xl',
+          depth > 1 && 'rounded-lg'
+        )}
       >
         <div className="flex gap-0">
           {/* Image section */}
@@ -120,10 +144,17 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 overflow-hidden">
                 <h3
-                  className={`line-clamp-2 text-sm leading-snug font-semibold sm:text-base ${
-                    item.purchased ? 'text-muted-foreground line-through' : 'text-foreground'
-                  }`}
+                  className={cn(
+                    'line-clamp-2 text-sm leading-snug font-semibold sm:text-base',
+                    item.purchased && 'text-muted-foreground line-through',
+                    !item.purchased && 'text-foreground',
+                    isParent && !item.purchased && 'font-bold',
+                    depth > 0 && 'text-[13px] sm:text-sm'
+                  )}
                 >
+                  {isParent && (
+                    <FolderTree className="text-accent/60 -mt-0.5 mr-1.5 inline h-3.5 w-3.5" />
+                  )}
                   {item.title}
                 </h3>
 
@@ -230,6 +261,58 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
               >
                 <Pencil className="h-3 w-3" /> Edit
               </Button>
+
+              {/* Context Menu (three-dot) */}
+              <Dropdown
+                trigger={
+                  <span className="text-muted-foreground hover:text-foreground hover:bg-surface inline-flex h-7 w-7 items-center justify-center rounded-lg transition-colors">
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                  </span>
+                }
+                align="end"
+                label="Item actions"
+                items={[
+                  ...(onAddChild
+                    ? [
+                        {
+                          label: 'Add Child',
+                          value: 'add-child',
+                          icon: <Plus className="h-3.5 w-3.5" />,
+                        },
+                      ]
+                    : []),
+                  { label: 'Rename', value: 'edit', icon: <Pencil className="h-3.5 w-3.5" /> },
+                  {
+                    label: 'Duplicate Branch',
+                    value: 'duplicate-branch',
+                    icon: <Copy className="h-3.5 w-3.5" />,
+                  },
+                  ...(item.parentId
+                    ? [
+                        {
+                          label: 'Convert to Root',
+                          value: 'convert-to-root',
+                          icon: <FolderUp className="h-3.5 w-3.5" />,
+                        },
+                      ]
+                    : []),
+                  {
+                    label: 'Delete',
+                    value: 'delete-branch',
+                    destructive: true,
+                    icon: <Trash2 className="h-3.5 w-3.5" />,
+                  },
+                ]}
+                onSelect={(action) => {
+                  if (action === 'add-child' && onAddChild) {
+                    onAddChild(item.id);
+                  } else if (action === 'edit') {
+                    setEditing(true);
+                  } else if (onContextAction) {
+                    onContextAction(action, item.id);
+                  }
+                }}
+              />
             </div>
           </div>
         </div>

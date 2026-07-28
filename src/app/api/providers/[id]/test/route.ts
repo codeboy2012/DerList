@@ -1,5 +1,8 @@
 /**
- * POST /api/providers/[id]/test — Test a provider configuration.
+ * POST /api/providers/[id]/test — Test a configured provider.
+ *
+ * Makes a real API call, measures latency, validates auth,
+ * and returns detailed results (model count, quota, etc.)
  */
 
 import { NextResponse } from 'next/server';

@@ -1,11 +1,15 @@
 /**
  * DELETE /api/providers/[id] — Delete a provider configuration.
  * PATCH  /api/providers/[id] — Update a provider configuration.
+ *
+ * PATCH supports updating: name, config (re-encrypted), enabled, priority, mode.
+ * Secrets are never returned in responses.
  */
 
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { createServices } from '@/lib/services/create';
+import { updateIntegration } from '@/lib/services/integration-service';
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -36,6 +40,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     enabled?: boolean;
     priority?: number;
     config?: Record<string, string>;
+    mode?: 'hosted' | 'personal';
   };
   try {
     body = await request.json();
@@ -44,8 +49,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   try {
-    const { providerSettings } = createServices();
-    const updated = await providerSettings.updateProvider(id, user.id, body);
+    const updated = await updateIntegration(id, user.id, body);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { config: _config, ...safe } = updated;
     return NextResponse.json({ success: true, provider: safe });
