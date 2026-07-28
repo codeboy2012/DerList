@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Bot, DollarSign, Eye, Key, Settings, ShoppingCart, User } from 'lucide-react';
+import { Key, Settings, User } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 type NavItem = {

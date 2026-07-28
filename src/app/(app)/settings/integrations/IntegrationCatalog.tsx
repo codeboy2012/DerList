@@ -28,7 +28,6 @@ import {
   type IntegrationCatalogEntry,
   type IntegrationCategory,
 } from '@/lib/providers/registry/integration-types';
-import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { CustomApiBuilder } from './CustomApiBuilder';
