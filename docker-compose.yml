@@ -2,12 +2,14 @@
 # DerList — One-Command Production Deployment
 #
 # Usage:
+#   git clone https://github.com/codeboy2012/DerList
+#   cd DerList
 #   cp .env.example .env   # fill in secrets
 #   docker compose up -d   # done
 #
 # Everything is automatic:
 #   - PostgreSQL starts and becomes healthy
-#   - App waits for DB, runs migrations, generates Prisma Client, then starts
+#   - App waits for DB, runs migrations, seeds if empty, then starts
 #   - Caddy provisions HTTPS certificates and proxies traffic
 #
 # No manual commands required. Ever.
@@ -18,6 +20,7 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    env_file: .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-derlist}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
@@ -32,41 +35,44 @@ services:
       start_period: 10s
     networks:
       - derlist
-    # Not exposed to host by default — access via internal network only.
-    # Uncomment below for local debugging:
-    # ports:
-    #   - "5432:5432"
     logging:
       driver: json-file
       options:
         max-size: '10m'
         max-file: '5'
+    # Uncomment to expose PostgreSQL to the host for debugging:
+    # ports:
+    #   - "5432:5432"
 
   # ─── DerList Application ────────────────────────────────────────────────────
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    init: true
     restart: unless-stopped
     stop_grace_period: 30s
+    env_file: .env
+    environment:
+      # DATABASE_URL is constructed from the Postgres vars — do not set it in .env
+      DATABASE_URL: postgresql://${POSTGRES_USER:-derlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-derlist}
+      NODE_ENV: production
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-derlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-derlist}
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
-      AUTH_SECRET: ${AUTH_SECRET:-}
-      PROVIDER_ENCRYPTION_KEY: ${PROVIDER_ENCRYPTION_KEY:-}
-      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
-      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      NODE_ENV: production
     ports:
       - '${APP_PORT:-3000}:3000'
     networks:
       - derlist
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     logging:
       driver: json-file
       options:
@@ -77,6 +83,7 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    env_file: .env
     depends_on:
       app:
         condition: service_healthy
@@ -84,8 +91,6 @@ services:
       - '80:80'
       - '443:443'
       - '443:443/udp'
-    environment:
-      DOMAIN: ${DOMAIN:-localhost}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -98,7 +103,11 @@ services:
         max-size: '10m'
         max-file: '5'
 
-  # ─── Optional: Redis (uncomment when needed) ────────────────────────────────
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Optional Services — uncomment to enable
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # ─── Redis ──────────────────────────────────────────────────────────────────
   # redis:
   #   image: redis:7-alpine
   #   restart: unless-stopped
@@ -118,7 +127,7 @@ services:
   #       max-size: "10m"
   #       max-file: "5"
 
-  # ─── Optional: Meilisearch (uncomment when needed) ──────────────────────────
+  # ─── Meilisearch ────────────────────────────────────────────────────────────
   # meilisearch:
   #   image: getmeili/meilisearch:v1.11
   #   restart: unless-stopped
@@ -140,7 +149,7 @@ services:
   #       max-size: "10m"
   #       max-file: "5"
 
-  # ─── Optional: Ollama (uncomment for local AI) ──────────────────────────────
+  # ─── Ollama — Local AI ──────────────────────────────────────────────────────
   # ollama:
   #   image: ollama/ollama:latest
   #   restart: unless-stopped
@@ -154,7 +163,7 @@ services:
   #       max-size: "10m"
   #       max-file: "5"
 
-  # ─── Optional: Watchtower (auto-update containers) ──────────────────────────
+  # ─── Watchtower — Automatic Container Updates ───────────────────────────────
   # watchtower:
   #   image: containrrr/watchtower
   #   restart: unless-stopped
@@ -171,7 +180,28 @@ services:
   #       max-size: "10m"
   #       max-file: "5"
 
-# ─── Volumes ───────────────────────────────────────────────────────────────────
+  # ─── Backups — Automated PostgreSQL Backups ─────────────────────────────────
+  # backup:
+  #   image: prodrigestivill/postgres-backup-local
+  #   restart: unless-stopped
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   environment:
+  #     POSTGRES_HOST: db
+  #     POSTGRES_DB: ${POSTGRES_DB:-derlist}
+  #     POSTGRES_USER: ${POSTGRES_USER:-derlist}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #     SCHEDULE: "@daily"
+  #     BACKUP_KEEP_DAYS: 7
+  #     BACKUP_KEEP_WEEKS: 4
+  #     BACKUP_KEEP_MONTHS: 6
+  #   volumes:
+  #     - ./backups:/backups
+  #   networks:
+  #     - derlist
+
+# ─── Volumes ──────────────────────────────────────────────────────────────────
 volumes:
   pgdata:
   caddy_data:

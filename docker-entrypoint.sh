@@ -1,116 +1,166 @@
 #!/bin/sh
 # ─────────────────────────────────────────────────────────────────────────────
-# DerList Docker Entrypoint
+# DerList — Docker Entrypoint
 #
-# Handles the full startup sequence:
-#   1. Wait for PostgreSQL to be ready
-#   2. Run Prisma migrations (creates tables on first run)
-#   3. Generate Prisma Client if needed
-#   4. Start the Next.js application
+# Startup sequence:
+#   1. Validate required environment variables
+#   2. Wait for PostgreSQL to accept connections
+#   3. Run `prisma migrate deploy` (idempotent — safe on every start)
+#   4. Generate Prisma Client if the binary is missing
+#   5. Seed the database only when the users table is empty
+#   6. Start the Next.js application
 #
-# This script ensures `docker compose up -d` is all you ever need.
+# `docker compose up -d` is all you ever need.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
 
-# ─── Helpers ──────────────────────────────────────────────────────────────────
+# ── Logging helpers ───────────────────────────────────────────────────────────
 
-log() {
-  echo "[derlist] $(date '+%H:%M:%S') $1"
+log()     { printf '[derlist] %s  %s\n'   "$(date '+%H:%M:%S')" "$1"; }
+success() { printf '[derlist] %s  ✓ %s\n' "$(date '+%H:%M:%S')" "$1"; }
+warn()    { printf '[derlist] %s  ⚠ %s\n' "$(date '+%H:%M:%S')" "$1" >&2; }
+die()     { printf '[derlist] %s  ✗ %s\n' "$(date '+%H:%M:%S')" "$1" >&2; exit 1; }
+
+# ── 1. Validate required environment variables ────────────────────────────────
+
+validate_env() {
+  MISSING=""
+
+  for VAR in AUTH_SECRET PROVIDER_ENCRYPTION_KEY DATABASE_URL; do
+    eval VAL=\$$VAR
+    if [ -z "$VAL" ]; then
+      MISSING="$MISSING\n  • $VAR"
+    fi
+  done
+
+  if [ -n "$MISSING" ]; then
+    echo ""
+    echo "  ╔══════════════════════════════════════════════════════════╗"
+    echo "  ║           DerList — Missing Required Variables           ║"
+    echo "  ╠══════════════════════════════════════════════════════════╣"
+    printf "  ║  The following variables must be set in your .env file: ║\n"
+    printf "%b" "$MISSING" | while IFS= read -r line; do
+      printf "  ║  %-56s ║\n" "$line"
+    done
+    echo "  ║                                                          ║"
+    echo "  ║  Run:  cp .env.example .env  and fill in the values.    ║"
+    echo "  ╚══════════════════════════════════════════════════════════╝"
+    echo ""
+    exit 1
+  fi
+
+  success "Environment validated"
 }
 
-success() {
-  echo "[derlist] $(date '+%H:%M:%S') ✓ $1"
-}
-
-error() {
-  echo "[derlist] $(date '+%H:%M:%S') ✗ $1" >&2
-}
-
-# ─── Wait for Database ────────────────────────────────────────────────────────
+# ── 2. Wait for PostgreSQL ────────────────────────────────────────────────────
 
 wait_for_db() {
   log "Waiting for PostgreSQL..."
 
   MAX_RETRIES=30
-  RETRY_INTERVAL=2
-  RETRIES=0
+  INTERVAL=2
+  ATTEMPT=0
 
-  while [ $RETRIES -lt $MAX_RETRIES ]; do
+  while [ "$ATTEMPT" -lt "$MAX_RETRIES" ]; do
     if node -e "
       const { Client } = require('pg');
       const c = new Client({ connectionString: process.env.DATABASE_URL });
-      c.connect().then(() => { c.end(); process.exit(0); }).catch(() => process.exit(1));
+      c.connect()
+        .then(() => { c.end(); process.exit(0); })
+        .catch(() => process.exit(1));
     " 2>/dev/null; then
-      success "Database ready"
+      success "PostgreSQL connected"
       return 0
     fi
 
-    RETRIES=$((RETRIES + 1))
-    sleep $RETRY_INTERVAL
+    ATTEMPT=$((ATTEMPT + 1))
+    log "  PostgreSQL not ready (attempt ${ATTEMPT}/${MAX_RETRIES}) — retrying in ${INTERVAL}s..."
+    sleep "$INTERVAL"
   done
 
-  error "Database not reachable after $((MAX_RETRIES * RETRY_INTERVAL))s"
-  exit 1
+  die "PostgreSQL did not become ready after $((MAX_RETRIES * INTERVAL))s — aborting"
 }
 
-# ─── Run Migrations ──────────────────────────────────────────────────────────
+# ── 3. Run Prisma migrations ──────────────────────────────────────────────────
 
 run_migrations() {
   log "Running Prisma migrations..."
 
   if npx prisma migrate deploy 2>&1; then
-    success "Database migrated"
+    success "Migrations applied"
   else
-    error "Migration failed — attempting db push as fallback..."
-    if npx prisma db push --skip-generate 2>&1; then
-      success "Database schema pushed"
-    else
-      error "Database initialization failed"
-      exit 1
-    fi
+    die "prisma migrate deploy failed — check your DATABASE_URL and migration files"
   fi
 }
 
-# ─── Generate Prisma Client ──────────────────────────────────────────────────
+# ── 4. Generate Prisma Client if missing ─────────────────────────────────────
 
-generate_client() {
-  # Check if Prisma Client is already generated
-  if [ -d "node_modules/.prisma/client" ] && [ -f "node_modules/.prisma/client/index.js" ]; then
-    success "Prisma Client already generated"
+ensure_prisma_client() {
+  if [ -f "node_modules/.prisma/client/index.js" ]; then
+    success "Prisma client ready"
     return 0
   fi
 
-  log "Generating Prisma Client..."
+  log "Generating Prisma client..."
   if npx prisma generate 2>&1; then
-    success "Prisma Client generated"
+    success "Prisma client generated"
   else
-    error "Prisma Client generation failed"
-    exit 1
+    die "prisma generate failed"
   fi
 }
 
-# ─── Main ─────────────────────────────────────────────────────────────────────
+# ── 5. Seed only when the users table is empty ────────────────────────────────
+
+maybe_seed() {
+  # Seeding is only possible when admin credentials are provided
+  if [ -z "$ADMIN_EMAIL" ] || [ -z "$ADMIN_PASSWORD" ] || [ -z "$ADMIN_USERNAME" ]; then
+    warn "ADMIN_EMAIL / ADMIN_PASSWORD / ADMIN_USERNAME not set — skipping seed"
+    return 0
+  fi
+
+  log "Checking whether seed is needed..."
+
+  USER_COUNT=$(node -e "
+    const { Client } = require('pg');
+    const c = new Client({ connectionString: process.env.DATABASE_URL });
+    c.connect()
+      .then(() => c.query('SELECT COUNT(*) FROM users'))
+      .then(r => { console.log(r.rows[0].count); c.end(); process.exit(0); })
+      .catch(err => { console.error(err.message); process.exit(1); });
+  " 2>/dev/null)
+
+  if [ "$USER_COUNT" = "0" ]; then
+    log "No users found — seeding initial admin account..."
+    if npx prisma db seed 2>&1; then
+      success "Admin account created"
+    else
+      die "Seed failed — check ADMIN_EMAIL / ADMIN_PASSWORD / ADMIN_USERNAME in .env"
+    fi
+  else
+    success "Admin exists — skipping seed"
+  fi
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 main() {
-  log "Starting DerList..."
+  echo ""
+  echo "  ╔══════════════════════════════════════════════════════════╗"
+  echo "  ║                  Starting DerList                        ║"
+  echo "  ╚══════════════════════════════════════════════════════════╝"
   echo ""
 
-  # Step 1: Wait for database
+  validate_env
   wait_for_db
-
-  # Step 2: Run migrations (idempotent — safe to run every startup)
   run_migrations
-
-  # Step 3: Generate Prisma Client if needed
-  generate_client
+  ensure_prisma_client
+  maybe_seed
 
   echo ""
-  log "Starting Next.js application..."
-  success "Ready"
+  success "Starting DerList..."
   echo ""
 
-  # Step 4: Start the application
   exec node server.js
 }
 
