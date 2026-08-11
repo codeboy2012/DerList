@@ -55,60 +55,13 @@ interface AvailableProvider {
   name: string;
   category: string;
   description: string;
-  fields: { name: string; label: string; type: string; placeholder?: string }[];
+  fields: { name: string; label: string; type: string; placeholder?: string; required?: boolean }[];
+  free?: boolean;
+  freeTier?: string;
 }
 
-// Static provider definitions (matches ProviderSettingsService.AVAILABLE_PROVIDERS)
-const AVAILABLE: AvailableProvider[] = [
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    category: 'AI',
-    description: 'Access to 100+ AI models including GPT-4, Claude, Llama. Free tier available.',
-    fields: [
-      { name: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk-or-...' },
-      {
-        name: 'model',
-        label: 'Default Model (optional)',
-        type: 'text',
-        placeholder: 'Auto (Free Recommended) — leave blank for free models',
-      },
-    ],
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    category: 'AI',
-    description: 'GPT-4o, GPT-4o-mini for chat and product identification.',
-    fields: [
-      { name: 'apiKey', label: 'API Key', type: 'password', placeholder: 'sk-...' },
-      {
-        name: 'model',
-        label: 'Default Model (optional)',
-        type: 'text',
-        placeholder: 'gpt-4o-mini',
-      },
-    ],
-  },
-  {
-    id: 'serpapi',
-    name: 'SerpAPI',
-    category: 'SHOPPING_SEARCH',
-    description: 'Google Shopping search for product discovery and price comparison.',
-    fields: [
-      { name: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your SerpAPI key' },
-    ],
-  },
-  {
-    id: 'keepa',
-    name: 'Keepa',
-    category: 'PRICE',
-    description: 'Amazon price history and price drop alerts.',
-    fields: [
-      { name: 'apiKey', label: 'API Key', type: 'password', placeholder: 'Your Keepa API key' },
-    ],
-  },
-];
+// Provider list is passed from the server component (from the authoritative catalog)
+// No hard-coded provider definitions here.
 
 type TabId = 'AI' | 'SHOPPING_SEARCH' | 'PRICE';
 
@@ -163,9 +116,10 @@ const PROVIDER_BRAND: Record<string, { icon: typeof Bot; color: string; gradient
 
 interface ProviderSettingsProps {
   providers: ConfiguredProvider[];
+  availableProviders: AvailableProvider[];
 }
 
-export function ProviderSettings({ providers: initialProviders }: ProviderSettingsProps) {
+export function ProviderSettings({ providers: initialProviders, availableProviders }: ProviderSettingsProps) {
   const [activeTab, setActiveTab] = useState<TabId>('AI');
   const [providers, setProviders] = useState(initialProviders);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
@@ -177,7 +131,7 @@ export function ProviderSettings({ providers: initialProviders }: ProviderSettin
   const toast = useToast();
 
   const tabProviders = providers.filter((p) => p.category === activeTab);
-  const tabAvailable = AVAILABLE.filter((p) => p.category === activeTab);
+  const tabAvailable = availableProviders.filter((p) => p.category === activeTab);
   const activeTabMeta = TABS.find((t) => t.id === activeTab)!;
 
   // ─── Actions ───
@@ -228,7 +182,7 @@ export function ProviderSettings({ providers: initialProviders }: ProviderSettin
 
   const handleAdd = useCallback(
     async (providerId: string, config: Record<string, string>) => {
-      const providerDef = AVAILABLE.find((p) => p.id === providerId);
+      const providerDef = availableProviders.find((p) => p.id === providerId);
       if (!providerDef) return;
 
       const res = await fetch('/api/providers', {
@@ -251,7 +205,7 @@ export function ProviderSettings({ providers: initialProviders }: ProviderSettin
         throw new Error(data.error || 'Failed to add provider');
       }
     },
-    [addModal, toast]
+    [addModal, toast, availableProviders]
   );
 
   // ─── Render ───
@@ -553,9 +507,13 @@ function AddProviderCard({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!config.apiKey?.trim()) {
-      setError('API Key is required.');
-      return;
+    // Validate required fields
+    const requiredFields = provider.fields.filter((f) => f.required !== false);
+    for (const field of requiredFields) {
+      if (!config[field.name]?.trim()) {
+        setError(`${field.label} is required.`);
+        return;
+      }
     }
 
     setIsSubmitting(true);

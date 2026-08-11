@@ -7,6 +7,7 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { AI_PROVIDERS, SEARCH_PROVIDERS, PRICE_PROVIDERS } from '@/lib/providers/registry/catalog';
 import { FeatureRouting } from './FeatureRouting';
 import { ProviderSettings } from './ProviderSettings';
 
@@ -45,6 +46,33 @@ export default async function ProvidersPage() {
   const config = (dbUser?.aiProviderConfig as Record<string, unknown>) ?? {};
   const routing = (config.featureRouting as Record<string, string>) ?? {};
 
+  // Build available providers list from the authoritative catalog
+  // Map catalog entries to the shape the client component expects
+  const availableProviders = [...AI_PROVIDERS, ...SEARCH_PROVIDERS, ...PRICE_PROVIDERS].map((entry) => ({
+    id: entry.id,
+    name: entry.name,
+    category: entry.category === 'ai' ? 'AI' : entry.category === 'search' ? 'SHOPPING_SEARCH' : 'PRICE',
+    description: entry.description,
+    fields: [
+      ...entry.requiredConfig.map((f) => ({
+        name: f.key,
+        label: f.label,
+        type: f.type,
+        placeholder: f.placeholder,
+        required: true,
+      })),
+      ...(entry.optionalConfig ?? []).map((f) => ({
+        name: f.key,
+        label: f.label,
+        type: f.type === 'select' ? 'text' : f.type,
+        placeholder: f.placeholder ?? (f.options ? f.options[0] : undefined),
+        required: false,
+      })),
+    ],
+    free: entry.free,
+    freeTier: entry.freeTier,
+  }));
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -67,7 +95,7 @@ export default async function ProvidersPage() {
       />
 
       {/* Provider Management */}
-      <ProviderSettings providers={serializedProviders} />
+      <ProviderSettings providers={serializedProviders} availableProviders={availableProviders} />
     </div>
   );
 }
