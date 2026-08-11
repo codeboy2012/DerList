@@ -7,6 +7,9 @@
  */
 
 import { ProviderRepository, type ProviderConfig } from '@/lib/repositories';
+import { createAnthropicProvider } from './anthropic';
+import { createGoogleGeminiProvider } from './google-gemini';
+import { createGoogleVertexProvider } from './google-vertex';
 import { createKeepaProvider } from './keepa';
 import { createOpenRouterProvider } from './openrouter';
 import { createSerpApiProvider } from './serpapi';
@@ -23,31 +26,117 @@ function createProviderFromConfig(
   config: ProviderConfig
 ): AIProvider | SearchProvider | PriceProvider | null {
   switch (config.providerId) {
-    // AI Providers
+    // ── AI Providers ──
+
     case 'openrouter':
       return createOpenRouterProvider(config.config);
+
     case 'openai':
-      // OpenAI is compatible with OpenRouter format with different base URL
+      // OpenAI is OpenAI-compatible — use OpenRouter provider with OpenAI base URL
       return createOpenRouterProvider({
         ...config.config,
-        baseUrl: 'https://api.openai.com/v1/chat/completions',
+        baseUrl: (config.config.baseUrl as string) || 'https://api.openai.com/v1/chat/completions',
       });
-    case 'anthropic':
-      // Anthropic uses a different format — would need its own class
-      // For now, route through OpenRouter which supports Anthropic models
-      return createOpenRouterProvider(config.config);
 
-    // Search Providers
+    case 'anthropic':
+      return createAnthropicProvider(config.config);
+
+    case 'google':
+      return createGoogleGeminiProvider(config.config);
+
+    case 'google-vertex':
+      return createGoogleVertexProvider(config.config);
+
+    case 'xai':
+    case 'mistral':
+    case 'deepseek':
+    case 'groq':
+    case 'cerebras':
+    case 'together':
+    case 'fireworks':
+    case 'perplexity':
+      // These providers use OpenAI-compatible chat/completions API
+      return createOpenRouterProvider({
+        apiKey: config.config.apiKey as string,
+        model: config.config.model as string,
+        baseUrl: getOpenAICompatibleBaseUrl(config.providerId, config.config),
+      });
+
+    case 'ollama':
+    case 'lmstudio':
+      // Local providers — OpenAI-compatible with custom base URL, no API key required
+      return createOpenRouterProvider({
+        apiKey: (config.config.apiKey as string) || 'not-needed',
+        model: config.config.model as string,
+        baseUrl: getLocalProviderUrl(config.providerId, config.config),
+      });
+
+    case 'azure-openai':
+      // Azure uses OpenAI-compatible format with a specific endpoint
+      return createOpenRouterProvider({
+        apiKey: config.config.apiKey as string,
+        model: config.config.model as string,
+        baseUrl: `${config.config.baseUrl}/openai/deployments/${config.config.model || 'gpt-4o'}/chat/completions?api-version=2024-02-01`,
+      });
+
+    // ── Search Providers ──
+
     case 'serpapi':
       return createSerpApiProvider(config.config);
 
-    // Price Providers
+    // ── Price Providers ──
+
     case 'keepa':
       return createKeepaProvider(config.config);
 
     default:
       return null;
   }
+}
+
+/**
+ * Get the base URL for OpenAI-compatible providers.
+ */
+function getOpenAICompatibleBaseUrl(
+  providerId: string,
+  config: Record<string, unknown>
+): string {
+  // Allow custom base URL override
+  if (config.baseUrl && typeof config.baseUrl === 'string') {
+    return config.baseUrl;
+  }
+
+  const urls: Record<string, string> = {
+    xai: 'https://api.x.ai/v1/chat/completions',
+    mistral: 'https://api.mistral.ai/v1/chat/completions',
+    deepseek: 'https://api.deepseek.com/chat/completions',
+    groq: 'https://api.groq.com/openai/v1/chat/completions',
+    cerebras: 'https://api.cerebras.ai/v1/chat/completions',
+    together: 'https://api.together.xyz/v1/chat/completions',
+    fireworks: 'https://api.fireworks.ai/inference/v1/chat/completions',
+    perplexity: 'https://api.perplexity.ai/chat/completions',
+  };
+
+  return urls[providerId] ?? 'https://api.openai.com/v1/chat/completions';
+}
+
+/**
+ * Get the base URL for local inference providers.
+ */
+function getLocalProviderUrl(
+  providerId: string,
+  config: Record<string, unknown>
+): string {
+  if (config.baseUrl && typeof config.baseUrl === 'string') {
+    return config.baseUrl;
+  }
+
+  const defaults: Record<string, string> = {
+    ollama: 'http://localhost:11434/v1/chat/completions',
+    lmstudio: 'http://localhost:1234/v1/chat/completions',
+  };
+
+  return defaults[providerId] ?? 'http://localhost:11434/v1/chat/completions';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -147,15 +147,16 @@ export class ProviderSettingsService {
    * Add a new provider configuration.
    */
   async addProvider(input: ProviderConfigCreateInput): Promise<ProviderConfig> {
-    // Validate that the provider ID is known
-    const providerInfo = AVAILABLE_PROVIDERS.find((p) => p.id === input.providerId);
-    if (!providerInfo) {
+    // Validate that the provider ID is recognized in the catalog
+    const { getCatalogEntry } = await import('@/lib/providers/registry/catalog');
+    const catalogEntry = getCatalogEntry(input.providerId);
+    if (!catalogEntry) {
       throw new Error(`Unknown provider: ${input.providerId}`);
     }
 
-    // Validate required fields
-    for (const field of providerInfo.requiredFields) {
-      if (!input.config[field.name]) {
+    // Validate required fields from catalog
+    for (const field of catalogEntry.requiredConfig) {
+      if (!input.config[field.key]) {
         throw new Error(`${field.label} is required.`);
       }
     }

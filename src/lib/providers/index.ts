@@ -22,6 +22,9 @@ export type {
 
 // Implementations
 export { OpenRouterProvider, createOpenRouterProvider } from './openrouter';
+export { AnthropicProvider, createAnthropicProvider } from './anthropic';
+export { GoogleGeminiProvider, createGoogleGeminiProvider } from './google-gemini';
+export { GoogleVertexProvider, createGoogleVertexProvider } from './google-vertex';
 export { SerpApiProvider, createSerpApiProvider } from './serpapi';
 export { KeepaProvider, createKeepaProvider } from './keepa';
 

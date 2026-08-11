@@ -18,7 +18,7 @@ export interface CatalogEntry {
   optionalConfig?: {
     key: string;
     label: string;
-    type: 'text' | 'select';
+    type: 'text' | 'select' | 'password';
     options?: string[];
     placeholder?: string;
   }[];
@@ -104,7 +104,7 @@ export const AI_PROVIDERS: CatalogEntry[] = [
     id: 'google',
     name: 'Google Gemini',
     category: 'ai',
-    description: 'Gemini 2.5 Pro/Flash multimodal.',
+    description: 'Gemini 2.5 Pro/Flash multimodal via Google AI Studio.',
     website: 'https://ai.google.dev',
     capabilities: {
       chat: true,
@@ -120,6 +120,30 @@ export const AI_PROVIDERS: CatalogEntry[] = [
     ],
     free: true,
     freeTier: 'Free tier with rate limits',
+  },
+  {
+    id: 'google-vertex',
+    name: 'Google Vertex AI',
+    category: 'ai',
+    description: 'Google Cloud Vertex AI for Gemini and other supported Google AI models.',
+    website: 'https://cloud.google.com/vertex-ai',
+    capabilities: {
+      chat: true,
+      streaming: true,
+      vision: true,
+      functionCalling: true,
+      jsonMode: true,
+      embeddings: true,
+    },
+    requiredConfig: [
+      { key: 'projectId', label: 'Google Cloud Project ID', type: 'text', placeholder: 'my-project-id' },
+      { key: 'region', label: 'Region', type: 'text', placeholder: 'us-central1' },
+    ],
+    optionalConfig: [
+      { key: 'apiKey', label: 'API Key (if supported)', type: 'password', placeholder: 'AIza...' },
+      { key: 'serviceAccountJson', label: 'Service Account JSON (alternative auth)', type: 'password', placeholder: '{"type":"service_account",...}' },
+      { key: 'model', label: 'Model', type: 'text', placeholder: 'gemini-2.5-flash' },
+    ],
   },
   {
     id: 'xai',
