@@ -115,8 +115,8 @@ export async function loginAction(
     data: { lastLoginAt: new Date() },
   });
 
-  // Redirect to admin dashboard
-  redirect('/admin');
+  // Redirect to dashboard
+  redirect('/dashboard');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

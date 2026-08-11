@@ -6,6 +6,9 @@ import { siteConfig } from '@/lib/site-config';
 
 import { AdminNav } from './AdminNav';
 
+// All admin pages require database access — prevent static generation at build time
+export const dynamic = 'force-dynamic';
+
 interface AdminLayoutProps {
   children: ReactNode;
 }

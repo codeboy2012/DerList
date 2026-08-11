@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';

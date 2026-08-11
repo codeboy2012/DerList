@@ -6,9 +6,15 @@
 #   docker compose up -d
 #
 # Services:
-#   - app: Next.js application (port 3000)
-#   - db: PostgreSQL 16 (port 5432)
-#   - caddy: Reverse proxy with automatic HTTPS (ports 80, 443)
+#   - db:    PostgreSQL 16 database
+#   - app:   Next.js application (auto-migrates on startup)
+#   - caddy: Reverse proxy with automatic HTTPS (optional, remove if unneeded)
+#
+# The app service automatically:
+#   1. Waits for PostgreSQL to be healthy
+#   2. Runs pending Prisma migrations
+#   3. Seeds the database with an owner account (first run only)
+#   4. Starts the Next.js server
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
@@ -23,12 +29,13 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-derlist}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    ports:
-      - "5432:5432"
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-derlist} -d ${POSTGRES_DB:-derlist}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      - derlist
 
   # ── DerList Application ──
   app:
@@ -40,39 +47,41 @@ services:
       db:
         condition: service_healthy
     environment:
+      # Database
       DATABASE_URL: postgresql://${POSTGRES_USER:-derlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-derlist}
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-https://derlist.dpdns.org}
+      # Application
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NODE_ENV: production
+      # Authentication
+      AUTH_SECRET: ${AUTH_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      NODE_ENV: production
+      # Provider encryption
+      PROVIDER_ENCRYPTION_KEY: ${PROVIDER_ENCRYPTION_KEY:-}
+      # Admin seed (only used on first run)
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-}
+      ADMIN_DISPLAY_NAME: ${ADMIN_DISPLAY_NAME:-}
     ports:
-      - "3000:3000"
+      - "${APP_PORT:-3000}:3000"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
       interval: 30s
       timeout: 5s
-      start_period: 15s
+      start_period: 45s
       retries: 3
+    networks:
+      - derlist
 
-  # ── Database Migrations (run once) ──
-  migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-derlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-derlist}
-    command: npx prisma migrate deploy
-    restart: "no"
-
-  # ── Caddy Reverse Proxy ──
+  # ── Caddy Reverse Proxy (optional — remove if using your own reverse proxy) ──
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    profiles:
+      - with-caddy
     depends_on:
       app:
         condition: service_healthy
@@ -84,8 +93,14 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    networks:
+      - derlist
 
 volumes:
   pgdata:
   caddy_data:
   caddy_config:
+
+networks:
+  derlist:
+    driver: bridge
