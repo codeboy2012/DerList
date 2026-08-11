@@ -82,7 +82,7 @@ data/
 runtime/
 tmp/
 temp/
-uploads/
+/uploads/
 backups/
 
 # Local database files
