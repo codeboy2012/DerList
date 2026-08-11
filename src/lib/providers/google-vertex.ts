@@ -4,16 +4,13 @@
  * Supports Gemini models through Google Cloud Vertex AI.
  *
  * Authentication methods:
- * 1. API Key — Supported for Vertex AI REST endpoints in certain regions.
- *    Simplest setup: just provide an API key and project/region.
- * 2. Service Account — JSON key file contents stored encrypted.
- *    Required for production/private endpoints without API key support.
+ * 1. API Key (Express Mode) — Uses the simplified Express Mode endpoint:
+ *    https://aiplatform.googleapis.com/v1/publishers/google/models/{MODEL}:generateContent?key={KEY}
+ *    No project/location needed in the path.
  *
- * Endpoint format:
- *   https://{REGION}-aiplatform.googleapis.com/v1/projects/{PROJECT}/locations/{REGION}/publishers/google/models/{MODEL}:generateContent
- *
- * For API Key auth, the key is appended as ?key={API_KEY}
- * For Service Account auth, an OAuth2 access token is obtained from the SA credentials.
+ * 2. Service Account (Standard Mode) — Uses the full Vertex AI endpoint:
+ *    Regional: https://{REGION}-aiplatform.googleapis.com/v1/projects/{PROJECT}/locations/{REGION}/publishers/google/models/{MODEL}:generateContent
+ *    Global:   https://aiplatform.googleapis.com/v1/projects/{PROJECT}/locations/global/publishers/google/models/{MODEL}:generateContent
  */
 
 import type { AIOptions, AIProvider, AIResponse, Message } from './types';
@@ -61,7 +58,6 @@ async function getAccessTokenFromServiceAccount(saJson: string): Promise<string>
   const now = Math.floor(Date.now() / 1000);
   const expiry = now + 3600;
 
-  // Build JWT header and payload
   const header = { alg: 'RS256', typ: 'JWT' };
   const payload = {
     iss: sa.client_email,
@@ -71,12 +67,9 @@ async function getAccessTokenFromServiceAccount(saJson: string): Promise<string>
     exp: expiry,
   };
 
-  const enc = (obj: unknown) =>
-    Buffer.from(JSON.stringify(obj)).toString('base64url');
-
+  const enc = (obj: unknown) => Buffer.from(JSON.stringify(obj)).toString('base64url');
   const unsignedToken = `${enc(header)}.${enc(payload)}`;
 
-  // Sign with the private key using Node.js crypto
   const { createSign } = await import('crypto');
   const sign = createSign('RSA-SHA256');
   sign.update(unsignedToken);
@@ -84,7 +77,6 @@ async function getAccessTokenFromServiceAccount(saJson: string): Promise<string>
 
   const jwt = `${unsignedToken}.${signature}`;
 
-  // Exchange JWT for access token
   const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -101,6 +93,64 @@ async function getAccessTokenFromServiceAccount(saJson: string): Promise<string>
 
   const tokenData = await tokenResp.json();
   return tokenData.access_token;
+}
+
+/**
+ * Build the correct endpoint URL based on authentication method and region.
+ */
+function buildEndpointUrl(
+  authMethod: 'apiKey' | 'serviceAccount',
+  projectId: string,
+  region: string,
+  model: string
+): string {
+  if (authMethod === 'apiKey') {
+    // Express Mode: simplified path, no project/location in URL
+    return `https://aiplatform.googleapis.com/v1/publishers/google/models/${model}:generateContent`;
+  }
+
+  // Standard Mode (service account): full project/location path
+  if (region === 'global') {
+    // Global endpoint uses aiplatform.googleapis.com (no region prefix on hostname)
+    return `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models/${model}:generateContent`;
+  }
+
+  // Regional endpoint uses {region}-aiplatform.googleapis.com
+  return `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:generateContent`;
+}
+
+/**
+ * Classify a Vertex AI error into a useful diagnostic message.
+ */
+function classifyVertexError(status: number, body: string): string {
+  // Strip HTML if the response is an HTML error page
+  const isHtml = body.trim().startsWith('<!') || body.trim().startsWith('<html');
+  const text = isHtml ? `HTTP ${status} from Google (HTML error page)` : body;
+
+  switch (status) {
+    case 401:
+      return `Authentication failed (${status}): Invalid or expired API key/credentials.`;
+    case 403:
+      return `Permission denied (${status}): The API key does not have access to this resource, or the Vertex AI API is not enabled for this project.`;
+    case 404: {
+      if (text.includes('not found') || isHtml) {
+        return `Not found (${status}): The model or endpoint does not exist. Verify the model name and that the Vertex AI API is enabled.`;
+      }
+      return `Not found (${status}): ${text.slice(0, 200)}`;
+    }
+    case 429:
+      return `Rate limited (${status}): Too many requests. Try again later or increase your quota.`;
+    case 400:
+      return `Invalid request (${status}): ${text.slice(0, 200)}`;
+    case 402:
+      return `Billing/quota issue (${status}): Check your Google Cloud billing and Vertex AI quota.`;
+    case 500:
+    case 502:
+    case 503:
+      return `Google service error (${status}): The Vertex AI service is temporarily unavailable.`;
+    default:
+      return `Vertex AI error (${status}): ${text.slice(0, 300)}`;
+  }
 }
 
 export class GoogleVertexProvider implements AIProvider {
@@ -148,10 +198,10 @@ export class GoogleVertexProvider implements AIProvider {
       (body.generationConfig as Record<string, unknown>).responseMimeType = 'application/json';
     }
 
-    // Build the endpoint URL
-    const baseUrl = `https://${this.region}-aiplatform.googleapis.com/v1/projects/${this.projectId}/locations/${this.region}/publishers/google/models/${model}:generateContent`;
+    // Determine auth method and build URL
+    const authMethod = this.apiKey ? 'apiKey' : 'serviceAccount';
+    const baseUrl = buildEndpointUrl(authMethod, this.projectId, this.region, model);
 
-    // Determine auth
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -159,14 +209,16 @@ export class GoogleVertexProvider implements AIProvider {
     let url = baseUrl;
 
     if (this.apiKey) {
-      // API key auth — append as query param
+      // API key auth (Express Mode) — append as query param
       url = `${baseUrl}?key=${this.apiKey}`;
     } else if (this.serviceAccountJson) {
-      // Service account auth — get OAuth2 token
+      // Service account auth — get OAuth2 bearer token
       const token = await getAccessTokenFromServiceAccount(this.serviceAccountJson);
       headers['Authorization'] = `Bearer ${token}`;
     } else {
-      throw new Error('Google Vertex AI: No authentication configured (API key or service account required).');
+      throw new Error(
+        'Google Vertex AI: No authentication configured (API key or service account required).'
+      );
     }
 
     const response = await fetch(url, {
@@ -177,9 +229,9 @@ export class GoogleVertexProvider implements AIProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
-      // Sanitize error — never leak credentials
+      // Sanitize — never leak credentials in error messages
       const sanitized = errorText.replace(/key=[^&\s"]+/gi, 'key=***');
-      throw new Error(`Google Vertex AI error (${response.status}): ${sanitized}`);
+      throw new Error(classifyVertexError(response.status, sanitized));
     }
 
     const data = await response.json();

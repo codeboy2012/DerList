@@ -10,6 +10,7 @@ import { ProviderRepository, type ProviderConfig } from '@/lib/repositories';
 import { createAnthropicProvider } from './anthropic';
 import { createGoogleGeminiProvider } from './google-gemini';
 import { createGoogleVertexProvider } from './google-vertex';
+import { createGoogleVertexDerListProvider } from './google-vertex-derlist';
 import { createKeepaProvider } from './keepa';
 import { createOpenRouterProvider } from './openrouter';
 import { createSerpApiProvider } from './serpapi';
@@ -46,6 +47,9 @@ function createProviderFromConfig(
 
     case 'google-vertex':
       return createGoogleVertexProvider(config.config);
+
+    case 'google-vertex-derlist':
+      return createGoogleVertexDerListProvider(config.config);
 
     case 'xai':
     case 'mistral':

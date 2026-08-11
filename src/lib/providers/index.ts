@@ -25,6 +25,7 @@ export { OpenRouterProvider, createOpenRouterProvider } from './openrouter';
 export { AnthropicProvider, createAnthropicProvider } from './anthropic';
 export { GoogleGeminiProvider, createGoogleGeminiProvider } from './google-gemini';
 export { GoogleVertexProvider, createGoogleVertexProvider } from './google-vertex';
+export { GoogleVertexDerListProvider, createGoogleVertexDerListProvider } from './google-vertex-derlist';
 export { SerpApiProvider, createSerpApiProvider } from './serpapi';
 export { KeepaProvider, createKeepaProvider } from './keepa';
 

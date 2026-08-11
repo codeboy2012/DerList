@@ -146,6 +146,30 @@ export const AI_PROVIDERS: CatalogEntry[] = [
     ],
   },
   {
+    id: 'google-vertex-derlist',
+    name: 'Google Vertex AI – DerList',
+    category: 'ai',
+    description: 'DerList Shopping AI powered by Google Vertex AI. Includes optimized shopping research system prompt.',
+    website: 'https://cloud.google.com/vertex-ai',
+    capabilities: {
+      chat: true,
+      streaming: true,
+      vision: true,
+      functionCalling: true,
+      jsonMode: true,
+      embeddings: false,
+    },
+    requiredConfig: [
+      { key: 'projectId', label: 'Google Cloud Project ID', type: 'text', placeholder: 'my-project-id' },
+      { key: 'region', label: 'Region', type: 'text', placeholder: 'us-central1' },
+    ],
+    optionalConfig: [
+      { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'AIza...' },
+      { key: 'serviceAccountJson', label: 'Service Account JSON', type: 'password', placeholder: '{"type":"service_account",...}' },
+      { key: 'model', label: 'Model', type: 'text', placeholder: 'gemini-2.5-flash' },
+    ],
+  },
+  {
     id: 'xai',
     name: 'xAI (Grok)',
     category: 'ai',
