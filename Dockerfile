@@ -46,6 +46,9 @@ RUN apk add --no-cache postgresql-client
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
+# Create uploads directory owned by runtime user
+RUN mkdir -p /app/uploads && chown nextjs:nodejs /app/uploads
+
 # Copy production dependencies (includes prisma CLI, dotenv, tsx for seed)
 # Use --chown to avoid slow recursive chown on large node_modules
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules

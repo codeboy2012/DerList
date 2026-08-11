@@ -3,12 +3,7 @@
 #
 # Usage:
 #   cp .env.example .env   (fill in secrets)
-#   docker compose up -d
-#
-# Services:
-#   - db:    PostgreSQL 16 database
-#   - app:   Next.js application (auto-migrates on startup)
-#   - caddy: Reverse proxy with automatic HTTPS (optional, remove if unneeded)
+#   docker compose up
 #
 # The app service automatically:
 #   1. Waits for PostgreSQL to be healthy
@@ -47,24 +42,21 @@ services:
       db:
         condition: service_healthy
     environment:
-      # Database
-      DATABASE_URL: postgresql://${POSTGRES_USER:-derlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-derlist}
-      # Application
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-derlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-derlist}"
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NODE_ENV: production
-      # Authentication
       AUTH_SECRET: ${AUTH_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      # Provider encryption
       PROVIDER_ENCRYPTION_KEY: ${PROVIDER_ENCRYPTION_KEY:-}
-      # Admin seed (only used on first run)
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-}
       ADMIN_DISPLAY_NAME: ${ADMIN_DISPLAY_NAME:-}
+    volumes:
+      - uploads:/app/uploads
     ports:
       - "${APP_PORT:-3000}:3000"
     healthcheck:
@@ -76,7 +68,7 @@ services:
     networks:
       - derlist
 
-  # ── Caddy Reverse Proxy (optional — remove if using your own reverse proxy) ──
+  # ── Caddy Reverse Proxy (optional — activate with: docker compose --profile with-caddy up) ──
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -98,6 +90,7 @@ services:
 
 volumes:
   pgdata:
+  uploads:
   caddy_data:
   caddy_config:
 
