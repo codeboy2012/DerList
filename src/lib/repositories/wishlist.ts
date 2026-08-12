@@ -62,6 +62,7 @@ export interface WishlistItemUpdateInput {
   purchased?: boolean;
   productId?: string | null;
   wishlistCategoryId?: string | null;
+  position?: number;
 }
 
 export interface CategoryCreateInput {
@@ -291,6 +292,7 @@ export const WishlistRepository = {
     if (data.productId !== undefined) updateData.productId = data.productId;
     if (data.wishlistCategoryId !== undefined)
       updateData.wishlistCategoryId = data.wishlistCategoryId;
+    if (data.position !== undefined) updateData.position = data.position;
 
     if (data.purchased !== undefined) {
       updateData.purchased = data.purchased;

@@ -2,7 +2,7 @@
  * POST /api/assistant/query
  *
  * Shopping assistant endpoint.
- * Handles conversational queries and returns AI responses + product suggestions.
+ * Handles conversational queries, tool execution, and returns AI responses.
  */
 
 import { NextResponse } from 'next/server';
@@ -28,6 +28,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Message is required.' }, { status: 400 });
   }
 
+  if (message.length > 4000) {
+    return NextResponse.json({ error: 'Message too long (max 4000 chars).' }, { status: 400 });
+  }
+
   try {
     const { assistant } = createServices();
     const response = await assistant.handleMessage(user.id, message.trim(), conversationId);
@@ -37,6 +41,7 @@ export async function POST(request: Request) {
       message: response.message,
       products: response.products,
       conversationId: response.conversationId,
+      toolResults: response.toolResults,
     });
   } catch (error) {
     console.error('Assistant error:', error);

@@ -1,31 +1,60 @@
 import { redirect } from 'next/navigation';
-import { MessageSquare } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
-import { Card } from '@/components/ui';
+import { prisma } from '@/lib/prisma';
+import { getProviderManager } from '@/lib/providers';
+import { ShoppingAssistantInterface } from './ShoppingAssistantInterface';
 
 export default async function AssistantPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/auth/login');
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Shopping Assistant</h1>
-        <p className="text-muted-foreground mt-2">
-          AI-powered shopping help — find products, compare prices, build PCs.
-        </p>
-      </div>
+  // Get existing conversations
+  const conversations = await prisma.shoppingConversation.findMany({
+    where: { userId: user.id },
+    orderBy: { updatedAt: 'desc' },
+    take: 20,
+    select: {
+      id: true,
+      title: true,
+      updatedAt: true,
+      messages: {
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, role: true, content: true, data: true, createdAt: true },
+      },
+    },
+  });
 
-      <Card className="p-8">
-        <div className="space-y-4 text-center">
-          <MessageSquare className="text-muted-foreground mx-auto h-12 w-12" />
-          <h2 className="text-lg font-medium">Shopping assistant is being rebuilt</h2>
-          <p className="text-muted-foreground mx-auto max-w-md">
-            We&apos;re redesigning the assistant to be smarter and more integrated. In the meantime,
-            you can still add products manually or by URL.
-          </p>
-        </div>
-      </Card>
-    </div>
+  // Check if user has any AI provider configured
+  const providers = getProviderManager();
+  const hasProviders = await providers.hasAI(user.id);
+
+  // Get AI permissions from user config
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { aiProviderConfig: true },
+  });
+  const config = (dbUser?.aiProviderConfig as Record<string, unknown>) ?? {};
+  const aiPermissions = (config.assistantPermissions as Record<string, boolean>) ?? {};
+
+  const serializedConversations = conversations.map((c) => ({
+    id: c.id,
+    title: c.title,
+    updatedAt: c.updatedAt.toISOString(),
+    messages: c.messages.map((m) => ({
+      id: m.id,
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+      data: m.data as Record<string, unknown> | null,
+      timestamp: m.createdAt.toISOString(),
+    })),
+  }));
+
+  return (
+    <ShoppingAssistantInterface
+      userId={user.id}
+      initialConversations={serializedConversations}
+      hasProviders={hasProviders}
+      permissions={aiPermissions}
+    />
   );
 }
