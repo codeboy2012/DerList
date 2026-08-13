@@ -1,6 +1,6 @@
 {
   "name": "derlist",
-  "version": "0.1.0",
+  "version": "0.11.5",
   "private": true,
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -18,7 +18,9 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.0",
@@ -46,6 +48,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^6.0.5",
     "eslint": "^9",
     "eslint-config-next": "16.2.11",
     "husky": "^9.1.7",
@@ -53,7 +56,8 @@
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [

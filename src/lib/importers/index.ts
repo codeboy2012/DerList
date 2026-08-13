@@ -13,6 +13,7 @@
 import { AmazonImporter } from './amazon';
 import { BestBuyImporter } from './bestbuy';
 import { GenericUrlImporter } from './generic-url';
+import { MultiUrlImporter } from './multi-url';
 import { NeweggImporter } from './newegg';
 import { PCPartPickerImporter } from './pcpartpicker';
 import { detectAll, detectBestImporter, getImporters, registerImporter } from './registry';
@@ -22,6 +23,9 @@ import type { ImportResult } from './types';
 // ─────────────────────────────────────────────────────────────────────────────
 // Register all importers (order matters for tie-breaking)
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Multi-URL importer (detects multiple URLs pasted together)
+registerImporter(MultiUrlImporter);
 
 // Specialized URL importers (high confidence for their domains)
 registerImporter(PCPartPickerImporter);

@@ -10,10 +10,26 @@
  * - Search result (populated from search)
  * - AI identification (populated from AI)
  *
+ * Features:
+ * - AI confidence display with percentage
+ * - Field source indicators (AI verified, URL verified, Search verified, Keepa verified)
+ * - Import status display (analyzing, identifying, verifying, ready, etc.)
+ * - No-AI-configured warning with manual entry prompt
+ * - AI activity timeline
+ *
  * Same fields, same validation, same save logic.
  */
 import { useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Loader2, Sparkles, X } from 'lucide-react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  Loader2,
+  Shield,
+  Sparkles,
+  X,
+} from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -36,7 +52,32 @@ export interface ProductEditorDraft {
   dealInfo?: string;
   category?: string;
   sku?: string;
+  asin?: string;
+  upc?: string;
+  mpn?: string;
   notes?: string;
+}
+
+export interface AIIdentificationInfo {
+  /** Current import status */
+  importStatus: string;
+  /** Overall confidence 0-100 */
+  confidence?: number;
+  /** Per-field source tracking */
+  fieldSources?: Record<string, string>;
+  /** Activity timeline */
+  activity?: Array<{
+    step: string;
+    status: string;
+    message: string;
+    timestamp: string;
+  }>;
+  /** AI provider used */
+  provider?: string;
+  /** Whether identification was successful */
+  identified: boolean;
+  /** Status message */
+  message?: string;
 }
 
 export interface ProductEditorProps {
@@ -54,6 +95,225 @@ export interface ProductEditorProps {
   onCancel?: () => void;
   /** Optional class name */
   className?: string;
+  /** AI identification metadata (from identification pipeline) */
+  aiInfo?: AIIdentificationInfo;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sub-Components
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Field source badge — shows where a field value came from */
+function FieldSourceBadge({ source }: { source?: string }) {
+  if (!source) return null;
+
+  const config = getSourceConfig(source);
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide',
+        config.className,
+      )}
+      title={config.label}
+    >
+      {config.icon}
+      {config.shortLabel}
+    </span>
+  );
+}
+
+function getSourceConfig(source: string): {
+  label: string;
+  shortLabel: string;
+  className: string;
+  icon: React.ReactNode;
+} {
+  switch (source) {
+    case 'ai':
+    case 'ai-identification':
+    case 'ai-knowledge':
+    case 'ai-from-evidence':
+      return {
+        label: 'AI verified',
+        shortLabel: 'AI',
+        className: 'bg-purple-500/10 text-purple-600',
+        icon: <Sparkles className="h-2 w-2" />,
+      };
+    case 'url':
+    case 'user-input':
+      return {
+        label: 'URL verified',
+        shortLabel: 'URL',
+        className: 'bg-blue-500/10 text-blue-600',
+        icon: <CheckCircle2 className="h-2 w-2" />,
+      };
+    case 'search':
+    case 'search-provider':
+    case 'serpapi':
+    case 'brave':
+      return {
+        label: 'Search verified',
+        shortLabel: 'Search',
+        className: 'bg-green-500/10 text-green-600',
+        icon: <CheckCircle2 className="h-2 w-2" />,
+      };
+    case 'keepa':
+      return {
+        label: 'Keepa verified',
+        shortLabel: 'Keepa',
+        className: 'bg-orange-500/10 text-orange-600',
+        icon: <Shield className="h-2 w-2" />,
+      };
+    case 'structured-data':
+      return {
+        label: 'Page data',
+        shortLabel: 'Page',
+        className: 'bg-slate-500/10 text-slate-600',
+        icon: <CheckCircle2 className="h-2 w-2" />,
+      };
+    case 'manual':
+    case 'user':
+      return {
+        label: 'Manual entry',
+        shortLabel: 'Manual',
+        className: 'bg-slate-500/10 text-slate-500',
+        icon: null,
+      };
+    default:
+      return {
+        label: source,
+        shortLabel: source,
+        className: 'bg-slate-500/10 text-slate-500',
+        icon: null,
+      };
+  }
+}
+
+/** Import status banner */
+function ImportStatusBanner({ aiInfo }: { aiInfo: AIIdentificationInfo }) {
+  const { importStatus, confidence, message } = aiInfo;
+
+  switch (importStatus) {
+    case 'no_ai_configured':
+      return (
+        <div className="border-warning/30 bg-warning/5 flex items-start gap-3 rounded-lg border px-4 py-3">
+          <AlertTriangle className="text-warning mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              AI identification isn&apos;t configured
+            </p>
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              DerList can&apos;t automatically identify this product yet. Please enter the product details manually below.
+            </p>
+          </div>
+        </div>
+      );
+
+    case 'ready':
+      return (
+        <div className="border-success/30 bg-success/5 flex items-center gap-2 rounded-lg border px-4 py-2.5">
+          <CheckCircle2 className="text-success h-4 w-4 shrink-0" />
+          <span className="text-sm font-medium text-green-800 dark:text-green-200">
+            AI identified — {confidence}% confidence
+          </span>
+        </div>
+      );
+
+    case 'needs_review':
+      return (
+        <div className="border-accent/30 bg-accent/5 flex items-center gap-2 rounded-lg border px-4 py-2.5">
+          <Info className="text-accent h-4 w-4 shrink-0" />
+          <span className="text-sm font-medium">
+            Product identified — please review ({confidence}% confidence)
+          </span>
+        </div>
+      );
+
+    case 'conflict':
+      return (
+        <div className="border-danger/30 bg-danger/5 flex items-start gap-2 rounded-lg border px-4 py-2.5">
+          <AlertCircle className="text-danger mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="text-danger text-sm font-medium">Identity conflict detected</p>
+            {message && (
+              <p className="text-muted-foreground mt-0.5 text-xs">{message}</p>
+            )}
+          </div>
+        </div>
+      );
+
+    case 'failed':
+      return (
+        <div className="border-danger/30 bg-danger/5 flex items-start gap-2 rounded-lg border px-4 py-2.5">
+          <AlertCircle className="text-danger mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="text-danger text-sm font-medium">
+              Couldn&apos;t reliably identify this product
+            </p>
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              {message || 'The connected AI couldn\'t verify enough information from this URL. Please enter the product details manually.'}
+            </p>
+          </div>
+        </div>
+      );
+
+    case 'identifying':
+      return (
+        <div className="bg-accent/5 flex items-center gap-2 rounded-lg border px-4 py-2.5">
+          <Loader2 className="text-accent h-4 w-4 animate-spin" />
+          <span className="text-sm">AI is identifying this product...</span>
+        </div>
+      );
+
+    case 'verifying':
+      return (
+        <div className="bg-accent/5 flex items-center gap-2 rounded-lg border px-4 py-2.5">
+          <Shield className="text-accent h-4 w-4" />
+          <span className="text-sm">Verifying product information...</span>
+        </div>
+      );
+
+    default:
+      return null;
+  }
+}
+
+/** AI Activity Timeline panel */
+function AIActivityTimeline({ activity }: { activity: AIIdentificationInfo['activity'] }) {
+  if (!activity || activity.length === 0) return null;
+
+  return (
+    <div className="border-border rounded-lg border p-3">
+      <h4 className="text-muted-foreground mb-2 text-xs font-medium uppercase tracking-wide">
+        AI Activity
+      </h4>
+      <div className="space-y-1.5">
+        {activity.map((item, idx) => (
+          <div key={idx} className="flex items-center gap-2 text-xs">
+            {item.status === 'completed' && (
+              <CheckCircle2 className="text-success h-3 w-3 shrink-0" />
+            )}
+            {item.status === 'in_progress' && (
+              <Loader2 className="text-accent h-3 w-3 shrink-0 animate-spin" />
+            )}
+            {item.status === 'failed' && (
+              <AlertCircle className="text-danger h-3 w-3 shrink-0" />
+            )}
+            {item.status === 'skipped' && (
+              <span className="text-muted-foreground h-3 w-3 shrink-0 text-center">—</span>
+            )}
+            <span className={cn(
+              'text-foreground',
+              item.status === 'failed' && 'text-danger',
+              item.status === 'skipped' && 'text-muted-foreground line-through',
+            )}>
+              {item.message}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,6 +328,7 @@ export function ProductEditor({
   onSave,
   onCancel,
   className,
+  aiInfo,
 }: ProductEditorProps) {
   // Form state
   const [title, setTitle] = useState(draft?.title ?? '');
@@ -84,39 +345,62 @@ export function ProductEditor({
   const [sku, setSku] = useState(draft?.sku ?? '');
   const [notes, setNotes] = useState(draft?.notes ?? '');
 
+  // Extended fields
+  const [asin] = useState(draft?.asin ?? '');
+  const [upc] = useState(draft?.upc ?? '');
+  const [mpn] = useState(draft?.mpn ?? '');
+
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [aiStatus, setAiStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [aiMessage, setAiMessage] = useState('');
+  const [aiStatus, setAiStatus] = useState<'idle' | 'loading' | 'done' | 'error' | 'no_ai'>(
+    aiInfo?.importStatus === 'no_ai_configured' ? 'no_ai' :
+    aiInfo?.identified ? 'done' : 'idle'
+  );
+  const [aiMessage, setAiMessage] = useState(
+    aiInfo?.identified
+      ? `AI identified — ${aiInfo.confidence ?? 0}% confidence`
+      : aiInfo?.message ?? ''
+  );
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   const formRef = useRef<HTMLFormElement>(null);
 
+  // Field sources from AI identification
+  const fieldSources = aiInfo?.fieldSources ?? {};
+
   // ─── AI Identify ───
 
   const handleIdentify = async () => {
-    if (!title.trim() || title.length < 2) {
+    const identifyInput = url || title;
+    if (!identifyInput.trim() || identifyInput.length < 2) {
       setAiStatus('error');
-      setAiMessage('Enter a product name first (at least 2 characters).');
+      setAiMessage('Enter a product name or URL first (at least 2 characters).');
       return;
     }
 
     setAiStatus('loading');
-    setAiMessage('Identifying product...');
+    setAiMessage('AI is identifying this product...');
 
     try {
       const res = await fetch('/api/products/identify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: title }),
+        body: JSON.stringify({ input: identifyInput }),
       });
 
       const data = await res.json();
 
+      // Handle no-AI-configured
+      if (data.aiIdentification?.importStatus === 'no_ai_configured') {
+        setAiStatus('no_ai');
+        setAiMessage("AI identification isn't configured. Please enter product details manually.");
+        return;
+      }
+
       if (!data.success || !data.candidates?.length) {
         setAiStatus('error');
-        setAiMessage(data.error || 'Could not identify product. Try adding more details.');
+        setAiMessage(data.error || "Couldn't reliably identify this product. Please enter details manually.");
         return;
       }
 
@@ -146,9 +430,8 @@ export function ProductEditor({
         setTitle(candidate.title);
       }
 
-      const verified = candidate.verified ? 'Verified' : 'AI-identified';
       setAiStatus('done');
-      setAiMessage(`${verified} (${candidate.confidence}% confidence)`);
+      setAiMessage(`AI identified — ${candidate.confidence}% confidence`);
     } catch {
       setAiStatus('error');
       setAiMessage('Failed to connect. Try again later.');
@@ -183,12 +466,15 @@ export function ProductEditor({
     if (category) formData.set('category', category);
     if (sku) formData.set('sku', sku);
     if (notes) formData.set('notes', notes);
+    if (asin) formData.set('asin', asin);
+    if (upc) formData.set('upc', upc);
+    if (mpn) formData.set('mpn', mpn);
     if (itemId) formData.set('itemId', itemId);
 
     try {
       const endpoint =
         mode === 'edit'
-          ? '/api/wishlists/add-item' // TODO: separate update endpoint
+          ? '/api/wishlists/add-item'
           : '/api/wishlists/add-item';
 
       const res = await fetch(endpoint, {
@@ -251,6 +537,7 @@ export function ProductEditor({
             setSku('');
             setNotes('');
             setAiStatus('idle');
+            setAiMessage('');
           }}
         >
           Add Another
@@ -268,6 +555,9 @@ export function ProductEditor({
       className={cn('flex flex-col gap-4', className)}
       noValidate
     >
+      {/* Import Status Banner */}
+      {aiInfo && <ImportStatusBanner aiInfo={aiInfo} />}
+
       {error && (
         <div className="border-danger/30 bg-danger/5 text-danger flex items-center gap-2 rounded-lg border px-4 py-3 text-sm">
           <AlertCircle className="h-4 w-4 shrink-0" />
@@ -275,11 +565,19 @@ export function ProductEditor({
         </div>
       )}
 
+      {/* AI Activity Timeline */}
+      {aiInfo?.activity && aiInfo.activity.length > 0 && (
+        <AIActivityTimeline activity={aiInfo.activity} />
+      )}
+
       {/* Title + AI Identify */}
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="pe-title" className="text-sm font-medium">
-          Product Name <span className="text-danger">*</span>
-        </label>
+        <div className="flex items-center gap-2">
+          <label htmlFor="pe-title" className="text-sm font-medium">
+            Product Name <span className="text-danger">*</span>
+          </label>
+          <FieldSourceBadge source={fieldSources.name} />
+        </div>
         <div className="flex gap-2">
           <Input
             id="pe-title"
@@ -324,6 +622,12 @@ export function ProductEditor({
             <span className="text-danger text-[11px]">{aiMessage}</span>
           </div>
         )}
+        {aiStatus === 'no_ai' && (
+          <div className="bg-warning/5 flex items-center gap-2 rounded-md px-2.5 py-1.5">
+            <AlertTriangle className="text-warning h-3 w-3" />
+            <span className="text-warning text-[11px]">{aiMessage}</span>
+          </div>
+        )}
       </div>
 
       {/* Image Preview */}
@@ -342,14 +646,47 @@ export function ProductEditor({
           >
             <X className="h-3 w-3" />
           </button>
+          {fieldSources.image && (
+            <div className="absolute -bottom-1 -right-1">
+              <FieldSourceBadge source={fieldSources.image} />
+            </div>
+          )}
         </div>
       )}
 
       {/* Core Fields */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <label htmlFor="pe-brand" className="text-sm font-medium">
+              Brand
+            </label>
+            <FieldSourceBadge source={fieldSources.brand} />
+          </div>
+          <Input
+            id="pe-brand"
+            value={brand}
+            onChange={(e) => setBrand(e.target.value)}
+            placeholder="e.g. Apple, NVIDIA"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <label htmlFor="pe-category" className="text-sm font-medium">
+              Category
+            </label>
+            <FieldSourceBadge source={fieldSources.category} />
+          </div>
+          <Input
+            id="pe-category"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            placeholder="e.g. Headphones, GPU"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
           <label htmlFor="pe-url" className="text-sm font-medium">
-            URL
+            Product URL
           </label>
           <Input
             id="pe-url"
@@ -360,9 +697,12 @@ export function ProductEditor({
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="pe-image" className="text-sm font-medium">
-            Image URL
-          </label>
+          <div className="flex items-center gap-2">
+            <label htmlFor="pe-image" className="text-sm font-medium">
+              Image URL
+            </label>
+            <FieldSourceBadge source={fieldSources.image} />
+          </div>
           <Input
             id="pe-image"
             value={image}
@@ -372,9 +712,12 @@ export function ProductEditor({
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="pe-price" className="text-sm font-medium">
-            Price
-          </label>
+          <div className="flex items-center gap-2">
+            <label htmlFor="pe-price" className="text-sm font-medium">
+              Price
+            </label>
+            <FieldSourceBadge source={fieldSources.price} />
+          </div>
           <Input
             id="pe-price"
             value={currentPrice}
@@ -398,17 +741,6 @@ export function ProductEditor({
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="pe-brand" className="text-sm font-medium">
-            Brand
-          </label>
-          <Input
-            id="pe-brand"
-            value={brand}
-            onChange={(e) => setBrand(e.target.value)}
-            placeholder="e.g. NVIDIA"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
           <label htmlFor="pe-retailer" className="text-sm font-medium">
             Retailer
           </label>
@@ -420,24 +752,43 @@ export function ProductEditor({
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="pe-category" className="text-sm font-medium">
-            Category
-          </label>
+          <div className="flex items-center gap-2">
+            <label htmlFor="pe-asin" className="text-sm font-medium">
+              ASIN
+            </label>
+            <FieldSourceBadge source={fieldSources.asin} />
+          </div>
           <Input
-            id="pe-category"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            placeholder="e.g. GPU, SSD, Monitor"
+            id="pe-asin"
+            value={asin}
+            readOnly={!!draft?.asin}
+            className={draft?.asin ? 'bg-muted' : ''}
+            placeholder="Amazon ASIN"
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="pe-sku" className="text-sm font-medium">
-            SKU / ASIN
-          </label>
+          <div className="flex items-center gap-2">
+            <label htmlFor="pe-sku" className="text-sm font-medium">
+              SKU
+            </label>
+            <FieldSourceBadge source={fieldSources.sku} />
+          </div>
           <Input
             id="pe-sku"
             value={sku}
             onChange={(e) => setSku(e.target.value)}
+            placeholder="Optional"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="pe-upc" className="text-sm font-medium">
+            UPC
+          </label>
+          <Input
+            id="pe-upc"
+            value={upc}
+            readOnly
+            className={upc ? 'bg-muted' : ''}
             placeholder="Optional"
           />
         </div>

@@ -1,6 +1,10 @@
-## Architecture
+## Overview
 
 The Product Intelligence Engine enhances DerList's existing product import system (`src/lib/products/`) and background job system (`src/lib/jobs/`) with a modular, multi-strategy extraction pipeline. It does NOT replace the existing architecture — it extends it.
+
+The engine runs multiple extraction strategies in parallel (JSON-LD, OpenGraph, Microdata, retailer-specific parsers, HTML heuristics), merges their results through a confidence-weighted consensus algorithm, and optionally invokes AI verification or headless browser rendering for low-confidence cases. The result is a single `PipelineResult` with a confidence score that feeds into the existing product creation and background refresh flows.
+
+## Architecture
 
 ### Current Architecture (Preserved)
 
@@ -67,7 +71,7 @@ src/lib/products/
     └── prompts.ts              # NEW: extraction + verification prompts
 ```
 
-## Components
+## Components and Interfaces
 
 ### Component 1: Extraction Pipeline (`engine/pipeline.ts`)
 
@@ -257,6 +261,86 @@ function isAIConfigured(): boolean;
 - Add `confidence` to the sync result logging
 - If confidence < 60%, mark the fetch job as needing review (new status or metadata flag)
 
+## Data Models
+
+### PipelineInput
+
+Passed into the extraction pipeline from both the import flow and background refresh:
+
+```typescript
+interface PipelineInput {
+  html: string;                // Raw HTML content of the product page
+  url: string;                 // Canonical product URL
+  domain: string | null;       // Extracted domain for parser selection
+  existingProduct?: {          // Present during background refresh
+    id: string;
+    currentPrice: number | null;
+  };
+}
+```
+
+### PipelineResult
+
+The unified output of the extraction pipeline, consumed by `confirmImportAction()` and `syncProduct()`:
+
+```typescript
+interface PipelineResult {
+  title: string | null;
+  description: string | null;
+  image: string | null;
+  gallery: string[];
+  price: number | null;
+  currency: string | null;
+  brand: string | null;
+  sku: string | null;
+  mpn: string | null;
+  gtin: string | null;
+  inStock: boolean | null;
+  availability: string | null;
+  retailer: string | null;
+  confidence: number;        // 0-100 overall confidence
+  priceSource: string;       // which extractor won the price vote
+  needsReview: boolean;      // true if confidence < 60
+}
+```
+
+### ExtractionResult
+
+Returned by each individual extractor and retailer parser:
+
+```typescript
+interface ExtractionResult {
+  title: string | null;
+  price: number | null;
+  currency: string | null;
+  image: string | null;
+  brand: string | null;
+  sku: string | null;
+  availability: string | null;
+  inStock: boolean | null;
+  confidence: number;        // 0-100, self-assessed by extractor
+}
+```
+
+### VotableResult
+
+Enriched extraction result used as input to the consensus engine:
+
+```typescript
+interface VotableResult extends ExtractionResult {
+  source: string;            // e.g. 'json-ld', 'opengraph', 'amazon-parser'
+}
+```
+
+### Database Models (Unchanged)
+
+No schema changes are required. The engine uses the existing Prisma models:
+
+- **Product** — stores the final extracted fields (title, price, image, brand, etc.)
+- **PriceHistory** — records every price observation during import and refresh
+- **ProductFetchJob** — tracks background refresh scheduling and status
+- **ProductChange** — logs field-level changes detected during refresh
+
 ## Data Flow
 
 ### Import Flow (User pastes a URL)
@@ -334,6 +418,67 @@ syncProduct(productId)                    [jobs/product-sync.ts]
 | `src/app/(app)/wishlists/[id]/product-actions.ts` | No change needed | Already calls `importProductFromUrl()` which gains the pipeline internally |
 | `src/app/admin/products/actions.ts` | No change needed | Already calls `syncProduct()` which gains the pipeline internally |
 | `prisma/schema.prisma` | No changes | Existing Product, PriceHistory, ProductFetchJob models are sufficient |
+
+## Correctness Properties
+
+The following invariants must hold for the extraction pipeline to be considered correct:
+
+1. **Never invent data** — If an extractor cannot find a field in the HTML, it must return `null`. No field may be guessed, interpolated, or hallucinated.
+
+2. **Consensus requires agreement** — A price is only accepted if at least two extractors report values within 5% of each other, OR a single extractor reports with confidence >= 85.
+
+3. **AI cannot override deterministic consensus** — AI verification results participate in voting with the same rules as any other extractor. They do not have veto or override power.
+
+4. **Confidence reflects actual evidence** — The `confidence` score must decrease when extractors disagree, when fewer fields are populated, or when the pipeline falls back to weaker strategies.
+
+5. **No silent product substitution** — During background refresh, if the extracted title/brand/SKU differ significantly from the stored product, the job is flagged `needsReview` rather than overwriting the product.
+
+6. **Graceful degradation** — Every optional component (AI, browser, specific parsers) must be skippable. The pipeline must always produce a result, even if confidence is 0 and all fields are null.
+
+7. **Idempotent extraction** — Running the pipeline twice on the same HTML input must produce the same `PipelineResult` (no randomness, no time-dependent logic in extraction).
+
+8. **Parser isolation** — A failing parser must not crash the pipeline. `Promise.allSettled` ensures all extractors run independently.
+
+## Error Handling
+
+### Extractor Failures
+
+Each extractor runs inside `Promise.allSettled`. If an individual extractor throws:
+- The error is logged with the extractor name and URL
+- The extractor's result is excluded from consensus
+- The pipeline continues with remaining results
+- If ALL extractors fail, the pipeline returns a result with `confidence: 0`, `needsReview: true`, and all fields null
+
+### Network Failures (Fetch)
+
+- **Timeout** (>10s): Logged, returns empty HTML → pipeline produces low-confidence result
+- **HTTP 403/429**: Triggers browser fallback if available; otherwise treated as empty HTML
+- **DNS failure / connection refused**: Returns immediately with fetch error; no pipeline run
+
+### Browser Failures
+
+- **Playwright not installed**: `isBrowserAvailable()` returns false, browser path is skipped entirely
+- **Browser timeout** (>30s): Returns null from `renderWithBrowser()`, original HTTP result is used
+- **Browser crash**: Caught, logged, returns null — does not block the pipeline
+
+### AI Provider Failures
+
+- **Not configured**: `isAIConfigured()` returns false, AI verification is skipped
+- **API timeout / rate limit / auth error**: Caught, logged, returns null from `verifyWithAI()`
+- **Malformed response**: Parsed with fallback; if unparseable, treated as null result
+- AI failure never blocks product creation or background refresh
+
+### Consensus Edge Cases
+
+- **Zero valid results**: Returns `confidence: 0`, `needsReview: true`, all fields null
+- **Single extractor only**: Uses that result directly; confidence capped at the extractor's own confidence (no boost from agreement)
+- **All prices disagree**: No majority group → `needsReview: true`, price set to highest-confidence extractor's value
+
+### Background Refresh Errors
+
+- **Product not found in DB**: Job marked as failed, not retried
+- **Fetch failure**: Job rescheduled with exponential backoff (existing behavior in `queue.ts`)
+- **Pipeline low confidence** (<60%): Job metadata flagged for review; product fields are NOT updated to avoid corrupting existing data
 
 ## Implementation Order (Tasks)
 
