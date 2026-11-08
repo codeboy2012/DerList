@@ -45,7 +45,12 @@ export interface AIOptions {
 
 export interface AIResponse {
   content: string;
+  /** Model that actually produced the response. */
   model: string;
+  /** Model the caller asked for, when the provider switched models. */
+  requestedModel?: string;
+  /** True when the provider substituted another model internally. */
+  fallbackUsed?: boolean;
   tokensUsed?: number;
   finishReason?: string;
 }

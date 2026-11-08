@@ -223,6 +223,15 @@ export class AIIdentificationProvider implements IdentificationProvider {
       responseContent = response.content;
       model = response.model;
       tokensUsed = response.tokensUsed;
+
+      // A provider may substitute a different model (e.g. a free fallback).
+      // Never let that happen silently.
+      if (response.fallbackUsed) {
+        importLog('AI_MODEL_FALLBACK', {
+          requestedModel: response.requestedModel ?? null,
+          usedModel: response.model,
+        });
+      }
     } catch (error) {
       const durationMs = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : 'Unknown AI error';

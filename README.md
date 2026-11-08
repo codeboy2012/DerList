@@ -207,7 +207,7 @@ git clone https://github.com/codeboy2012/DerList.git
 cd DerList
 
 cp .env.example .env
-````
+```
 
 Edit `.env` and configure at minimum:
 
@@ -216,7 +216,6 @@ POSTGRES_PASSWORD=your-secure-password
 ADMIN_EMAIL=admin@example.com
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=your-secure-password
-AUTH_SECRET=your-generated-secret
 ```
 
 Then start DerList:
@@ -241,6 +240,20 @@ docker compose ps
 docker compose logs -f app
 ```
 
+### Background worker
+
+Background refreshes and price history are processed by the `worker` service.
+`docker compose up -d` starts it alongside the app, and it must not be scaled
+to more than one replica — it holds a PostgreSQL advisory lock so only one
+worker processes jobs at a time.
+
+```bash
+docker compose logs -f worker
+```
+
+If the worker stops unexpectedly, jobs left in a running state are recovered
+on the next startup instead of blocking the queue.
+
 ### Health check
 
 ```text
@@ -253,11 +266,11 @@ http://localhost:3000/api/health
 
 ### Recommended
 
-* Docker
-* Docker Compose v2+
-* Linux server
-* 2 GB+ RAM
-* PostgreSQL 16+
+- Docker
+- Docker Compose v2+
+- Linux server
+- 2 GB+ RAM
+- PostgreSQL 16+
 
 DerList is primarily developed and tested on Linux with Docker.
 
@@ -335,21 +348,21 @@ When no AI provider is configured, DerList will not fabricate product informatio
 
 DerList includes multiple security protections for self-hosted deployments.
 
-* Argon2id password hashing
-* SHA-256 hashed session tokens
-* HttpOnly cookies
-* Secure cookies
-* SameSite protection
-* Server-side authorization
-* Zod input validation
-* Invite-only registration
-* Encrypted provider API keys
-* SSRF protection
-* Private network blocking
-* Internal hostname blocking
-* Image URL validation
-* HTTP image verification
-* No API secrets exposed to clients
+- Argon2id password hashing
+- SHA-256 hashed session tokens
+- HttpOnly cookies
+- Secure cookies
+- SameSite protection
+- Server-side authorization
+- Zod input validation
+- Invite-only registration
+- Encrypted provider API keys
+- SSRF protection
+- Private network blocking
+- Internal hostname blocking
+- Image URL validation
+- HTTP image verification
+- No API secrets exposed to clients
 
 DerList's product import system is specifically designed to prevent malicious URLs from being used to access internal services.
 
@@ -411,17 +424,17 @@ DerList includes automated tests for core functionality.
 
 Current test coverage includes:
 
-* Product validation
-* ASIN extraction
-* URL normalization
-* Search providers
-* AI providers
-* Image validation
-* Image HTTP verification
-* SSRF protection
-* Completeness scoring
-* Product identification
-* Import behavior
+- Product validation
+- ASIN extraction
+- URL normalization
+- Search providers
+- AI providers
+- Image validation
+- Image HTTP verification
+- SSRF protection
+- Completeness scoring
+- Product identification
+- Import behavior
 
 Run the test suite with the project's configured test command.
 
@@ -441,37 +454,37 @@ Focused on improving product identification, AI research, validation, image hand
 
 **v0.12.0 — AI Intelligence Improvements**
 
-* Better AI product research
-* Better product identity verification
-* Improved AI prompts
-* Structured AI JSON output
-* Better source tracking
-* Improved research accuracy
-* Better handling of incorrect search results
-* Improved manual fallback
+- Better AI product research
+- Better product identity verification
+- Improved AI prompts
+- Structured AI JSON output
+- Better source tracking
+- Improved research accuracy
+- Better handling of incorrect search results
+- Improved manual fallback
 
 ### Long-Term
 
 The roadmap continues through the `1.x` releases, with major milestones including:
 
-* Product intelligence
-* Advanced pricing
-* Wishlist intelligence
-* Price tracking
-* Universal importing
-* AI Shopping Assistant
-* Sharing
-* Gift registries
-* Browser extension
-* Notifications
-* Offline/PWA
-* PC Builder
-* Advanced PC Builder
-* Mobile applications
-* Advanced AI
-* Social and collaboration
-* Automation
-* Production readiness
+- Product intelligence
+- Advanced pricing
+- Wishlist intelligence
+- Price tracking
+- Universal importing
+- AI Shopping Assistant
+- Sharing
+- Gift registries
+- Browser extension
+- Notifications
+- Offline/PWA
+- PC Builder
+- Advanced PC Builder
+- Mobile applications
+- Advanced AI
+- Social and collaboration
+- Automation
+- Production readiness
 
 The current major roadmap target is **v1.20.0**.
 
@@ -523,9 +536,9 @@ Built by [CodeBoy2012](https://github.com/codeboy2012) and contributors.
 
 ## 📚 Documentation
 
-* **[Changelog](https://github.com/codeboy2012/DerList/blob/main/CHNAGELOG.md)**
-* **[GitHub Repository](https://github.com/codeboy2012/DerList)**
-* **[Issues](https://github.com/codeboy2012/DerList/issues)**
-* **[Releases](https://github.com/codeboy2012/DerList/releases)**
+- **[Changelog](https://github.com/codeboy2012/DerList/blob/main/CHNAGELOG.md)**
+- **[GitHub Repository](https://github.com/codeboy2012/DerList)**
+- **[Issues](https://github.com/codeboy2012/DerList/issues)**
+- **[Releases](https://github.com/codeboy2012/DerList/releases)**
 
 ---

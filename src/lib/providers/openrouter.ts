@@ -118,7 +118,7 @@ export class OpenRouterProvider implements AIProvider {
           );
         }
 
-        return result;
+        return isFallback ? { ...result, requestedModel, fallbackUsed: true } : result;
       } catch (error) {
         // Cancellation must not trigger the free-model fallback loop.
         if (options?.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {

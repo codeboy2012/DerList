@@ -45,7 +45,6 @@ services:
       DATABASE_URL: 'postgresql://${POSTGRES_USER:-derlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-derlist}'
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NODE_ENV: production
-      AUTH_SECRET: ${AUTH_SECRET:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
