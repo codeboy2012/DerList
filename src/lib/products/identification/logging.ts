@@ -29,7 +29,17 @@ type ImportLogEvent =
   | 'PRODUCT_IDENTIFIED'
   | 'PRODUCT_NEEDS_REVIEW'
   | 'PRODUCT_IDENTIFICATION_FAILED'
-  | 'PIPELINE_COMPLETE';
+  | 'PIPELINE_COMPLETE'
+  | 'IMAGE_RESOLVED'
+  | 'IMAGE_HTTP_FAILED'
+  | 'IMAGE_ALL_FAILED'
+  | 'KEEPA_IMAGE_SKIPPED'
+  | 'KEEPA_IMAGE_STARTED'
+  | 'KEEPA_IMAGE_API_ERROR'
+  | 'KEEPA_IMAGE_NO_DATA'
+  | 'KEEPA_IMAGE_EMPTY'
+  | 'KEEPA_IMAGE_FOUND'
+  | 'KEEPA_IMAGE_ERROR';
 
 /**
  * Log a structured import event.
@@ -60,9 +70,20 @@ function sanitizeLogData(data?: Record<string, unknown>): Record<string, unknown
 
   const sanitized: Record<string, unknown> = {};
   const sensitiveKeys = new Set([
-    'apiKey', 'api_key', 'key', 'secret', 'token', 'password',
-    'authorization', 'auth', 'cookie', 'session', 'credential',
-    'encryptedConfig', 'configIv', 'configAuthTag',
+    'apiKey',
+    'api_key',
+    'key',
+    'secret',
+    'token',
+    'password',
+    'authorization',
+    'auth',
+    'cookie',
+    'session',
+    'credential',
+    'encryptedConfig',
+    'configIv',
+    'configAuthTag',
   ]);
 
   for (const [key, value] of Object.entries(data)) {

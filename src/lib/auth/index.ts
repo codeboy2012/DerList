@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation';
-
 import { getSessionToken, validateSession } from '@/lib/auth/session';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -7,9 +6,7 @@ import { getSessionToken, validateSession } from '@/lib/auth/session';
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** The shape of the user object returned by auth helpers. */
-export type SessionUser = NonNullable<
-  Awaited<ReturnType<typeof validateSession>>
->['user'];
+export type SessionUser = NonNullable<Awaited<ReturnType<typeof validateSession>>>['user'];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Auth helpers for Server Components and Server Actions
@@ -71,5 +68,10 @@ export async function requireOwner(): Promise<SessionUser> {
 }
 
 // Re-export session and password utilities for convenient imports
-export { createSession, invalidateSession, invalidateAllUserSessions } from '@/lib/auth/session';
+export {
+  createSession,
+  invalidateSession,
+  invalidateAllUserSessions,
+  invalidateOtherUserSessions,
+} from '@/lib/auth/session';
 export { hashPassword, verifyPassword } from '@/lib/auth/password';

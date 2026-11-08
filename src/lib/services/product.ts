@@ -15,6 +15,15 @@ import { ProductRepository, type ProductSearchResult } from '@/lib/repositories'
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Metadata attached by importers for downstream pipeline decisions. */
+export interface ProductDraftMeta {
+  needsIdentification?: boolean;
+  asin?: string;
+  amazonCountry?: string;
+  directExtractionFailed?: boolean;
+  failureReason?: string;
+}
+
 export interface ProductDraft {
   title: string;
   description?: string;
@@ -36,6 +45,8 @@ export interface ProductDraft {
   source: 'search' | 'ai' | 'import' | 'manual';
   /** 0-100 confidence in the data quality */
   confidence: number;
+  /** Internal importer metadata (for pipeline decisions, never persisted) */
+  _meta?: ProductDraftMeta;
 }
 
 export interface SearchResponse {

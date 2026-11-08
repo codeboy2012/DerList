@@ -12,6 +12,12 @@ export interface OAuthProfile {
   provider: string;
   providerAccountId: string;
   email: string | null;
+  /**
+   * True only when the provider itself has verified ownership of `email`.
+   * Auto-linking an existing account on an unverified email is an account
+   * takeover vector, so callers must set this explicitly.
+   */
+  emailVerifiedByProvider?: boolean;
   name: string | null;
   avatar: string | null;
   accessToken: string;
@@ -20,8 +26,7 @@ export interface OAuthProfile {
 }
 
 export type OAuthCallbackResult =
-  | { type: 'redirect'; url: string }
-  | { type: 'session_created'; redirectUrl: string };
+  { type: 'redirect'; url: string } | { type: 'session_created'; redirectUrl: string };
 
 /**
  * Process an OAuth callback.
@@ -33,7 +38,17 @@ export type OAuthCallbackResult =
  * 4. Otherwise → reject (invite-only, cannot auto-create accounts)
  */
 export async function handleOAuthCallback(profile: OAuthProfile): Promise<string> {
-  const { provider, providerAccountId, email, name, avatar, accessToken, refreshToken, expiresAt } = profile;
+  const {
+    provider,
+    providerAccountId,
+    email,
+    name,
+    avatar,
+    accessToken,
+    refreshToken,
+    expiresAt,
+    emailVerifiedByProvider = false,
+  } = profile;
 
   // ── Check if user is already logged in (account linking) ──
   const currentUser = await getCurrentUser();
@@ -92,7 +107,14 @@ export async function handleOAuthCallback(profile: OAuthProfile): Promise<string
   }
 
   // ── Check if email matches existing user (auto-link on first OAuth login) ──
-  if (email) {
+  // SECURITY: never link to an existing account based on an email the provider
+  // has not verified. Otherwise a user-controlled profile email could take over
+  // an account that already exists with that address.
+  if (email && !emailVerifiedByProvider) {
+    return '/login?error=email_unverified';
+  }
+
+  if (email && emailVerifiedByProvider) {
     const userByEmail = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
       select: { id: true, disabled: true, avatarUrl: true },

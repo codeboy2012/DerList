@@ -2,7 +2,6 @@
 
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-
 import { verifyPassword } from '@/lib/auth/password';
 import {
   clearSessionCookie,
@@ -12,6 +11,7 @@ import {
   setSessionCookie,
 } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
+import { checkRateLimit, resetRateLimit } from '@/lib/security/rate-limit';
 import { loginSchema } from '@/lib/validations/auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ export type ActionState = {
  */
 export async function loginAction(
   _prevState: ActionState,
-  formData: FormData,
+  formData: FormData
 ): Promise<ActionState> {
   // Parse and validate input
   const raw = {
@@ -56,6 +56,23 @@ export async function loginAction(
   }
 
   const { email, password } = parsed.data;
+
+  // ── Brute-force protection ──
+  // Limit both per-IP (spraying) and per-IP+email (targeted guessing).
+  const headerStore = await headers();
+  const ipAddress =
+    headerStore.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    headerStore.get('x-real-ip') ??
+    'unknown';
+  const ipKey = `login:ip:${ipAddress}`;
+  const accountKey = `login:account:${ipAddress}:${email.toLowerCase().trim()}`;
+
+  if (!checkRateLimit(ipKey, 20, 15 * 60 * 1000).allowed) {
+    return { success: false, error: 'Too many login attempts. Try again later.' };
+  }
+  if (!checkRateLimit(accountKey, 5, 15 * 60 * 1000).allowed) {
+    return { success: false, error: 'Too many login attempts. Try again later.' };
+  }
 
   // Look up user by email
   const user = await prisma.user.findUnique({
@@ -92,12 +109,10 @@ export async function loginAction(
   }
 
   // Get request metadata for audit
-  const headerStore = await headers();
-  const ipAddress =
-    headerStore.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    headerStore.get('x-real-ip') ??
-    undefined;
   const userAgent = headerStore.get('user-agent') ?? undefined;
+
+  // Successful login clears the targeted counter for this account.
+  resetRateLimit(accountKey);
 
   // Create session
   const token = await createSession({

@@ -15,7 +15,7 @@
  */
 
 import { readFile, stat } from 'fs/promises';
-import { join, resolve, normalize } from 'path';
+import { join, normalize, resolve } from 'path';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,10 +42,7 @@ function getMimeType(filename: string): string {
   return MIME_TYPES[ext] ?? 'application/octet-stream';
 }
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ path: string[] }> },
-) {
+export async function GET(_request: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const { path: segments } = await params;
 
   // Reject empty paths
@@ -71,7 +68,12 @@ export async function GET(
   }
 
   // Decode and re-check (catches %2e%2e and similar encodings)
-  const decoded = decodeURIComponent(relativePath);
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(relativePath);
+  } catch {
+    return new Response('Bad Request', { status: 400 });
+  }
   if (decoded.includes('..') || decoded.startsWith('/')) {
     return new Response('Forbidden', { status: 403 });
   }
@@ -102,6 +104,11 @@ export async function GET(
         'Content-Length': String(fileStat.size),
         'Cache-Control': 'public, max-age=31536000, immutable',
         'X-Content-Type-Options': 'nosniff',
+        'Cross-Origin-Resource-Policy': 'same-origin',
+        // Defence in depth: even if a dangerous type is ever stored, it cannot
+        // execute script or load subresources when opened directly.
+        'Content-Security-Policy': "default-src 'none'; sandbox",
+        'Content-Disposition': 'inline',
       },
     });
   } catch (err: unknown) {

@@ -11,18 +11,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
-  Archive,
   Check,
   ChevronDown,
   ChevronRight,
-  Copy,
   ExternalLink,
   Image as ImageIcon,
   Loader2,
   MoreHorizontal,
   Plus,
   Save,
-  Share2,
   Sparkles,
   Trash2,
   X,
@@ -263,20 +260,6 @@ function mergeMetadata(base: ProductEditorData, meta: Record<string, unknown>): 
     provider: (meta.provider as string) || base.provider,
     extractionConfidence: (meta.extractionConfidence as string) || base.extractionConfidence,
   };
-}
-
-/** Calculate pricing totals */
-function calcPricing(data: ProductEditorData) {
-  const price = parseFloat(data.currentPrice) || 0;
-  const original = parseFloat(data.originalPrice) || 0;
-  const shipping = parseFloat(data.shippingCost) || 0;
-  const tax = parseFloat(data.tax) || 0;
-
-  const savings = original > price && price > 0 ? original - price : 0;
-  const savingsPercent = original > 0 && savings > 0 ? Math.round((savings / original) * 100) : 0;
-  const total = price + shipping + tax;
-
-  return { savings: savings.toFixed(2), savingsPercent, total: total.toFixed(2) };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -680,22 +663,6 @@ export function ProductEditorDrawer({
   const overflowActions = useMemo(
     () => [
       {
-        label: 'Duplicate',
-        icon: Copy,
-        action: () => {
-          toast.info('Duplicate coming soon');
-          setOverflowOpen(false);
-        },
-      },
-      {
-        label: 'Share',
-        icon: Share2,
-        action: () => {
-          toast.info('Share coming soon');
-          setOverflowOpen(false);
-        },
-      },
-      {
         label: 'Copy Link',
         icon: ExternalLink,
         action: () => {
@@ -703,14 +670,6 @@ export function ProductEditorDrawer({
             navigator.clipboard.writeText(data.url);
             toast.success('Link copied');
           }
-          setOverflowOpen(false);
-        },
-      },
-      {
-        label: 'Archive',
-        icon: Archive,
-        action: () => {
-          toast.info('Archive coming soon');
           setOverflowOpen(false);
         },
       },

@@ -1,6 +1,5 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-
 import { getGitHub } from '@/lib/auth/oauth';
 import { handleOAuthCallback } from '@/lib/auth/oauth-helpers';
 
@@ -58,17 +57,21 @@ export async function GET(request: Request) {
   });
   if (emailsRes.ok) {
     const emails = (await emailsRes.json()) as GitHubEmail[];
-    primaryEmail = emails.find((e) => e.primary && e.verified)?.email
-      ?? emails.find((e) => e.verified)?.email
-      ?? null;
+    primaryEmail =
+      emails.find((e) => e.primary && e.verified)?.email ??
+      emails.find((e) => e.verified)?.email ??
+      null;
   }
-  if (!primaryEmail) primaryEmail = ghUser.email;
+  // Do NOT fall back to ghUser.email: the public profile email is not
+  // guaranteed to be verified by GitHub, and using it for auto-linking would
+  // allow account takeover. Only /user/emails entries marked verified are used.
 
   // Handle callback with shared logic
   const redirectUrl = await handleOAuthCallback({
     provider: 'github',
     providerAccountId: String(ghUser.id),
     email: primaryEmail,
+    emailVerifiedByProvider: primaryEmail !== null,
     name: ghUser.name ?? ghUser.login,
     avatar: ghUser.avatar_url,
     accessToken,

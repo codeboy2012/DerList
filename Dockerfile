@@ -49,6 +49,8 @@ RUN addgroup --system --gid 1001 nodejs && \
 # Create uploads directory owned by runtime user
 RUN mkdir -p /app/uploads && chown nextjs:nodejs /app/uploads
 
+# Worker startup helper (same image, different command)
+
 # Copy production dependencies (includes prisma CLI, dotenv, tsx for seed)
 # Use --chown to avoid slow recursive chown on large node_modules
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
@@ -62,6 +64,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+# Copy worker sources and TypeScript config.
+# The worker runs through tsx (a production dependency) using the same
+# standalone image, so it does not need a second build stage.
+COPY --from=builder --chown=nextjs:nodejs /app/src ./src
+COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
+COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
 
 # Copy entrypoint script
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./docker-entrypoint.sh

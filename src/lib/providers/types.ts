@@ -39,6 +39,8 @@ export interface AIOptions {
   temperature?: number;
   /** If true, request JSON output */
   json?: boolean;
+  /** Abort a request that is taking too long or was cancelled by the user. */
+  signal?: AbortSignal;
 }
 
 export interface AIResponse {

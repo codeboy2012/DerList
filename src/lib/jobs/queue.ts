@@ -25,7 +25,7 @@ const BASE_RETRY_DELAY_MS = 60_000; // 1 minute
  */
 export async function enqueueProductRefresh(
   productId: string,
-  runAt?: Date,
+  runAt?: Date
 ): Promise<string | null> {
   // Check for existing pending/running job
   const existing = await prisma.productFetchJob.findFirst({
@@ -155,6 +155,20 @@ export async function failJob(jobId: string, error: string): Promise<void> {
       data: { status: 'FAILED', error, finishedAt: new Date() },
     });
   }
+}
+
+/**
+ * Recover jobs that were claimed by a worker that died before finishing.
+ * Without this, a crash leaves rows stuck in RUNNING forever because claimJobs
+ * only selects PENDING jobs.
+ */
+export async function recoverStaleJobs(staleAfterMs = 15 * 60 * 1000): Promise<number> {
+  const cutoff = new Date(Date.now() - staleAfterMs);
+  const result = await prisma.productFetchJob.updateMany({
+    where: { status: 'RUNNING', startedAt: { lt: cutoff } },
+    data: { status: 'PENDING', startedAt: null },
+  });
+  return result.count;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

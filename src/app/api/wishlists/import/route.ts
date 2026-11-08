@@ -98,40 +98,73 @@ export async function POST(request: Request) {
         }
       }
     } catch {
-      // Metadata extraction failed — use URL as title
-      if (!title) title = url;
+      // Metadata extraction failed. Never use the URL as a product title;
+      // the caller is asked for a real title below instead.
     }
   }
 
+  title = title.trim();
+
   if (!title) {
-    return NextResponse.json({ error: 'Title or URL is required' }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: 'Could not read a product title from this URL. Enter a title and try again.',
+      },
+      { status: 422 }
+    );
   }
 
-  // Get next position
-  const lastItem = await prisma.wishlistItem.findFirst({
-    where: { wishlistId },
-    orderBy: { position: 'desc' },
-    select: { position: true },
-  });
-  const position = (lastItem?.position ?? -1) + 1;
+  // Reuse an existing item for the same URL instead of duplicating it.
+  if (url) {
+    const existing = await prisma.wishlistItem.findFirst({
+      where: { wishlistId, url },
+      select: { id: true, title: true, image: true, currentPrice: true },
+    });
 
-  // Create item immediately
-  const item = await prisma.wishlistItem.create({
-    data: {
-      wishlistId,
-      title,
-      description,
-      url,
-      image,
-      brand,
-      retailer,
-      currentPrice: price,
-      currency: 'USD',
-      category: body.category || null,
-      position,
-      // Mark as enrichment pending in metadata
-      metadata: JSON.stringify({ enrichmentStatus: 'pending' }),
-    },
+    if (existing) {
+      return NextResponse.json({
+        success: true,
+        deduplicated: true,
+        item: {
+          id: existing.id,
+          title: existing.title,
+          image: existing.image,
+          currentPrice: existing.currentPrice?.toString() ?? null,
+          brand,
+          retailer,
+          enriching: false,
+        },
+      });
+    }
+  }
+
+  // Create the item and its position in one transaction so concurrent
+  // imports cannot assign the same position.
+  const item = await prisma.$transaction(async (tx) => {
+    const lastItem = await tx.wishlistItem.findFirst({
+      where: { wishlistId },
+      orderBy: { position: 'desc' },
+      select: { position: true },
+    });
+    const position = (lastItem?.position ?? -1) + 1;
+
+    return tx.wishlistItem.create({
+      data: {
+        wishlistId,
+        title,
+        description,
+        url,
+        image,
+        brand,
+        retailer,
+        currentPrice: price,
+        currency: 'USD',
+        category: body.category || null,
+        position,
+        // Mark as enrichment pending in metadata
+        metadata: JSON.stringify({ enrichmentStatus: 'pending' }),
+      },
+    });
   });
 
   revalidatePath(`/wishlists/${wishlistId}`);

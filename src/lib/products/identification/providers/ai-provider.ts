@@ -20,28 +20,27 @@
 
 import { getProviderManager } from '@/lib/providers';
 import type { AIProvider, Message } from '@/lib/providers/types';
-import { sanitizeBrand, sanitizeImage, sanitizeTitle } from '../../validation';
-import type { IdentificationInput, IdentificationProvider, IdentifiedProduct } from '../types';
-import type { SearchEvidence } from './search-provider';
-import { importLog } from '../logging';
-import {
-  buildSystemPrompt,
-  buildIdentificationPrompt,
-  assembleIdentificationContext,
-  parseAIResponse,
-} from '../ai-product-prompt';
+import { sanitizeBrand, sanitizeTitle } from '../../validation';
 import type {
-  AIIdentificationResult,
+  AIIdentificationMetadata,
   AIProductResponse,
   FieldSourceMap,
-  AIImportStatus,
-  IdentityVerificationResult,
   IdentityCheck,
   IdentityConflict,
-  AIIdentificationMetadata,
+  IdentityVerificationResult,
   NoAIConfiguredResult,
   SearchEvidenceContext,
 } from '../ai-identification-types';
+import {
+  assembleIdentificationContext,
+  buildIdentificationPrompt,
+  buildSystemPrompt,
+  parseAIResponse,
+} from '../ai-product-prompt';
+import { selectImageFromEvidence, selectPriceFromEvidence } from '../evidence-only';
+import { importLog } from '../logging';
+import type { IdentificationInput, IdentificationProvider, IdentifiedProduct } from '../types';
+import type { SearchEvidence } from './search-provider';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -55,6 +54,28 @@ const AI_MAX_TOKENS = 2048;
 
 /** Temperature for identification (low = more deterministic) */
 const AI_TEMPERATURE = 0.1;
+
+/**
+ * Scratch state the pipeline attaches to the mutable identification input.
+ * Providers communicate results through this bag instead of the public input.
+ */
+interface IdentificationScratch {
+  _noAIConfigured?: NoAIConfiguredResult;
+  _searchEvidence?: SearchEvidence;
+  _allSearchEvidence?: SearchEvidence[];
+  _aiFailure?: { error: string; durationMs: number; isTimeout?: boolean };
+  _aiResponse?: AIProductResponse;
+  _aiMetadata?: AIIdentificationMetadata;
+  _identityVerification?: IdentityVerificationResult;
+  _identityConflict?: IdentityVerificationResult;
+  _fieldSources?: FieldSourceMap;
+}
+
+type ScratchInput = IdentificationInput & IdentificationScratch;
+
+function scratchOf(input: IdentificationInput): ScratchInput {
+  return input as ScratchInput;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider Implementation
@@ -97,7 +118,8 @@ export class AIIdentificationProvider implements IdentificationProvider {
       // Signal to the pipeline that AI is not configured
       const noAIResult: NoAIConfiguredResult = {
         status: 'no_ai_configured',
-        message: 'AI product identification is not configured. Please enter the product details manually.',
+        message:
+          'AI product identification is not configured. Please enter the product details manually.',
         verifiedContext: {
           url: input.url ?? null,
           asin: input.asin ?? null,
@@ -107,13 +129,13 @@ export class AIIdentificationProvider implements IdentificationProvider {
           mpn: null,
         },
       };
-      (input as any)._noAIConfigured = noAIResult;
+      scratchOf(input)._noAIConfigured = noAIResult;
       return null;
     }
 
     // ── Assemble context ──
-    const searchEvidence = (input as any)._searchEvidence as SearchEvidence | undefined;
-    const allSearchEvidence = (input as any)._allSearchEvidence as SearchEvidence[] | undefined;
+    const searchEvidence = scratchOf(input)._searchEvidence as SearchEvidence | undefined;
+    const allSearchEvidence = scratchOf(input)._allSearchEvidence as SearchEvidence[] | undefined;
 
     importLog('AI_IDENTIFICATION_STARTED', {
       asin: input.asin,
@@ -157,7 +179,8 @@ export class AIIdentificationProvider implements IdentificationProvider {
     if (input.partialData) {
       if (input.partialData.title) structuredMetadata.title = input.partialData.title;
       if (input.partialData.brand) structuredMetadata.brand = input.partialData.brand;
-      if (input.partialData.description) structuredMetadata.description = input.partialData.description;
+      if (input.partialData.description)
+        structuredMetadata.description = input.partialData.description;
       if (input.partialData.price) structuredMetadata.price = input.partialData.price;
       if (input.partialData.imageUrl) structuredMetadata.image = input.partialData.imageUrl;
     }
@@ -168,7 +191,8 @@ export class AIIdentificationProvider implements IdentificationProvider {
       asin: input.asin,
       retailer: input.retailer,
       searchEvidence: evidenceForContext,
-      structuredMetadata: Object.keys(structuredMetadata).length > 0 ? structuredMetadata : undefined,
+      structuredMetadata:
+        Object.keys(structuredMetadata).length > 0 ? structuredMetadata : undefined,
     });
 
     // ── Build messages ──
@@ -180,22 +204,21 @@ export class AIIdentificationProvider implements IdentificationProvider {
       { role: 'user', content: userPrompt },
     ];
 
-    // ── Call AI with timeout ──
+    // ── Call AI with an abortable timeout ──
     let responseContent: string;
     let model: string | undefined;
     let tokensUsed: number | undefined;
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+
     try {
-      const response = await Promise.race([
-        aiProvider.chat(messages, {
-          maxTokens: AI_MAX_TOKENS,
-          temperature: AI_TEMPERATURE,
-          json: true,
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('AI identification timeout')), AI_TIMEOUT_MS)
-        ),
-      ]);
+      const response = await aiProvider.chat(messages, {
+        maxTokens: AI_MAX_TOKENS,
+        temperature: AI_TEMPERATURE,
+        json: true,
+        signal: controller.signal,
+      });
 
       responseContent = response.content;
       model = response.model;
@@ -206,12 +229,14 @@ export class AIIdentificationProvider implements IdentificationProvider {
       importLog('AI_ERROR', { error: errorMessage, durationMs });
 
       // Store failure metadata for the pipeline
-      (input as any)._aiFailure = {
+      scratchOf(input)._aiFailure = {
         error: errorMessage,
         durationMs,
-        isTimeout: errorMessage.includes('timeout'),
+        isTimeout: controller.signal.aborted || errorMessage.includes('timeout'),
       };
       return null;
+    } finally {
+      clearTimeout(timeout);
     }
 
     // ── Parse AI response ──
@@ -221,7 +246,7 @@ export class AIIdentificationProvider implements IdentificationProvider {
         responsePreview: responseContent.substring(0, 200),
         durationMs: Date.now() - startTime,
       });
-      (input as any)._aiFailure = {
+      scratchOf(input)._aiFailure = {
         error: 'Failed to parse AI response as valid JSON',
         durationMs: Date.now() - startTime,
       };
@@ -235,7 +260,7 @@ export class AIIdentificationProvider implements IdentificationProvider {
         reason: aiResponse.reason,
         durationMs: Date.now() - startTime,
       });
-      (input as any)._aiResponse = aiResponse;
+      scratchOf(input)._aiResponse = aiResponse;
       return null;
     }
 
@@ -243,16 +268,19 @@ export class AIIdentificationProvider implements IdentificationProvider {
     const identityVerification = this.verifyIdentity(input, aiResponse);
 
     // If critical identity conflict, reject
-    if (!identityVerification.verified && identityVerification.conflicts.some(c => c.severity === 'critical')) {
+    if (
+      !identityVerification.verified &&
+      identityVerification.conflicts.some((c) => c.severity === 'critical')
+    ) {
       importLog('AI_IDENTIFICATION_COMPLETED', {
         status: 'conflict',
-        conflicts: identityVerification.conflicts.map(c => c.message),
+        conflicts: identityVerification.conflicts.map((c) => c.message),
         durationMs: Date.now() - startTime,
       });
 
       // Store the conflict info for the pipeline
-      (input as any)._aiResponse = aiResponse;
-      (input as any)._identityConflict = identityVerification;
+      scratchOf(input)._aiResponse = aiResponse;
+      scratchOf(input)._identityConflict = identityVerification;
       return null;
     }
 
@@ -272,7 +300,11 @@ export class AIIdentificationProvider implements IdentificationProvider {
     const fieldSources = this.buildFieldSources(input, aiResponse, searchEvidence);
 
     // ── Determine confidence ──
-    const confidence = this.calculateFinalConfidence(aiResponse, identityVerification, searchEvidence);
+    const confidence = this.calculateFinalConfidence(
+      aiResponse,
+      identityVerification,
+      searchEvidence
+    );
 
     // ── Build the identified product ──
     const durationMs = Date.now() - startTime;
@@ -282,7 +314,11 @@ export class AIIdentificationProvider implements IdentificationProvider {
     const imageUrl = this.resolveImageFromEvidence(aiResponse, searchEvidence, input);
 
     // Price: only accept if from evidence or AI has high confidence
-    const price = this.resolvePriceFromEvidence(aiResponse, searchEvidence);
+    const price = this.resolvePriceFromEvidence(
+      aiResponse,
+      searchEvidence,
+      input.partialData?.price
+    );
 
     // Store full AI result for downstream consumers
     const metadata: AIIdentificationMetadata = {
@@ -291,21 +327,26 @@ export class AIIdentificationProvider implements IdentificationProvider {
       tokensUsed: tokensUsed ?? null,
       durationMs,
       timestamp: new Date().toISOString(),
-      importMethod: input.inputType === 'url' ? 'url' : input.inputType === 'product-name' ? 'name' : 'shopping-list',
+      importMethod:
+        input.inputType === 'url'
+          ? 'url'
+          : input.inputType === 'product-name'
+            ? 'name'
+            : 'shopping-list',
       importSource: input.retailer?.toLowerCase() ?? 'unknown',
     };
 
-    (input as any)._aiResponse = aiResponse;
-    (input as any)._aiMetadata = metadata;
-    (input as any)._identityVerification = identityVerification;
-    (input as any)._fieldSources = fieldSources;
+    scratchOf(input)._aiResponse = aiResponse;
+    scratchOf(input)._aiMetadata = metadata;
+    scratchOf(input)._identityVerification = identityVerification;
+    scratchOf(input)._fieldSources = fieldSources;
 
     importLog('AI_IDENTIFICATION_COMPLETED', {
       status: aiResponse.status,
       title,
       brand: product.brand,
       confidence,
-      asinMatch: identityVerification.checks.find(c => c.field === 'asin')?.passed ?? null,
+      asinMatch: identityVerification.checks.find((c) => c.field === 'asin')?.passed ?? null,
       durationMs,
       model,
       tokensUsed,
@@ -333,10 +374,19 @@ export class AIIdentificationProvider implements IdentificationProvider {
       fieldSources: {
         titleSource: 'ai-identification',
         brandSource: product.brand ? 'ai-identification' : undefined,
-        priceSource: price != null ? (searchEvidence?.price != null ? 'search-provider' : 'ai-identification') : undefined,
+        priceSource:
+          price != null
+            ? searchEvidence?.price != null
+              ? 'search-provider'
+              : 'ai-identification'
+            : undefined,
         categorySource: product.category ? 'ai-identification' : undefined,
         descriptionSource: product.description ? 'ai-identification' : undefined,
-        imageSource: imageUrl ? (searchEvidence?.imageUrl === imageUrl ? 'search-provider' : 'ai-identification') : undefined,
+        imageSource: imageUrl
+          ? searchEvidence?.imageUrl === imageUrl
+            ? 'search-provider'
+            : 'ai-identification'
+          : undefined,
         urlSource: input.url ? 'user-input' : undefined,
       },
     };
@@ -354,7 +404,7 @@ export class AIIdentificationProvider implements IdentificationProvider {
    */
   private verifyIdentity(
     input: IdentificationInput,
-    aiResponse: AIProductResponse,
+    aiResponse: AIProductResponse
   ): IdentityVerificationResult {
     const checks: IdentityCheck[] = [];
     const conflicts: IdentityConflict[] = [];
@@ -420,7 +470,7 @@ export class AIIdentificationProvider implements IdentificationProvider {
     }
 
     // ── Cross-check with search evidence ──
-    const searchEvidence = (input as any)._searchEvidence as SearchEvidence | undefined;
+    const searchEvidence = scratchOf(input)._searchEvidence as SearchEvidence | undefined;
     if (searchEvidence && searchEvidence.matchedAsin && aiResponse.product.name) {
       totalChecks++;
       // If search found a title for this ASIN, check for major disagreement
@@ -467,11 +517,9 @@ export class AIIdentificationProvider implements IdentificationProvider {
       });
     }
 
-    const confidence = totalChecks > 0
-      ? Math.round((passedChecks / totalChecks) * 100)
-      : 50; // No checks = moderate confidence
+    const confidence = totalChecks > 0 ? Math.round((passedChecks / totalChecks) * 100) : 50; // No checks = moderate confidence
 
-    const hasCriticalConflict = conflicts.some(c => c.severity === 'critical');
+    const hasCriticalConflict = conflicts.some((c) => c.severity === 'critical');
 
     return {
       verified: !hasCriticalConflict && confidence >= 50,
@@ -492,7 +540,7 @@ export class AIIdentificationProvider implements IdentificationProvider {
   private calculateFinalConfidence(
     aiResponse: AIProductResponse,
     verification: IdentityVerificationResult,
-    searchEvidence?: SearchEvidence,
+    searchEvidence?: SearchEvidence
   ): number {
     let confidence = aiResponse.confidence.overall;
 
@@ -507,9 +555,9 @@ export class AIIdentificationProvider implements IdentificationProvider {
     }
 
     // Penalize if there are warnings
-    const warnings = verification.conflicts.filter(c => c.severity === 'warning');
+    const warnings = verification.conflicts.filter((c) => c.severity === 'warning');
     if (warnings.length > 0) {
-      confidence = Math.max(30, confidence - (warnings.length * 5));
+      confidence = Math.max(30, confidence - warnings.length * 5);
     }
 
     // Penalize if AI status is uncertain
@@ -533,7 +581,7 @@ export class AIIdentificationProvider implements IdentificationProvider {
   private buildFieldSources(
     input: IdentificationInput,
     aiResponse: AIProductResponse,
-    searchEvidence?: SearchEvidence,
+    searchEvidence?: SearchEvidence
   ): FieldSourceMap {
     const now = new Date().toISOString();
     const sources: FieldSourceMap = {};
@@ -548,7 +596,11 @@ export class AIIdentificationProvider implements IdentificationProvider {
       sources.model = { source: 'ai', confidence: aiResponse.confidence.model, timestamp: now };
     }
     if (aiResponse.product.category) {
-      sources.category = { source: 'ai', confidence: aiResponse.confidence.category, timestamp: now };
+      sources.category = {
+        source: 'ai',
+        confidence: aiResponse.confidence.category,
+        timestamp: now,
+      };
     }
 
     // ASIN source is URL if extracted from URL, otherwise AI
@@ -592,30 +644,13 @@ export class AIIdentificationProvider implements IdentificationProvider {
   private resolveImageFromEvidence(
     aiResponse: AIProductResponse,
     searchEvidence?: SearchEvidence,
-    input?: IdentificationInput,
+    input?: IdentificationInput
   ): string | null {
-    // Priority 1: Search evidence image (already validated by search provider)
-    if (searchEvidence?.imageUrl) {
-      const validated = sanitizeImage(searchEvidence.imageUrl);
-      if (validated) return validated;
-    }
-
-    // Priority 2: AI-provided images (only from evidence)
-    if (aiResponse.product.images.length > 0) {
-      for (const img of aiResponse.product.images) {
-        const validated = sanitizeImage(img.url);
-        if (validated) return validated;
-      }
-    }
-
-    // Priority 3: Partial data from prior extraction
-    if (input?.partialData?.imageUrl) {
-      const validated = sanitizeImage(input.partialData.imageUrl);
-      if (validated) return validated;
-    }
-
-    // No verified image available — will be resolved by image-resolution stage
-    return null;
+    return selectImageFromEvidence({
+      searchImage: searchEvidence?.imageUrl ?? null,
+      partialImage: input?.partialData?.imageUrl ?? null,
+      aiImages: aiResponse.product.images,
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -629,24 +664,16 @@ export class AIIdentificationProvider implements IdentificationProvider {
   private resolvePriceFromEvidence(
     aiResponse: AIProductResponse,
     searchEvidence?: SearchEvidence,
+    partialPrice?: number | null
   ): number | null {
-    // Priority 1: Search evidence price (from actual shopping results)
-    if (searchEvidence?.price != null && searchEvidence.price > 0) {
-      return searchEvidence.price;
-    }
-
-    // Priority 2: AI price only if confidence is high AND status is "identified"
-    if (
-      aiResponse.product.pricing.currentPrice != null &&
-      aiResponse.product.pricing.currentPrice > 0 &&
-      aiResponse.confidence.price >= 70 &&
-      aiResponse.status === 'identified'
-    ) {
-      return aiResponse.product.pricing.currentPrice;
-    }
-
-    // No verified price available
-    return null;
+    return selectPriceFromEvidence({
+      searchPrice: searchEvidence?.price ?? null,
+      partialPrice: partialPrice ?? null,
+      aiPrice: aiResponse.product.pricing.currentPrice,
+      aiPriceConfidence: aiResponse.confidence.price,
+      status: aiResponse.status,
+      verifiedFields: aiResponse.verifiedFields,
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -655,7 +682,7 @@ export class AIIdentificationProvider implements IdentificationProvider {
 
   private buildEvidenceStrings(
     aiResponse: AIProductResponse,
-    verification: IdentityVerificationResult,
+    verification: IdentityVerificationResult
   ): string[] {
     const evidence: string[] = [];
 
@@ -699,8 +726,18 @@ export class AIIdentificationProvider implements IdentificationProvider {
    * Returns 0-1 where 1 = identical.
    */
   private titleSimilarity(titleA: string, titleB: string): number {
-    const wordsA = new Set(titleA.toLowerCase().split(/\s+/).filter(w => w.length > 2));
-    const wordsB = new Set(titleB.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+    const wordsA = new Set(
+      titleA
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((w) => w.length > 2)
+    );
+    const wordsB = new Set(
+      titleB
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((w) => w.length > 2)
+    );
 
     if (wordsA.size === 0 || wordsB.size === 0) return 0;
 

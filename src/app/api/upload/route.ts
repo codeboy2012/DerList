@@ -1,4 +1,4 @@
-import { requireUser } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { uploadFile } from '@/lib/uploads';
 
@@ -11,7 +11,10 @@ import { uploadFile } from '@/lib/uploads';
  * - purpose: string context (e.g. "avatar", "wishlist_icon", "product_image")
  */
 export async function POST(request: Request) {
-  const user = await requireUser();
+  const user = await getCurrentUser();
+  if (!user) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   const formData = await request.formData();
   const file = formData.get('file');

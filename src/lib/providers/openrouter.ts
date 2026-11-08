@@ -27,11 +27,6 @@ const FREE_FALLBACKS = [
   'qwen/qwen3-235b-a22b:free',
 ];
 
-/** Check if a model is known to be free (no credits needed) */
-function isFreeModel(model: string): boolean {
-  return model === 'openrouter/free' || model.endsWith(':free');
-}
-
 /** Errors where we should retry with a different model */
 function isRetryableModelError(status: number, body: string): boolean {
   if (status === 404) return true;
@@ -94,6 +89,10 @@ export class OpenRouterProvider implements AIProvider {
     let attempt = 0;
 
     for (const model of modelsToTry) {
+      if (options?.signal?.aborted) {
+        throw new DOMException('Request aborted', 'AbortError');
+      }
+
       attempt++;
       const isFallback = model !== requestedModel;
 
@@ -109,7 +108,8 @@ export class OpenRouterProvider implements AIProvider {
           messages,
           maxTokens,
           temperature,
-          options?.json
+          options?.json,
+          options?.signal
         );
 
         if (process.env.NODE_ENV === 'development') {
@@ -120,6 +120,11 @@ export class OpenRouterProvider implements AIProvider {
 
         return result;
       } catch (error) {
+        // Cancellation must not trigger the free-model fallback loop.
+        if (options?.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+          throw error;
+        }
+
         const msg = error instanceof Error ? error.message : String(error);
         const statusMatch = msg.match(/\((\d{3})\)/);
         const status = statusMatch ? parseInt(statusMatch[1]) : 0;
@@ -164,7 +169,8 @@ export class OpenRouterProvider implements AIProvider {
     messages: Message[],
     maxTokens: number,
     temperature: number,
-    json?: boolean
+    json?: boolean,
+    signal?: AbortSignal
   ): Promise<AIResponse> {
     const body: Record<string, unknown> = {
       model,
@@ -194,6 +200,7 @@ export class OpenRouterProvider implements AIProvider {
         'X-Title': 'DerList',
       },
       body: JSON.stringify(body),
+      signal,
     });
 
     if (!response.ok) {

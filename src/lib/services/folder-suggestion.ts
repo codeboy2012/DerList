@@ -62,6 +62,11 @@ export interface ExistingFolderMatch {
   similarity: number;
 }
 
+interface ExistingFolder {
+  id: string;
+  name: string;
+}
+
 export interface ApplyFolderInput {
   wishlistId: string;
   itemIds: string[];
@@ -93,7 +98,11 @@ export class FolderSuggestionService {
     const existingCategories = await this.getExistingCategories(wishlistId);
 
     // Ask AI to analyze the group
-    const aiSuggestion = await this.getAISuggestion(items, existingCategories, userId);
+    const aiSuggestion = await this.getAISuggestion(
+      items,
+      existingCategories.map((category) => category.name),
+      userId
+    );
     if (!aiSuggestion || !aiSuggestion.shouldGroup) return null;
 
     // Check if an existing folder matches
@@ -130,13 +139,20 @@ export class FolderSuggestionService {
       }
     }
 
-    // Create new category
-    const category = await prisma.wishlistCategory.create({
-      data: {
-        wishlistId: input.wishlistId,
-        name: input.folderName,
-      },
+    // Reuse an existing folder with the same name instead of creating a
+    // duplicate (and potentially violating the unique (wishlistId, name) key).
+    const existingCategory = await prisma.wishlistCategory.findFirst({
+      where: { wishlistId: input.wishlistId, name: input.folderName },
     });
+
+    const category =
+      existingCategory ??
+      (await prisma.wishlistCategory.create({
+        data: {
+          wishlistId: input.wishlistId,
+          name: input.folderName,
+        },
+      }));
 
     // Assign all items to the folder
     await prisma.wishlistItem.updateMany({
@@ -159,37 +175,48 @@ export class FolderSuggestionService {
 
   // ─── Private ───
 
-  private async getExistingCategories(wishlistId: string): Promise<string[]> {
+  private async getExistingCategories(wishlistId: string): Promise<ExistingFolder[]> {
     const categories = await prisma.wishlistCategory.findMany({
       where: { wishlistId },
-      select: { name: true },
+      select: { id: true, name: true },
     });
     const itemCategories = await prisma.wishlistItem.findMany({
       where: { wishlistId, category: { not: null } },
       select: { category: true },
       distinct: ['category'],
     });
-    const all = new Set([
-      ...categories.map((c) => c.name),
-      ...itemCategories.map((c) => c.category!),
-    ]);
-    return [...all];
+
+    const byName = new Map<string, ExistingFolder>();
+    for (const category of categories) {
+      byName.set(category.name.toLowerCase(), category);
+    }
+    for (const item of itemCategories) {
+      if (!item.category) continue;
+      const key = item.category.toLowerCase();
+      if (!byName.has(key)) byName.set(key, { id: '', name: item.category });
+    }
+
+    return [...byName.values()];
   }
 
   private findExistingMatch(
     suggested: string,
-    existing: string[]
+    existing: ExistingFolder[]
   ): ExistingFolderMatch | undefined {
     const lower = suggested.toLowerCase();
-    for (const name of existing) {
-      const nameLower = name.toLowerCase();
+    for (const folder of existing) {
+      const nameLower = folder.name.toLowerCase();
       // Check for substring or high similarity
       if (
         nameLower.includes(lower) ||
         lower.includes(nameLower) ||
         this.similarity(lower, nameLower) > 0.7
       ) {
-        return { id: '', name, similarity: this.similarity(lower, nameLower) };
+        return {
+          id: folder.id,
+          name: folder.name,
+          similarity: this.similarity(lower, nameLower),
+        };
       }
     }
     return undefined;

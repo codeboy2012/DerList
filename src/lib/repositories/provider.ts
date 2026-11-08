@@ -136,7 +136,7 @@ export const ProviderRepository = {
   async listByCategory(userId: string, category: ProviderCategory): Promise<ProviderConfig[]> {
     const configs = await prisma.providerConfiguration.findMany({
       where: { userId, category, enabled: true },
-      orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+      orderBy: [{ isDefault: 'desc' }, { priority: 'asc' }, { createdAt: 'asc' }],
     });
 
     return configs.map(decryptConfig);
@@ -322,8 +322,15 @@ function decryptConfig(raw: ProviderConfiguration): ProviderConfig {
   try {
     const decrypted = decrypt(raw.encryptedConfig, raw.configIv, raw.configAuthTag);
     config = JSON.parse(decrypted);
-  } catch {
-    // If decryption fails (key changed, corrupted), return empty config
+  } catch (error) {
+    // Never silently degrade: an empty config makes the provider look
+    // configured while every request fails. Log identifiers only (no secrets)
+    // so operators can detect a rotated key or corrupted row.
+    console.error('Failed to decrypt provider configuration', {
+      providerConfigId: raw.id,
+      providerId: raw.providerId,
+      error: error instanceof Error ? error.message : 'unknown error',
+    });
     config = {};
   }
 

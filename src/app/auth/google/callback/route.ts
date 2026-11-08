@@ -1,6 +1,5 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-
 import { getGoogle } from '@/lib/auth/oauth';
 import { handleOAuthCallback } from '@/lib/auth/oauth-helpers';
 
@@ -47,13 +46,14 @@ export async function GET(request: Request) {
   if (!userRes.ok) redirect('/login?error=oauth_profile_failed');
   const googleUser = (await userRes.json()) as GoogleTokenInfo;
 
-  const email = googleUser.email_verified ? googleUser.email ?? null : null;
+  const email = googleUser.email_verified ? (googleUser.email ?? null) : null;
 
   // Handle callback with shared logic
   const redirectUrl = await handleOAuthCallback({
     provider: 'google',
     providerAccountId: googleUser.sub,
     email,
+    emailVerifiedByProvider: googleUser.email_verified === true,
     name: googleUser.name ?? null,
     avatar: googleUser.picture ?? null,
     accessToken,

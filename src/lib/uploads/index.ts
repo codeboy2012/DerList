@@ -6,9 +6,9 @@
  * StorageBackend interface without changing application code.
  */
 
-import { mkdir, writeFile, unlink, stat } from 'fs/promises';
-import { join } from 'path';
 import { randomBytes } from 'crypto';
+import { mkdir, unlink, writeFile } from 'fs/promises';
+import { join } from 'path';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Storage Backend Interface
@@ -70,13 +70,11 @@ export function getStorage(): StorageBackend {
 // Upload Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ALLOWED_IMAGE_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'image/svg+xml',
-]);
+/**
+ * SVG is deliberately excluded: uploaded SVGs are served from the application
+ * origin and can contain script, which turns an upload into stored XSS.
+ */
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -102,11 +100,11 @@ export interface UploadError {
  */
 export async function uploadFile(
   file: File,
-  directory: string,
+  directory: string
 ): Promise<UploadResult | UploadError> {
   // Validate type
   if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-    return { error: `Unsupported file type: ${file.type}. Allowed: JPG, PNG, WEBP, GIF, SVG.` };
+    return { error: `Unsupported file type: ${file.type}. Allowed: JPG, PNG, WEBP, GIF.` };
   }
 
   // Validate size
@@ -168,7 +166,6 @@ function getExtension(filename: string, mimeType: string): string {
     'image/png': '.png',
     'image/webp': '.webp',
     'image/gif': '.gif',
-    'image/svg+xml': '.svg',
   };
   return mimeExtMap[mimeType] ?? '.bin';
 }

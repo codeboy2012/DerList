@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
+import { getSessionToken, invalidateOtherUserSessions } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
 import type { ActionState } from '../../(auth)/actions';
 
@@ -116,6 +117,12 @@ export async function changePasswordAction(
     where: { id: sessionUser.id },
     data: { passwordHash: newHash },
   });
+
+  // Sign out every other device without terminating the current session.
+  const currentToken = await getSessionToken();
+  if (currentToken) {
+    await invalidateOtherUserSessions(sessionUser.id, currentToken);
+  }
 
   return { success: true };
 }

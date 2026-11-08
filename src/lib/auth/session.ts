@@ -1,6 +1,5 @@
 import { createHash, randomBytes } from 'crypto';
 import { cookies } from 'next/headers';
-
 import {
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_MS,
@@ -132,10 +131,25 @@ export async function invalidateSession(token: string): Promise<void> {
 }
 
 /**
- * Invalidate all sessions for a user (e.g. after password change or disable).
+ * Invalidate all sessions for a user (e.g. after disable or admin reset).
  */
 export async function invalidateAllUserSessions(userId: string): Promise<void> {
   await prisma.session.deleteMany({ where: { userId } });
+}
+
+/**
+ * Invalidate every session for a user except the one making the request.
+ * Used after a password change so other devices are signed out without
+ * terminating the session the user is currently using.
+ */
+export async function invalidateOtherUserSessions(
+  userId: string,
+  currentToken: string
+): Promise<void> {
+  const tokenHash = hashToken(currentToken);
+  await prisma.session.deleteMany({
+    where: { userId, tokenHash: { not: tokenHash } },
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

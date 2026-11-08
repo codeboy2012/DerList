@@ -8,6 +8,8 @@
  * It gathers factual data that is then sent to the AI for normalization.
  */
 
+import type { SearchOptions, SearchProvider, SearchResult } from '../types';
+
 const BRAVE_BASE_URL = 'https://api.search.brave.com/res/v1';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -71,7 +73,7 @@ export interface BraveResearchResult {
 // Provider
 // ─────────────────────────────────────────────────────────────────────────────
 
-export class BraveSearchProvider {
+export class BraveSearchProvider implements SearchProvider {
   readonly id = 'brave';
   readonly name = 'Brave Search';
   readonly category = 'search' as const;
@@ -92,6 +94,35 @@ export class BraveSearchProvider {
 
   isAvailable(): boolean {
     return Boolean(this.apiKey);
+  }
+
+  /**
+   * SearchProvider implementation.
+   *
+   * Brave's web results do not include structured pricing, so price/rating
+   * fields stay null rather than being guessed. Images are matched by result
+   * position when available.
+   */
+  async search(query: string, options?: SearchOptions): Promise<SearchResult[]> {
+    const limit = Math.max(1, Math.min(options?.maxResults ?? this.maxResults, 20));
+
+    const [web, images] = await Promise.all([
+      this.webSearch(query),
+      this.enableImages ? this.imageSearch(query).catch(() => []) : Promise.resolve([]),
+    ]);
+
+    return web.slice(0, limit).map((result, index) => ({
+      title: result.title,
+      url: result.url,
+      price: null,
+      currency: 'USD',
+      image: images[index]?.url ?? images[0]?.url ?? null,
+      retailer: result.source ?? getDomain(result.url) ?? null,
+      rating: null,
+      reviewCount: null,
+      snippet: result.description || null,
+      inStock: null,
+    }));
   }
 
   /**

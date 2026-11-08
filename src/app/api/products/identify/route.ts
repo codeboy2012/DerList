@@ -24,22 +24,26 @@
 
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { universalImport } from '@/lib/importers';
-import { identifyProduct } from '@/lib/products/identification';
-import type { IdentificationInput } from '@/lib/products/identification';
-import type { ExtendedIdentificationResult } from '@/lib/products/identification/pipeline';
-import type { AIImportStatus } from '@/lib/products/identification/ai-identification-types';
-import { validateTitle } from '@/lib/products/validation';
-import { extractAsinFromUrl } from '@/lib/importers/amazon';
-import { extractDomain, getRetailerName } from '@/lib/products/normalize';
-import { createServices } from '@/lib/services/create';
-import type { ProductDraft } from '@/lib/services/product';
 import {
+  buildActivityTimeline,
   emitIdentificationEvent,
   generateOperationId,
-  buildActivityTimeline,
   type IdentificationActivityItem,
 } from '@/lib/events/wishlist-events';
+import { universalImport } from '@/lib/importers';
+import { extractAsinFromUrl } from '@/lib/importers/amazon';
+import { identifyProduct, type IdentificationInput } from '@/lib/products/identification';
+import type { AIImportStatus } from '@/lib/products/identification/ai-identification-types';
+import {
+  computeOverallSuccess,
+  hasNoAiConfigured,
+} from '@/lib/products/identification/overall-status';
+import type { ExtendedIdentificationResult } from '@/lib/products/identification/pipeline';
+import { extractDomain, getRetailerName } from '@/lib/products/normalize';
+import { validateTitle } from '@/lib/products/validation';
+import { checkRateLimit } from '@/lib/security/rate-limit';
+import { createServices } from '@/lib/services/create';
+import type { ProductDraft } from '@/lib/services/product';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -125,6 +129,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const rate = checkRateLimit(`ai:identify:${user.id}`, 10, 60_000);
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: 'Too many identification requests. Try again shortly.' },
+      { status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds) } }
+    );
+  }
+
   let body: { input?: string; type?: string; data?: Record<string, unknown> };
   try {
     body = await request.json();
@@ -137,6 +149,13 @@ export async function POST(request: Request) {
 
   if (!input || typeof input !== 'string' || input.trim().length < 2) {
     return NextResponse.json({ error: 'Input is required (min 2 characters).' }, { status: 400 });
+  }
+
+  if (input.length > 2000) {
+    return NextResponse.json(
+      { error: 'Input is too long (max 2000 characters).' },
+      { status: 400 }
+    );
   }
 
   const operationId = generateOperationId();
@@ -192,36 +211,48 @@ export async function POST(request: Request) {
         {
           success: firstStatus?.status === 'identified',
           confidence: firstStatus?.confidence,
-          product: processedDrafts[0] ? {
-            title: processedDrafts[0].title,
-            brand: processedDrafts[0].brand,
-            asin: processedDrafts[0].asin,
-          } : undefined,
+          product: processedDrafts[0]
+            ? {
+                title: processedDrafts[0].title,
+                brand: processedDrafts[0].brand,
+                asin: processedDrafts[0].asin,
+              }
+            : undefined,
           aiImportStatus: firstStatus?.aiImportStatus,
           fieldSources: firstStatus?.fieldSources as Record<string, unknown> | undefined,
-        },
+        }
       ),
     };
 
     // 4. Emit completion event
-    const isSuccess = processedDrafts.length > 0 && firstStatus?.status !== 'failed' && firstStatus?.status !== 'no-ai-configured';
+    const isSuccess = computeOverallSuccess(itemStatuses);
     emitIdentificationEvent(user.id, operationId, {
-      step: isSuccess ? 'completed' : (firstStatus?.aiImportStatus === 'no_ai_configured' ? 'no_ai_configured' : 'failed'),
-      status: isSuccess ? 'success' : (firstStatus?.aiImportStatus === 'no_ai_configured' ? 'no_ai_configured' : 'failed'),
-      product: processedDrafts[0] ? {
-        name: processedDrafts[0].title || null,
-        brand: processedDrafts[0].brand || null,
-        asin: processedDrafts[0].asin || null,
-        price: processedDrafts[0].currentPrice || null,
-        image: processedDrafts[0].image || null,
-      } : undefined,
+      step: isSuccess
+        ? 'completed'
+        : hasNoAiConfigured(itemStatuses)
+          ? 'no_ai_configured'
+          : 'failed',
+      status: isSuccess
+        ? 'success'
+        : hasNoAiConfigured(itemStatuses)
+          ? 'no_ai_configured'
+          : 'failed',
+      product: processedDrafts[0]
+        ? {
+            name: processedDrafts[0].title || null,
+            brand: processedDrafts[0].brand || null,
+            asin: processedDrafts[0].asin || null,
+            price: processedDrafts[0].currentPrice || null,
+            image: processedDrafts[0].image || null,
+          }
+        : undefined,
       confidence: firstStatus?.confidence,
       activity: aiMeta.activity,
     });
 
     // 5. Return results
     const response: IdentifyResponse = {
-      success: processedDrafts.length > 0 && firstStatus?.status !== 'no-ai-configured',
+      success: computeOverallSuccess(itemStatuses),
       drafts: processedDrafts,
       isBatch: importResult.isBatch,
       batchName: importResult.batchName,
@@ -279,7 +310,7 @@ async function processDraft(
   rawInput: string,
   userId: string,
   products: { enrich: (draft: ProductDraft, userId: string) => Promise<ProductDraft> },
-  operationId: string,
+  operationId: string
 ): Promise<ProcessResult> {
   // Check if this draft needs further identification
   const needsIdentification = shouldRunIdentificationPipeline(draft);
@@ -320,7 +351,7 @@ async function processDraft(
 
   // ── Run the AI-first identification pipeline ──
   const identInput = buildIdentificationInput(draft, rawInput, userId);
-  const identResult = await identifyProduct(identInput) as ExtendedIdentificationResult;
+  const identResult = (await identifyProduct(identInput)) as ExtendedIdentificationResult;
 
   // ── Handle no-AI-configured ──
   if (identResult.aiImportStatus === 'no_ai_configured') {
@@ -329,9 +360,10 @@ async function processDraft(
     return {
       draft: {
         title: '', // Blank — user must enter manually
-        url: noAIContext?.verifiedContext.url ?? draft.url ?? (isUrl(rawInput) ? rawInput : undefined),
+        url:
+          noAIContext?.verifiedContext.url ?? draft.url ?? (isUrl(rawInput) ? rawInput : undefined),
         retailer: noAIContext?.verifiedContext.retailer ?? draft.retailer,
-        asin: noAIContext?.verifiedContext.asin ?? (draft as any).asin,
+        asin: noAIContext?.verifiedContext.asin ?? draft.asin,
         source: 'manual',
         confidence: 0,
       },
@@ -339,7 +371,8 @@ async function processDraft(
         status: 'no-ai-configured',
         confidence: 0,
         source: 'manual',
-        message: "AI identification isn't configured. DerList needs a connected AI provider to automatically identify products from URLs. Please enter the product details manually below.",
+        message:
+          "AI identification isn't configured. DerList needs a connected AI provider to automatically identify products from URLs. Please enter the product details manually below.",
         aiImportStatus: 'no_ai_configured',
       },
     };
@@ -352,7 +385,7 @@ async function processDraft(
         title: identResult.product?.title ?? '',
         url: identResult.product?.url ?? draft.url ?? undefined,
         retailer: identResult.product?.retailer ?? draft.retailer,
-        asin: identResult.product?.asin ?? (draft as any).asin,
+        asin: identResult.product?.asin ?? draft.asin,
         source: 'import',
         confidence: identResult.product?.confidence ?? 0,
       },
@@ -363,7 +396,8 @@ async function processDraft(
         message: identResult.statusMessage,
         providersAttempted: identResult.providersAttempted.map((p) => p.provider),
         aiImportStatus: 'conflict',
-        identityVerification: identResult.identityVerification as Record<string, unknown> | undefined,
+        identityVerification: identResult.identityVerification as
+          Record<string, unknown> | undefined,
       },
     };
   }
@@ -381,7 +415,7 @@ async function processDraft(
       currentPrice: identResult.product.price ?? undefined,
       currency: identResult.product.currency ?? 'USD',
       sku: identResult.product.sku ?? undefined,
-      asin: identResult.product.asin ?? (draft as any).asin ?? undefined,
+      asin: identResult.product.asin ?? draft.asin ?? undefined,
       mpn: identResult.product.mpn ?? undefined,
       gtin: identResult.product.gtin ?? undefined,
       upc: identResult.product.upc ?? undefined,
@@ -398,7 +432,8 @@ async function processDraft(
       // Enrichment failure is not critical
     }
 
-    const aiImportStatus: AIImportStatus = identResult.aiImportStatus ?? (identResult.needsReview ? 'needs_review' : 'ready');
+    const aiImportStatus: AIImportStatus =
+      identResult.aiImportStatus ?? (identResult.needsReview ? 'needs_review' : 'ready');
 
     return {
       draft: finalDraft,
@@ -410,7 +445,8 @@ async function processDraft(
         providersAttempted: identResult.providersAttempted.map((p) => p.provider),
         aiImportStatus,
         fieldSources: identResult.fieldSources as Record<string, unknown> | undefined,
-        identityVerification: identResult.identityVerification as Record<string, unknown> | undefined,
+        identityVerification: identResult.identityVerification as
+          Record<string, unknown> | undefined,
       },
     };
   }
@@ -422,7 +458,7 @@ async function processDraft(
         title: identResult.product.title || '',
         url: identResult.product.url ?? draft.url ?? undefined,
         retailer: identResult.product.retailer ?? draft.retailer ?? undefined,
-        asin: identResult.product.asin ?? (draft as any).asin ?? undefined,
+        asin: identResult.product.asin ?? draft.asin ?? undefined,
         source: 'import',
         confidence: identResult.product.confidence,
       },
@@ -439,7 +475,7 @@ async function processDraft(
 
   // ── Complete failure — return manual draft ──
   // IMPORTANT: Never use a URL as the product title
-  const fallbackTitle = isUrl(rawInput) ? '' : (draft.title || rawInput);
+  const fallbackTitle = isUrl(rawInput) ? '' : draft.title || rawInput;
 
   // Validate fallback title is not garbage
   const titleCheck = fallbackTitle ? validateTitle(fallbackTitle) : { valid: false };
@@ -450,7 +486,7 @@ async function processDraft(
       title: safeTitle,
       url: draft.url ?? (isUrl(rawInput) ? rawInput : undefined),
       retailer: draft.retailer,
-      asin: (draft as any).asin,
+      asin: draft.asin,
       source: 'manual',
       confidence: 10,
     },
@@ -458,7 +494,9 @@ async function processDraft(
       status: 'failed',
       confidence: 10,
       source: 'manual',
-      message: identResult.statusMessage || "Couldn't reliably identify this product. The connected AI couldn't verify enough information from this URL. Please enter the product details manually.",
+      message:
+        identResult.statusMessage ||
+        "Couldn't reliably identify this product. The connected AI couldn't verify enough information from this URL. Please enter the product details manually.",
       providersAttempted: identResult.providersAttempted.map((p) => p.provider),
       aiImportStatus: 'failed',
     },
@@ -485,7 +523,7 @@ function shouldRunIdentificationPipeline(draft: ProductDraft): boolean {
   if (draft.confidence < 40) return true;
 
   // Check for _meta.needsIdentification flag (set by Amazon importer)
-  if ((draft as any)._meta?.needsIdentification) return true;
+  if (draft._meta?.needsIdentification) return true;
 
   return false;
 }
@@ -496,11 +534,11 @@ function shouldRunIdentificationPipeline(draft: ProductDraft): boolean {
 function buildIdentificationInput(
   draft: ProductDraft,
   rawInput: string,
-  userId: string,
+  userId: string
 ): IdentificationInput {
-  const meta = (draft as any)._meta;
+  const meta = draft._meta;
   const url = draft.url ?? undefined;
-  const asin = (draft as any).asin ?? (url ? extractAsinFromUrl(url) : null) ?? undefined;
+  const asin = draft.asin ?? (url ? extractAsinFromUrl(url) : null) ?? undefined;
   const domain = url ? extractDomain(url) : null;
   const retailer = draft.retailer ?? (domain ? getRetailerName(domain) : null) ?? undefined;
 

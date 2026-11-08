@@ -182,7 +182,12 @@ export async function POST(request: Request) {
           icon: '🤖',
           timestamp: elapsed(),
         });
-        emit({ type: 'source', message: 'openrouter.ai', icon: '🤖', timestamp: elapsed() });
+        emit({
+          type: 'source',
+          message: 'Configured AI provider',
+          icon: '🤖',
+          timestamp: elapsed(),
+        });
         stats.sources++;
 
         const providers = getProviderManager();
@@ -306,8 +311,8 @@ export async function POST(request: Request) {
         });
         emit({
           type: 'discovery',
-          message: 'Product saved successfully',
-          icon: '💾',
+          message: 'Research complete — review the results before saving',
+          icon: '📝',
           timestamp: elapsed(),
         });
 
@@ -320,7 +325,7 @@ export async function POST(request: Request) {
             success: true,
             duration: elapsed(),
             model: result.modelUsed,
-            provider: 'OpenRouter',
+            provider: 'configured AI provider',
             specs: stats.specs,
             images: stats.images,
             sellers: stats.sellers,

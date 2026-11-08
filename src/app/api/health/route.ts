@@ -36,6 +36,9 @@ export async function GET() {
   } catch (error) {
     const dbLatency = Date.now() - start;
 
+    // Log details server-side; never expose driver errors to anonymous probes.
+    console.error('Health check failed:', error instanceof Error ? error.message : 'Unknown error');
+
     return Response.json(
       {
         status: 'unhealthy',
@@ -44,7 +47,6 @@ export async function GET() {
         database: {
           status: 'disconnected',
           latency: `${dbLatency}ms`,
-          error: error instanceof Error ? error.message : 'Unknown error',
         },
       },
       { status: 503 }

@@ -2,8 +2,12 @@
  * Tests for Image Resolution and Completeness
  */
 import { describe, expect, it } from 'vitest';
-import { validateImageUrl, httpVerifyImage } from '@/lib/products/identification/image-resolution';
 import { calculateCompleteness } from '@/lib/products/identification/completeness';
+import {
+  httpVerifyImage,
+  isSsrfSafe,
+  validateImageUrl,
+} from '@/lib/products/identification/image-resolution';
 import type { IdentifiedProduct } from '@/lib/products/identification/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -18,7 +22,9 @@ describe('validateImageUrl', () => {
   });
 
   it('rejects Google encrypted thumbnails', () => {
-    expect(validateImageUrl('https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcSABC')).toBe(false);
+    expect(validateImageUrl('https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcSABC')).toBe(
+      false
+    );
     expect(validateImageUrl('https://encrypted-tbn1.gstatic.com/images?q=tbn:ABC')).toBe(false);
     expect(validateImageUrl('https://encrypted-tbn2.gstatic.com/shopping?q=tbn:XYZ')).toBe(false);
   });
@@ -58,21 +64,33 @@ describe('validateImageUrl', () => {
   });
 
   it('accepts valid Amazon product images', () => {
-    expect(validateImageUrl('https://m.media-amazon.com/images/I/71zXnNM0PYL._AC_SX679_.jpg')).toBe(true);
-    expect(validateImageUrl('https://m.media-amazon.com/images/I/B0GSS4SGZR._AC_SX679_.jpg')).toBe(true);
+    expect(validateImageUrl('https://m.media-amazon.com/images/I/71zXnNM0PYL._AC_SX679_.jpg')).toBe(
+      true
+    );
+    expect(validateImageUrl('https://m.media-amazon.com/images/I/B0GSS4SGZR._AC_SX679_.jpg')).toBe(
+      true
+    );
   });
 
   it('accepts valid Best Buy images', () => {
-    expect(validateImageUrl('https://pisces.bbystatic.com/image2/BestBuy_US/images/products/6501/6501234.jpg')).toBe(true);
+    expect(
+      validateImageUrl(
+        'https://pisces.bbystatic.com/image2/BestBuy_US/images/products/6501/6501234.jpg'
+      )
+    ).toBe(true);
   });
 
   it('accepts valid Walmart images', () => {
-    expect(validateImageUrl('https://i5.walmartimages.com/seo/product-image-20240501.jpeg')).toBe(true);
+    expect(validateImageUrl('https://i5.walmartimages.com/seo/product-image-20240501.jpeg')).toBe(
+      true
+    );
   });
 
   it('accepts valid product image URLs from generic CDNs', () => {
     expect(validateImageUrl('https://cdn.example.com/products/headphones-main.jpg')).toBe(true);
-    expect(validateImageUrl('https://store-images.s-microsoft.com/image/apps.12345.png')).toBe(true);
+    expect(validateImageUrl('https://store-images.s-microsoft.com/image/apps.12345.png')).toBe(
+      true
+    );
   });
 
   it('accepts protocol-relative URLs from trusted domains', () => {
@@ -199,7 +217,6 @@ describe('calculateCompleteness', () => {
   });
 });
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // SSRF Protection (via httpVerifyImage)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -237,13 +254,10 @@ describe('httpVerifyImage SSRF protection', () => {
     expect(await httpVerifyImage('https://example.com:3306/image.jpg')).toBe(false); // MySQL
   });
 
-  it('allows standard HTTPS on port 443', async () => {
-    // This will fail because the URL doesn't exist, but it should NOT be
-    // rejected by SSRF validation. It will fail on HTTP response instead.
-    // We're testing that the SSRF check itself passes.
-    const result = await httpVerifyImage('https://m.media-amazon.com/nonexistent.jpg');
-    // Either false (404) or true (if it somehow exists) — but NOT a SSRF block
-    expect(typeof result).toBe('boolean');
+  it('allows standard HTTPS on port 443', () => {
+    // Network-free: assert the SSRF policy accepts a normal public image URL.
+    expect(isSsrfSafe('https://m.media-amazon.com/images/I/example.jpg')).toBe(true);
+    expect(isSsrfSafe('https://example.com/image.jpg')).toBe(true);
   });
 });
 
@@ -254,7 +268,15 @@ describe('httpVerifyImage SSRF protection', () => {
 describe('ImageSource types', () => {
   it('validates keepa as a valid image source', () => {
     // This tests the type system at runtime
-    const validSources = ['keepa', 'structured-data', 'amazon-page', 'search-result', 'image-search', 'retailer-page', 'none'];
+    const validSources = [
+      'keepa',
+      'structured-data',
+      'amazon-page',
+      'search-result',
+      'image-search',
+      'retailer-page',
+      'none',
+    ];
     for (const source of validSources) {
       expect(typeof source).toBe('string');
     }

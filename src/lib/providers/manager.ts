@@ -13,6 +13,7 @@ import { createGoogleVertexProvider } from './google-vertex';
 import { createGoogleVertexDerListProvider } from './google-vertex-derlist';
 import { createKeepaProvider } from './keepa';
 import { createOpenRouterProvider } from './openrouter';
+import { createBraveSearchProvider } from './search/brave';
 import { createSerpApiProvider } from './serpapi';
 import type { AIProvider, PriceProvider, SearchProvider } from './types';
 
@@ -88,6 +89,9 @@ function createProviderFromConfig(
     case 'serpapi':
       return createSerpApiProvider(config.config);
 
+    case 'brave':
+      return createBraveSearchProvider(config.config);
+
     // ── Price Providers ──
 
     case 'keepa':
@@ -101,10 +105,7 @@ function createProviderFromConfig(
 /**
  * Get the base URL for OpenAI-compatible providers.
  */
-function getOpenAICompatibleBaseUrl(
-  providerId: string,
-  config: Record<string, unknown>
-): string {
+function getOpenAICompatibleBaseUrl(providerId: string, config: Record<string, unknown>): string {
   // Allow custom base URL override
   if (config.baseUrl && typeof config.baseUrl === 'string') {
     return config.baseUrl;
@@ -127,10 +128,7 @@ function getOpenAICompatibleBaseUrl(
 /**
  * Get the base URL for local inference providers.
  */
-function getLocalProviderUrl(
-  providerId: string,
-  config: Record<string, unknown>
-): string {
+function getLocalProviderUrl(providerId: string, config: Record<string, unknown>): string {
   if (config.baseUrl && typeof config.baseUrl === 'string') {
     return config.baseUrl;
   }
@@ -172,6 +170,20 @@ export class ProviderManager {
   async getAIProvider(userId: string): Promise<AIProvider | null> {
     const providers = await this.getAIProviders(userId);
     return providers[0] ?? null;
+  }
+
+  /**
+   * Instantiate a specific provider configuration by id.
+   * Used by the settings "Test" action so it tests the selected provider
+   * rather than whichever provider happens to be first.
+   */
+  async getProviderById(
+    id: string,
+    userId: string
+  ): Promise<AIProvider | SearchProvider | PriceProvider | null> {
+    const config = await ProviderRepository.findById(id, userId);
+    if (!config) return null;
+    return createProviderFromConfig(config);
   }
 
   /**

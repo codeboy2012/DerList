@@ -24,7 +24,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-derlist} -d ${POSTGRES_DB:-derlist}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-derlist} -d ${POSTGRES_DB:-derlist}']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -42,7 +42,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: "postgresql://${POSTGRES_USER:-derlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-derlist}"
+      DATABASE_URL: 'postgresql://${POSTGRES_USER:-derlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-derlist}'
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NODE_ENV: production
       AUTH_SECRET: ${AUTH_SECRET:-}
@@ -55,16 +55,47 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-}
       ADMIN_DISPLAY_NAME: ${ADMIN_DISPLAY_NAME:-}
+      WORKER_POLL_INTERVAL_MS: ${WORKER_POLL_INTERVAL_MS:-5000}
+      WORKER_SCHEDULE_INTERVAL_MS: ${WORKER_SCHEDULE_INTERVAL_MS:-900000}
+      WORKER_BATCH_SIZE: ${WORKER_BATCH_SIZE:-10}
     volumes:
       - uploads:/app/uploads
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - '${APP_PORT:-3000}:3000'
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
+      test:
+        ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:3000/api/health']
       interval: 30s
       timeout: 5s
       start_period: 45s
       retries: 3
+    networks:
+      - derlist
+
+  # ── Background Worker ──
+  # Runs the refresh scheduler and drains the durable job queue.
+  # Only one instance may process jobs; the worker uses a PostgreSQL
+  # advisory lock to enforce that, and recovers stale RUNNING jobs on start.
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    depends_on:
+      db:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    entrypoint: ['node_modules/.bin/tsx', 'scripts/worker.ts']
+    environment:
+      DATABASE_URL: 'postgresql://${POSTGRES_USER:-derlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-derlist}'
+      NODE_ENV: production
+      PROVIDER_ENCRYPTION_KEY: ${PROVIDER_ENCRYPTION_KEY:-}
+      WORKER_POLL_INTERVAL_MS: ${WORKER_POLL_INTERVAL_MS:-5000}
+      WORKER_SCHEDULE_INTERVAL_MS: ${WORKER_SCHEDULE_INTERVAL_MS:-900000}
+      WORKER_BATCH_SIZE: ${WORKER_BATCH_SIZE:-10}
     networks:
       - derlist
 
@@ -78,9 +109,9 @@ services:
       app:
         condition: service_healthy
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

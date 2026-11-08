@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 import { createServices } from '@/lib/services/create';
 
 export async function POST(request: Request) {
@@ -20,6 +21,14 @@ export async function POST(request: Request) {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON.' }, { status: 400 });
+  }
+
+  const rate = checkRateLimit(`ai:assistant:${user.id}`, 20, 60_000);
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: 'Too many assistant requests. Try again shortly.' },
+      { status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds) } }
+    );
   }
 
   const { message, conversationId } = body;

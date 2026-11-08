@@ -19,6 +19,7 @@
 
 import { getProviderManager } from '@/lib/providers';
 import type { SearchResult } from '@/lib/providers/types';
+import { safeFetch } from '@/lib/security/safe-fetch';
 import { importLog } from './logging';
 import { getKeepaImageCandidates } from './providers/keepa-image-provider';
 
@@ -89,7 +90,7 @@ const BLOCKED_HOSTNAME_PATTERNS = [
 /**
  * Validate that a URL is safe to fetch (not internal/private).
  */
-function isSsrfSafe(url: string): boolean {
+export function isSsrfSafe(url: string): boolean {
   try {
     const parsed = new URL(url.startsWith('//') ? `https:${url}` : url);
     const hostname = parsed.hostname.toLowerCase();
@@ -177,7 +178,9 @@ export function validateImageUrl(url: string | null | undefined): boolean {
       try {
         const domain = new URL(trimmed).hostname;
         if (!TRUSTED_IMAGE_DOMAINS.has(domain)) return false;
-      } catch { return false; }
+      } catch {
+        return false;
+      }
     } else {
       return false;
     }
@@ -190,9 +193,12 @@ export function validateImageUrl(url: string | null | undefined): boolean {
   try {
     const hostname = new URL(trimmed.startsWith('//') ? `https:${trimmed}` : trimmed).hostname;
     if (REJECT_DOMAINS.has(hostname)) return false;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 
-  const looksLikeImage = /\.(jpe?g|png|webp|gif|avif|svg)(\?|$|#)/i.test(trimmed) ||
+  const looksLikeImage =
+    /\.(jpe?g|png|webp|gif|avif|svg)(\?|$|#)/i.test(trimmed) ||
     /\/images?\//i.test(trimmed) ||
     isTrustedDomain(trimmed);
 
@@ -203,7 +209,9 @@ function isTrustedDomain(url: string): boolean {
   try {
     const hostname = new URL(url.startsWith('//') ? `https:${url}` : url).hostname;
     return TRUSTED_IMAGE_DOMAINS.has(hostname);
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -231,15 +239,18 @@ export async function httpVerifyImage(url: string): Promise<boolean> {
     const timeout = setTimeout(() => controller.abort(), IMAGE_VERIFY_TIMEOUT_MS);
 
     try {
-      const response = await fetch(normalizedUrl, {
-        method: 'HEAD',
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; DerList/1.0)',
-          'Accept': 'image/*',
+      const response = await safeFetch(
+        normalizedUrl,
+        {
+          method: 'HEAD',
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; DerList/1.0)',
+            Accept: 'image/*',
+          },
         },
-        redirect: 'follow',
-      });
+        { maxRedirects: 5 }
+      );
 
       clearTimeout(timeout);
 
@@ -249,11 +260,6 @@ export async function httpVerifyImage(url: string): Promise<boolean> {
           return await httpVerifyImageGet(normalizedUrl);
         }
         return false;
-      }
-
-      // Validate final URL after redirects (SSRF: redirect could point to internal)
-      if (response.url && response.url !== normalizedUrl) {
-        if (!isSsrfSafe(response.url)) return false;
       }
 
       const contentType = response.headers.get('content-type') ?? '';
@@ -286,25 +292,23 @@ async function httpVerifyImageGet(url: string): Promise<boolean> {
     const timeout = setTimeout(() => controller.abort(), IMAGE_VERIFY_TIMEOUT_MS);
 
     try {
-      const response = await fetch(url, {
-        method: 'GET',
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; DerList/1.0)',
-          'Accept': 'image/*',
-          'Range': 'bytes=0-1023', // Only fetch first 1KB
+      const response = await safeFetch(
+        url,
+        {
+          method: 'GET',
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; DerList/1.0)',
+            Accept: 'image/*',
+            Range: 'bytes=0-1023', // Only fetch first 1KB
+          },
         },
-        redirect: 'follow',
-      });
+        { maxRedirects: 5 }
+      );
 
       clearTimeout(timeout);
 
       if (!response.ok && response.status !== 206) return false;
-
-      // Validate redirect target
-      if (response.url && response.url !== url) {
-        if (!isSsrfSafe(response.url)) return false;
-      }
 
       const contentType = response.headers.get('content-type') ?? '';
       return contentType.startsWith('image/') || isLikelyImageExtension(url);
@@ -368,7 +372,7 @@ function scoreCandidate(candidate: ImageCandidate, input: ImageResolutionInput):
  * Every candidate is HTTP-verified with SSRF protection before acceptance.
  */
 export async function resolveProductImage(
-  input: ImageResolutionInput,
+  input: ImageResolutionInput
 ): Promise<ImageResolutionResult> {
   const candidates: ImageCandidate[] = [];
   let rejected = 0;
@@ -413,11 +417,21 @@ export async function resolveProductImage(
           rejected++;
         }
       }
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
   }
 
   if (candidates.length === 0) {
-    return { imageUrl: null, source: 'none', confidence: 0, httpVerified: false, candidatesFound: 0, candidatesRejected: rejected, keepaUsed };
+    return {
+      imageUrl: null,
+      source: 'none',
+      confidence: 0,
+      httpVerified: false,
+      candidatesFound: 0,
+      candidatesRejected: rejected,
+      keepaUsed,
+    };
   }
 
   // ── Score and sort ──
@@ -432,7 +446,7 @@ export async function resolveProductImage(
     const isValid = await httpVerifyImage(candidate.url);
 
     if (isValid) {
-      importLog('IMAGE_RESOLVED' as any, {
+      importLog('IMAGE_RESOLVED', {
         source: candidate.source,
         confidence: candidate.finalScore,
         httpVerified: true,
@@ -452,7 +466,7 @@ export async function resolveProductImage(
       };
     } else {
       rejected++;
-      importLog('IMAGE_HTTP_FAILED' as any, {
+      importLog('IMAGE_HTTP_FAILED', {
         url: candidate.url.substring(0, 100),
         source: candidate.source,
         attempt: i + 1,
@@ -461,9 +475,17 @@ export async function resolveProductImage(
   }
 
   // No candidate passed verification
-  importLog('IMAGE_ALL_FAILED' as any, { candidatesFound: candidates.length, rejected, keepaUsed });
+  importLog('IMAGE_ALL_FAILED', { candidatesFound: candidates.length, rejected, keepaUsed });
 
-  return { imageUrl: null, source: 'none', confidence: 0, httpVerified: false, candidatesFound: candidates.length, candidatesRejected: rejected, keepaUsed };
+  return {
+    imageUrl: null,
+    source: 'none',
+    confidence: 0,
+    httpVerified: false,
+    candidatesFound: candidates.length,
+    candidatesRejected: rejected,
+    keepaUsed,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -479,8 +501,12 @@ async function searchForProductImage(input: ImageResolutionInput): Promise<Image
     if (!searchProvider) return [];
 
     const query = input.title
-      ? (input.brand ? `${input.brand} ${input.title}` : input.title)
-      : (input.asin ? `${input.asin} product` : null);
+      ? input.brand
+        ? `${input.brand} ${input.title}`
+        : input.title
+      : input.asin
+        ? `${input.asin} product`
+        : null;
     if (!query) return [];
 
     const results = await searchProvider.search(query, { maxResults: 5 });
@@ -494,7 +520,9 @@ async function searchForProductImage(input: ImageResolutionInput): Promise<Image
         });
       }
     }
-  } catch { /* non-fatal */ }
+  } catch {
+    /* non-fatal */
+  }
 
   return candidates;
 }
@@ -502,7 +530,10 @@ async function searchForProductImage(input: ImageResolutionInput): Promise<Image
 function isRelevant(result: SearchResult, input: ImageResolutionInput): boolean {
   if (input.asin && result.url.toUpperCase().includes(input.asin.toUpperCase())) return true;
   if (input.title && result.title) {
-    const words = input.title.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+    const words = input.title
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 3);
     const matches = words.filter((w) => result.title.toLowerCase().includes(w)).length;
     if (matches >= 2 || matches / words.length >= 0.5) return true;
   }

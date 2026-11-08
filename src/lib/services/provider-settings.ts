@@ -194,11 +194,16 @@ export class ProviderSettingsService {
     const start = Date.now();
 
     try {
+      // Test the configuration the user selected, not the first provider.
+      const provider = await this.providers.getProviderById(id, userId);
+      if (!provider) {
+        return { success: false, message: 'Could not instantiate this provider.' };
+      }
+
       switch (config.category) {
         case 'AI': {
-          const provider = await this.providers.getAIProvider(userId);
-          if (!provider) {
-            return { success: false, message: 'Could not instantiate AI provider.' };
+          if (!('chat' in provider)) {
+            return { success: false, message: 'Provider does not support AI chat.' };
           }
           await provider.chat([{ role: 'user', content: 'Hello' }], {
             maxTokens: 5,
@@ -207,17 +212,15 @@ export class ProviderSettingsService {
           break;
         }
         case 'SHOPPING_SEARCH': {
-          const provider = await this.providers.getSearchProvider(userId);
-          if (!provider) {
-            return { success: false, message: 'Could not instantiate search provider.' };
+          if (!('search' in provider)) {
+            return { success: false, message: 'Provider does not support search.' };
           }
           await provider.search('test', { maxResults: 1 });
           break;
         }
         case 'PRICE': {
-          // Price providers need a real ASIN to test — just verify config is valid
-          const provider = await this.providers.getPriceProvider(userId);
-          if (!provider || !provider.isAvailable()) {
+          // Price providers need a real ASIN to test — verify the config loads.
+          if (!('getCurrentPrice' in provider) || !provider.isAvailable()) {
             return { success: false, message: 'Provider not available.' };
           }
           break;
