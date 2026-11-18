@@ -1,16 +1,8 @@
-import { AnimatedSection } from '@/components/coming-soon/AnimatedSection';
+import { Globe, Heart, Link2, ListChecks, Package, Share2, TrendingDown } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Container } from '@/components/ui/Container';
 import { Section } from '@/components/ui/Section';
-import {
-  Globe,
-  Heart,
-  Link2,
-  ListChecks,
-  Monitor,
-  Share2,
-  TrendingDown,
-} from 'lucide-react';
+import { AnimatedSection } from '@/components/coming-soon/AnimatedSection';
 
 /**
  * Feature data sourced exclusively from the README Features section.
@@ -23,7 +15,7 @@ const features = [
       'Create unlimited wishlists for birthdays, holidays, gaming setups, home projects, and more. Private, public, secret, or shared — organise with folders, tags, priorities, and notes.',
     highlights: [
       'Unlimited lists & products',
-      'Private, public & secret modes',
+      'Private to your account',
       'Folder organisation',
       'Custom tags & priorities',
     ],
@@ -33,14 +25,14 @@ const features = [
   },
   {
     icon: TrendingDown,
-    title: 'Live Price Tracking',
+    title: 'Target Prices',
     description:
-      'DerList automatically tracks product prices from supported stores. View price history charts, see the lowest and highest recorded prices, and never miss a deal.',
+      'Record the current price and the price you are waiting for on every product. Automated history is optional and only appears when a price provider and the background worker are configured.',
     highlights: [
-      'Live price updates',
-      'Historical price charts',
-      'Lowest & average price records',
-      'Price drop alerts (planned)',
+      'Per-item target price',
+      'Honest unknown values',
+      'Price history (when enabled)',
+      'Private to your account',
     ],
     accent: 'from-emerald-500/20 to-emerald-600/5',
     iconColor: 'text-emerald-400',
@@ -62,15 +54,15 @@ const features = [
     iconBg: 'bg-violet-500/10',
   },
   {
-    icon: Monitor,
-    title: 'Free PC Builder',
+    icon: Package,
+    title: 'Personal Product Details',
     description:
-      'Plan your perfect build without paying for a tool to do it. Includes full custom builds, compatibility checking, live component pricing, multiple saved builds, and easy sharing.',
+      'Keep the details that belong to your copy of a product — model, condition, availability, quantity, priority and private notes — next to the imported catalogue data.',
     highlights: [
-      'Full custom builds',
-      'Compatibility checking',
-      'Live component pricing',
-      'Build sharing',
+      'Condition & availability',
+      'Quantity & priority',
+      'Private notes',
+      'Move between collections',
     ],
     accent: 'from-orange-500/20 to-orange-600/5',
     iconColor: 'text-orange-400',
@@ -78,14 +70,14 @@ const features = [
   },
   {
     icon: Share2,
-    title: 'Sharing',
+    title: 'Private by Design',
     description:
-      'Share wishlists, PC builds, and products with anyone. Public, private, and shared visibility modes give you full control over who can see your lists.',
+      'Every collection is private to your account. There are no public wishlist pages, share links or catalogues, and no other account can search or open your products.',
     highlights: [
-      'Public wishlists & builds',
-      'Private & shared modes',
-      'Shareable URLs',
-      'Product links',
+      'No public pages',
+      'No share links',
+      'Owner-only uploads',
+      'No cross-account search',
     ],
     accent: 'from-pink-500/20 to-pink-600/5',
     iconColor: 'text-pink-400',
@@ -128,7 +120,7 @@ const features = [
  */
 export function FeaturesSection() {
   return (
-    <Section id="features" className="border-t border-border">
+    <Section id="features" className="border-border border-t">
       <Container>
         {/* Section header */}
         <div className="mx-auto max-w-2xl text-center">
@@ -138,14 +130,14 @@ export function FeaturesSection() {
             </Badge>
           </AnimatedSection>
           <AnimatedSection variant="fade-up" delay={80}>
-            <h2 className="text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+            <h2 className="text-foreground text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
               Everything you need. Nothing you don&apos;t.
             </h2>
           </AnimatedSection>
           <AnimatedSection variant="fade-up" delay={160}>
-            <p className="mt-4 text-lg text-muted-foreground">
-              DerList combines wishlists, price tracking, smart import, and a PC builder
-              into one fast, free application — with more on the way.
+            <p className="text-muted-foreground mt-4 text-lg">
+              DerList combines private collections, smart import and personal product details into
+              one fast, free application.
             </p>
           </AnimatedSection>
         </div>
@@ -159,7 +151,7 @@ export function FeaturesSection() {
               delay={80 + (i % 3) * 80}
               threshold={0.05}
             >
-              <article className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card transition-all duration-300 hover:-translate-y-0.5 hover:border-border/60 hover:shadow-xl hover:shadow-black/20">
+              <article className="group border-border bg-card hover:border-border/60 relative flex h-full flex-col overflow-hidden rounded-2xl border transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/20">
                 {/* Gradient wash */}
                 <div
                   aria-hidden
@@ -177,10 +169,8 @@ export function FeaturesSection() {
 
                   {/* Copy */}
                   <div>
-                    <h3 className="text-base font-semibold text-foreground">
-                      {feature.title}
-                    </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    <h3 className="text-foreground text-base font-semibold">{feature.title}</h3>
+                    <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
                       {feature.description}
                     </p>
                   </div>
@@ -188,7 +178,7 @@ export function FeaturesSection() {
                   {/* Highlight list */}
                   <ul className="mt-auto space-y-1.5 pt-2">
                     {feature.highlights.map((h) => (
-                      <li key={h} className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <li key={h} className="text-muted-foreground flex items-center gap-2 text-xs">
                         <span
                           aria-hidden
                           className={`h-1 w-1 flex-shrink-0 rounded-full ${feature.iconColor.replace('text-', 'bg-')}`}

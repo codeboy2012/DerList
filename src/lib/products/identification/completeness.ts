@@ -46,7 +46,7 @@ export function calculateCompleteness(product: IdentifiedProduct): CompletenessR
 
   for (const [field, weight] of Object.entries(FIELD_WEIGHTS)) {
     totalWeight += weight;
-    const value = (product as any)[field];
+    const value = (product as unknown as Record<string, unknown>)[field];
 
     if (value != null && value !== '' && value !== 0) {
       presentFields.push(field);

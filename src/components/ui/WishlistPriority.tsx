@@ -70,7 +70,7 @@ export function WishlistPriority({
   };
 
   return (
-    <div className="inline-flex items-center gap-1.5">
+    <div className="inline-flex flex-wrap items-center gap-1.5">
       <div
         className="relative inline-flex items-center gap-0.5"
         role="radiogroup"
@@ -151,7 +151,7 @@ export function WishlistPriorityDisplay({
 }) {
   return (
     <div
-      className="inline-flex items-center gap-1.5"
+      className="inline-flex flex-wrap items-center gap-1.5"
       aria-label={`Priority: ${PRIORITY_LABELS[value] ?? 'Want'}`}
     >
       <div className="inline-flex items-center gap-0.5">

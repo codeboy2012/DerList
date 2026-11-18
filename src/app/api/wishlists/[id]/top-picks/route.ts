@@ -27,23 +27,22 @@ interface WishlistTopPick {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
   const { id } = await params;
 
-  const wishlist = await prisma.wishlist.findUnique({
-    where: { id },
-    select: { topPicks: true, ownerId: true, visibility: true },
+  // Top Picks are private to the owner. Collections are never shared, so an
+  // unauthenticated or foreign request must not reveal whether the row exists.
+  const wishlist = await prisma.wishlist.findFirst({
+    where: { id, ownerId: user.id },
+    select: { topPicks: true },
   });
 
   if (!wishlist) {
-    return NextResponse.json({ error: 'Wishlist not found' }, { status: 404 });
-  }
-
-  // Public/unlisted wishlists are readable by anyone; private requires auth
-  if (wishlist.visibility === 'PRIVATE') {
-    const user = await getCurrentUser();
-    if (!user || user.id !== wishlist.ownerId) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
   // topPicks is already a parsed object from Prisma (Json type)

@@ -1,8 +1,8 @@
-import { AnimatedSection } from '@/components/coming-soon/AnimatedSection';
+import { Check, Clock, Rocket, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Container } from '@/components/ui/Container';
 import { Section } from '@/components/ui/Section';
-import { Check, Clock, Rocket, Sparkles } from 'lucide-react';
+import { AnimatedSection } from '@/components/coming-soon/AnimatedSection';
 
 /**
  * Roadmap phases pulled directly from the README Roadmap section.
@@ -18,9 +18,9 @@ const phases = [
     items: [
       'Modern dark UI',
       'Authentication (Google & GitHub)',
-      'Universal wishlists',
+      'Private collections',
       'Smart product import',
-      'Basic price tracking',
+      'Price history data model',
     ],
   },
   {
@@ -31,9 +31,9 @@ const phases = [
     iconColor: 'text-accent',
     dotColor: 'bg-accent',
     items: [
-      'Price history charts',
+      'Price history charts (provider required)',
       'Notifications & alerts',
-      'Public sharing',
+      'Bulk import & export',
       'Better search',
       'Product comparison',
     ],
@@ -45,12 +45,7 @@ const phases = [
     color: 'border-warning/50 bg-warning/5',
     iconColor: 'text-warning',
     dotColor: 'bg-warning',
-    items: [
-      'Full PC builder',
-      'Community builds',
-      'Browser extension',
-      'Mobile improvements',
-    ],
+    items: ['Browser extension', 'Mobile improvements', 'Bulk editing', 'Saved filters'],
   },
   {
     status: 'Future Vision' as const,
@@ -74,7 +69,7 @@ const phases = [
  */
 export function RoadmapSection() {
   return (
-    <Section id="roadmap" className="border-t border-border bg-surface/30">
+    <Section id="roadmap" className="border-border bg-surface/30 border-t">
       <Container>
         <div className="mx-auto max-w-2xl text-center">
           <AnimatedSection variant="fade-up">
@@ -83,14 +78,14 @@ export function RoadmapSection() {
             </Badge>
           </AnimatedSection>
           <AnimatedSection variant="fade-up" delay={80}>
-            <h2 className="text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+            <h2 className="text-foreground text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
               Where we&apos;re headed.
             </h2>
           </AnimatedSection>
           <AnimatedSection variant="fade-up" delay={160}>
-            <p className="mt-4 text-lg text-muted-foreground">
-              DerList is being built in public, one focused phase at a time.
-              Here&apos;s what&apos;s planned.
+            <p className="text-muted-foreground mt-4 text-lg">
+              DerList is being built in public, one focused phase at a time. Here&apos;s what&apos;s
+              planned.
             </p>
           </AnimatedSection>
         </div>
@@ -100,7 +95,7 @@ export function RoadmapSection() {
           {/* Connecting line (desktop) */}
           <div
             aria-hidden
-            className="absolute left-0 right-0 top-6 hidden h-px bg-gradient-to-r from-transparent via-border to-transparent lg:block"
+            className="via-border absolute top-6 right-0 left-0 hidden h-px bg-gradient-to-r from-transparent to-transparent lg:block"
           />
 
           {phases.map((phase, i) => (
@@ -112,20 +107,20 @@ export function RoadmapSection() {
                 <div className="mb-4 flex items-center gap-3">
                   <span
                     aria-hidden
-                    className={`flex h-8 w-8 items-center justify-center rounded-lg bg-card ring-1 ring-border ${phase.iconColor}`}
+                    className={`bg-card ring-border flex h-8 w-8 items-center justify-center rounded-lg ring-1 ${phase.iconColor}`}
                   >
                     <phase.icon className="h-4 w-4" />
                   </span>
                   <div>
-                    <p className="text-xs font-medium text-muted-foreground">{phase.statusLabel}</p>
-                    <p className="text-sm font-semibold text-foreground">{phase.status}</p>
+                    <p className="text-muted-foreground text-xs font-medium">{phase.statusLabel}</p>
+                    <p className="text-foreground text-sm font-semibold">{phase.status}</p>
                   </div>
                 </div>
 
                 {/* Items */}
                 <ul className="flex-1 space-y-2.5">
                   {phase.items.map((item) => (
-                    <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground">
+                    <li key={item} className="text-muted-foreground flex items-start gap-2 text-sm">
                       <span
                         aria-hidden
                         className={`mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full ${phase.dotColor}`}

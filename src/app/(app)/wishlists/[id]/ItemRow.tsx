@@ -11,12 +11,14 @@ import {
   ExternalLink,
   Package,
   Pencil,
+  Target,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { WishlistPriority } from '@/components/ui/WishlistPriority';
 import { ProductEditorDrawer } from '@/components/product/ProductEditorDrawer';
 import { ProductPrice } from '@/components/product/ProductPrice';
 import { togglePurchasedAction } from './item-actions';
+import { ItemDetailsDialog } from './ItemDetailsDialog';
 import { updateStarPriorityAction } from './priority-action';
 
 interface ItemRowProps {
@@ -27,8 +29,12 @@ interface ItemRowProps {
     url: string | null;
     image: string | null;
     brand: string | null;
+    model: string | null;
+    condition: string | null;
+    availability: string | null;
     retailer: string | null;
     currentPrice: string | null;
+    targetPrice: string | null;
     originalPrice?: string | null;
     dealInfo?: string | null;
     currency: string;
@@ -40,6 +46,8 @@ interface ItemRowProps {
     category?: string | null;
   };
   wishlistId: string;
+  /** Other collections owned by the user, for moving this item. */
+  collections?: Array<{ id: string; title: string }>;
 }
 
 // Retailer badge colors
@@ -66,12 +74,15 @@ function getRetailerStyle(retailer: string | null): string {
   return retailerStyles[key] ?? 'bg-surface text-muted-foreground border-border';
 }
 
-export function ItemRow({ item, wishlistId }: ItemRowProps) {
+export function ItemRow({ item, wishlistId, collections = [] }: ItemRowProps) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const router = useRouter();
 
   const price = item.currentPrice != null ? Number(item.currentPrice) : null;
+  const targetPrice = item.targetPrice != null ? Number(item.targetPrice) : null;
+  const targetReached = price != null && targetPrice != null && price <= targetPrice;
 
   const handleCopy = async () => {
     if (!item.url) return;
@@ -79,6 +90,8 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const refresh = () => router.refresh();
 
   return (
     <div className="flex flex-col gap-2">
@@ -97,6 +110,7 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
                 <img
                   src={item.image}
                   alt=""
+                  data-product-image
                   className="h-full max-h-28 w-full object-contain sm:max-h-32"
                   loading="lazy"
                 />
@@ -115,10 +129,10 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
           </div>
 
           {/* Content */}
-          <div className="flex flex-1 flex-col justify-between gap-3 p-4 sm:p-5">
+          <div className="flex min-w-0 flex-1 flex-col justify-between gap-3 p-4 sm:p-5">
             {/* Top row: title + price */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 overflow-hidden">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1 overflow-hidden">
                 <h3
                   className={`line-clamp-2 text-sm leading-snug font-semibold sm:text-base ${
                     item.purchased ? 'text-muted-foreground line-through' : 'text-foreground'
@@ -127,7 +141,7 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
                   {item.title}
                 </h3>
 
-                {/* Meta: brand + retailer */}
+                {/* Meta: brand, model, retailer, condition, availability */}
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   {item.retailer && (
                     <span
@@ -139,28 +153,62 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
                   {item.brand && (
                     <span className="text-muted-foreground text-[11px]">{item.brand}</span>
                   )}
+                  {item.model && (
+                    <span className="text-muted-foreground/80 text-[11px]">{item.model}</span>
+                  )}
+                  {item.condition && (
+                    <span className="border-border bg-surface text-muted-foreground inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] leading-none font-medium">
+                      {item.condition}
+                    </span>
+                  )}
                   <InlineStarPriority item={item} wishlistId={wishlistId} />
                   {item.quantity > 1 && (
                     <span className="bg-surface text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium">
                       ×{item.quantity}
                     </span>
                   )}
+                  {item.category && (
+                    <span className="text-muted-foreground/70 text-[10px]">{item.category}</span>
+                  )}
                 </div>
+
+                {item.availability && (
+                  <p className="text-muted-foreground mt-1 text-[10px]">
+                    Availability: {item.availability}
+                  </p>
+                )}
               </div>
 
               {/* Price */}
-              {price != null && (
-                <ProductPrice
-                  price={price}
-                  originalPrice={
-                    item.originalPrice != null ? Number(item.originalPrice) : undefined
-                  }
-                  currency={item.currency}
-                  dealInfo={item.dealInfo}
-                  purchased={item.purchased}
-                  size="md"
-                />
-              )}
+              <div className="flex flex-col items-end gap-1">
+                {price != null && (
+                  <ProductPrice
+                    price={price}
+                    originalPrice={
+                      item.originalPrice != null ? Number(item.originalPrice) : undefined
+                    }
+                    currency={item.currency}
+                    dealInfo={item.dealInfo}
+                    purchased={item.purchased}
+                    size="md"
+                  />
+                )}
+                {targetPrice != null && (
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
+                      targetReached
+                        ? 'bg-success/10 text-success'
+                        : 'bg-surface text-muted-foreground'
+                    }`}
+                    data-price
+                    title={`Target price: ${targetPrice} ${item.currency}`}
+                  >
+                    <Target className="h-3 w-3" aria-hidden />
+                    {targetPrice.toFixed(2)} {item.currency}
+                    {targetReached ? ' reached' : ''}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Notes — expandable */}
@@ -221,12 +269,12 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
                 </Button>
               )}
 
-              {/* Edit */}
+              {/* Edit personal details */}
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-7 gap-1.5 rounded-lg text-[11px]"
-                onClick={() => setEditing(true)}
+                onClick={() => setDetailsOpen(true)}
               >
                 <Pencil className="h-3 w-3" /> Edit
               </Button>
@@ -235,7 +283,41 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
         </div>
       </article>
 
-      {/* Product Editor Drawer */}
+      {/* Personal details dialog */}
+      <ItemDetailsDialog
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        item={{
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          brand: item.brand,
+          model: item.model,
+          category: item.category ?? null,
+          condition: item.condition,
+          availability: item.availability,
+          currentPrice: item.currentPrice,
+          targetPrice: item.targetPrice,
+          currency: item.currency,
+          quantity: item.quantity,
+          priority: item.priority,
+          notes: item.notes,
+        }}
+        wishlistId={wishlistId}
+        collections={
+          collections.length > 0 ? collections : [{ id: wishlistId, title: 'This wishlist' }]
+        }
+        onSaved={() => {
+          setDetailsOpen(false);
+          refresh();
+        }}
+        onOpenAdvanced={() => {
+          setDetailsOpen(false);
+          setEditing(true);
+        }}
+      />
+
+      {/* Advanced product editor (imported product data) */}
       <ProductEditorDrawer
         open={editing}
         onClose={() => setEditing(false)}
@@ -243,11 +325,11 @@ export function ItemRow({ item, wishlistId }: ItemRowProps) {
         wishlistId={wishlistId}
         onSave={() => {
           setEditing(false);
-          router.refresh();
+          refresh();
         }}
         onDelete={() => {
           setEditing(false);
-          router.refresh();
+          refresh();
         }}
       />
     </div>

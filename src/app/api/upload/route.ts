@@ -1,5 +1,6 @@
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 import { uploadFile } from '@/lib/uploads';
 
 /**
@@ -14,6 +15,14 @@ export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const rate = checkRateLimit(`upload:${user.id}`, 30, 60_000);
+  if (!rate.allowed) {
+    return Response.json(
+      { error: 'Too many uploads. Try again shortly.' },
+      { status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds) } }
+    );
   }
 
   const formData = await request.formData();

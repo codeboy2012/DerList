@@ -17,11 +17,20 @@ import { prisma } from '@/lib/prisma';
 import { fetchProductPage } from '@/lib/products/fetch';
 import { extractMetadata } from '@/lib/products/metadata';
 import { getProviderManager } from '@/lib/providers';
+import { checkRateLimit } from '@/lib/security/rate-limit';
 import { EnrichmentService } from '@/lib/services/enrichment';
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const rate = checkRateLimit(`import:${user.id}`, 30, 60_000);
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: 'Too many imports. Try again shortly.' },
+      { status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds) } }
+    );
+  }
 
   let body: {
     wishlistId?: string;

@@ -8,8 +8,12 @@ interface CategoryItem {
   url: string | null;
   image: string | null;
   brand: string | null;
+  model: string | null;
+  condition: string | null;
+  availability: string | null;
   retailer: string | null;
   currentPrice: string | null;
+  targetPrice: string | null;
   originalPrice: string | null;
   dealInfo: string | null;
   currency: string;
@@ -31,6 +35,7 @@ interface CategoryMeta {
 }
 
 interface CategoryViewProps {
+  collections?: Array<{ id: string; title: string }>;
   items: CategoryItem[];
   wishlistId: string;
   categoryMeta?: CategoryMeta[];
@@ -40,7 +45,12 @@ interface CategoryViewProps {
  * Groups wishlist items by category and renders each group with a section header,
  * total price, optional external link, and items sorted by star priority.
  */
-export function CategoryView({ items, wishlistId, categoryMeta = [] }: CategoryViewProps) {
+export function CategoryView({
+  items,
+  wishlistId,
+  categoryMeta = [],
+  collections,
+}: CategoryViewProps) {
   // Group items by category
   const groups = new Map<string, CategoryItem[]>();
   const uncategorized: CategoryItem[] = [];
@@ -82,6 +92,7 @@ export function CategoryView({ items, wishlistId, categoryMeta = [] }: CategoryV
             items={sortedItems}
             total={total}
             wishlistId={wishlistId}
+            collections={collections}
           />
         );
       })}
@@ -93,6 +104,7 @@ export function CategoryView({ items, wishlistId, categoryMeta = [] }: CategoryV
           items={uncategorized.sort((a, b) => b.starPriority - a.starPriority)}
           total={uncategorized.reduce((sum, item) => sum + (Number(item.currentPrice) || 0), 0)}
           wishlistId={wishlistId}
+          collections={collections}
         />
       )}
     </div>
@@ -105,28 +117,30 @@ function CategorySection({
   items,
   total,
   wishlistId,
+  collections,
 }: {
   name: string;
   meta?: CategoryMeta;
   items: CategoryItem[];
   total: number;
   wishlistId: string;
+  collections?: Array<{ id: string; title: string }>;
 }) {
   return (
     <section className="flex flex-col gap-2.5">
       {/* Category header */}
-      <div className="flex items-center gap-2.5 border-b border-border pb-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface text-sm">
-          {meta?.icon || <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />}
+      <div className="border-border flex items-center gap-2.5 border-b pb-2">
+        <span className="bg-surface flex h-7 w-7 items-center justify-center rounded-lg text-sm">
+          {meta?.icon || <FolderOpen className="text-muted-foreground h-3.5 w-3.5" />}
         </span>
         <div className="flex flex-1 items-baseline gap-3">
-          <h3 className="text-sm font-semibold text-foreground">{name}</h3>
+          <h3 className="text-foreground text-sm font-semibold">{name}</h3>
           {total > 0 && (
-            <span className="text-[11px] tabular-nums text-muted-foreground">
+            <span className="text-muted-foreground text-[11px] tabular-nums">
               ${total.toFixed(2)} total
             </span>
           )}
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-muted-foreground text-[10px]">
             {items.length} item{items.length !== 1 ? 's' : ''}
           </span>
         </div>
@@ -135,7 +149,7 @@ function CategorySection({
             href={meta.externalLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[10px] font-medium text-accent transition-colors hover:bg-card hover:text-accent"
+            className="border-border bg-surface text-accent hover:bg-card hover:text-accent inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-medium transition-colors"
           >
             <ExternalLink className="h-3 w-3" aria-hidden />
             {meta.externalLinkLabel || 'View Build'}
@@ -144,24 +158,22 @@ function CategorySection({
       </div>
 
       {/* Category description */}
-      {meta?.description && (
-        <p className="text-xs text-muted-foreground">{meta.description}</p>
-      )}
+      {meta?.description && <p className="text-muted-foreground text-xs">{meta.description}</p>}
 
       {/* Items */}
       <div className="flex flex-col gap-2">
         {items.map((item) => (
-          <ItemRow key={item.id} item={item} wishlistId={wishlistId} />
+          <ItemRow key={item.id} item={item} wishlistId={wishlistId} collections={collections} />
         ))}
       </div>
 
       {/* Category notes (expandable) */}
       {meta?.notes && (
         <details className="group mt-1">
-          <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground">
+          <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-[11px] font-medium transition-colors">
             Category notes...
           </summary>
-          <div className="mt-2 rounded-lg border border-border/50 bg-surface/50 p-3 text-xs leading-relaxed text-muted-foreground">
+          <div className="border-border/50 bg-surface/50 text-muted-foreground mt-2 rounded-lg border p-3 text-xs leading-relaxed">
             {meta.notes}
           </div>
         </details>

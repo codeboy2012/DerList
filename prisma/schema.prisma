@@ -1111,6 +1111,12 @@ model WishlistItem {
   /// Brand name (e.g. "Apple", "Sony").
   brand String?
 
+  /// Model number or variant identifier (e.g. "RTX 5070 Ti OC").
+  model String?
+
+  /// Physical condition of the item (e.g. "New", "Used — Like New").
+  condition String?
+
   /// Store or retailer name (e.g. "Amazon", "Best Buy").
   retailer String?
 
@@ -1118,6 +1124,9 @@ model WishlistItem {
 
   /// Current price as a decimal value.
   currentPrice Decimal? @db.Decimal(10, 2)
+
+  /// Price the user is waiting for before buying.
+  targetPrice Decimal? @db.Decimal(10, 2)
 
   /// Currency code (e.g. "USD", "EUR", "GBP").
   currency String @default("USD")
@@ -1140,6 +1149,9 @@ model WishlistItem {
 
   /// Desired quantity.
   quantity Int @default(1)
+
+  /// Availability note when known (e.g. "In stock", "Backorder").
+  availability String?
 
   /// Whether this item has been purchased.
   purchased Boolean @default(false)

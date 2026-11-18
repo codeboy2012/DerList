@@ -171,6 +171,7 @@ crash.log
 .agents/
 .claude/
 .windsurf/
+.freebuff/
 
 # AI tool lock/config files that are local-only
 skills-lock.json
@@ -180,6 +181,9 @@ skills-lock.json
 # ============================================================================
 
 PriceGhost-main/
+
+# Project-local portable toolchain (Windows dev machine)
+.tools/
 
 # ============================================================================
 # Generated Documentation / Temporary Exports

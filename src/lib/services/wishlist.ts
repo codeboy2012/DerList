@@ -6,6 +6,7 @@
  */
 
 import type { WishlistCategory, WishlistItem } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import {
   ProductRepository,
   WishlistRepository,
@@ -173,7 +174,21 @@ export class WishlistService {
       throw new Error('Wishlist not found or access denied.');
     }
 
-    return WishlistRepository.updateItem(itemId, data);
+    // Scope the write to the item *and* its collection so a valid wishlistId
+    // cannot be used to modify an item from another wishlist.
+    const { count } = await prisma.wishlistItem.updateMany({
+      where: { id: itemId, wishlistId },
+      data,
+    });
+    if (count === 0) {
+      throw new Error('Item not found or access denied.');
+    }
+
+    const updated = await WishlistRepository.findItem(itemId);
+    if (!updated) {
+      throw new Error('Item not found.');
+    }
+    return updated;
   }
 
   /**
@@ -185,7 +200,12 @@ export class WishlistService {
       throw new Error('Wishlist not found or access denied.');
     }
 
-    await WishlistRepository.deleteItem(itemId);
+    const { count } = await prisma.wishlistItem.deleteMany({
+      where: { id: itemId, wishlistId },
+    });
+    if (count === 0) {
+      throw new Error('Item not found or access denied.');
+    }
   }
 
   /**
@@ -197,12 +217,27 @@ export class WishlistService {
       throw new Error('Wishlist not found or access denied.');
     }
 
-    const item = await WishlistRepository.findItem(itemId);
+    const item = await prisma.wishlistItem.findFirst({
+      where: { id: itemId, wishlistId },
+      select: { purchased: true },
+    });
     if (!item) {
       throw new Error('Item not found.');
     }
 
-    return WishlistRepository.updateItem(itemId, { purchased: !item.purchased });
+    const { count } = await prisma.wishlistItem.updateMany({
+      where: { id: itemId, wishlistId },
+      data: { purchased: !item.purchased, purchasedAt: item.purchased ? null : new Date() },
+    });
+    if (count === 0) {
+      throw new Error('Item not found or access denied.');
+    }
+
+    const updated = await WishlistRepository.findItem(itemId);
+    if (!updated) {
+      throw new Error('Item not found.');
+    }
+    return updated;
   }
 
   /**

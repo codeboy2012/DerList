@@ -1,9 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-
-import { cn } from '@/utils/cn';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import {
   Heart,
   LayoutDashboard,
@@ -14,6 +12,7 @@ import {
   ShieldCheck,
   Users,
 } from 'lucide-react';
+import { cn } from '@/utils/cn';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -42,13 +41,55 @@ interface SearchResult {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const staticCommands: CommandItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-4 w-4" />, href: '/dashboard', section: 'Navigation' },
-  { id: 'wishlists', label: 'Wishlists', icon: <List className="h-4 w-4" />, href: '/wishlists', section: 'Navigation' },
-  { id: 'new-wishlist', label: 'New Wishlist', icon: <Heart className="h-4 w-4" />, href: '/wishlists/new', section: 'Actions' },
-  { id: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4" />, href: '/settings/profile', section: 'Navigation' },
-  { id: 'admin', label: 'Admin Panel', icon: <ShieldCheck className="h-4 w-4" />, href: '/admin', section: 'Navigation' },
-  { id: 'admin-users', label: 'Manage Users', icon: <Users className="h-4 w-4" />, href: '/admin/users', section: 'Admin' },
-  { id: 'admin-products', label: 'Manage Products', icon: <Package className="h-4 w-4" />, href: '/admin/products', section: 'Admin' },
+  {
+    id: 'dashboard',
+    label: 'Dashboard',
+    icon: <LayoutDashboard className="h-4 w-4" />,
+    href: '/dashboard',
+    section: 'Navigation',
+  },
+  {
+    id: 'wishlists',
+    label: 'Wishlists',
+    icon: <List className="h-4 w-4" />,
+    href: '/wishlists',
+    section: 'Navigation',
+  },
+  {
+    id: 'new-wishlist',
+    label: 'New Wishlist',
+    icon: <Heart className="h-4 w-4" />,
+    href: '/wishlists/new',
+    section: 'Actions',
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    icon: <Settings className="h-4 w-4" />,
+    href: '/settings/profile',
+    section: 'Navigation',
+  },
+  {
+    id: 'appearance',
+    label: 'Appearance & Local Settings',
+    icon: <Settings className="h-4 w-4" />,
+    href: '/settings/appearance',
+    section: 'Navigation',
+  },
+  {
+    id: 'admin',
+    label: 'Admin Panel',
+    icon: <ShieldCheck className="h-4 w-4" />,
+    href: '/admin',
+    section: 'Navigation',
+  },
+  {
+    id: 'admin-users',
+    label: 'Manage Users',
+    icon: <Users className="h-4 w-4" />,
+    href: '/admin/users',
+    section: 'Admin',
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -60,7 +101,7 @@ export function CommandPalette() {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
   const prevOpenRef = useRef(open);
   const router = useRouter();
@@ -130,12 +171,19 @@ export function CommandPalette() {
     ? staticCommands.filter(
         (cmd) =>
           cmd.label.toLowerCase().includes(query.toLowerCase()) ||
-          cmd.section.toLowerCase().includes(query.toLowerCase()),
+          cmd.section.toLowerCase().includes(query.toLowerCase())
       )
     : staticCommands;
 
   // Combined items
-  const allItems: { id: string; label: string; description?: string; icon: React.ReactNode; href: string; section: string }[] = [
+  const allItems: {
+    id: string;
+    label: string;
+    description?: string;
+    icon: React.ReactNode;
+    href: string;
+    section: string;
+  }[] = [
     ...filteredCommands.map((cmd) => ({
       id: cmd.id,
       label: cmd.label,
@@ -148,18 +196,28 @@ export function CommandPalette() {
       id: r.id,
       label: r.label,
       description: r.description,
-      icon: r.type === 'wishlist' ? <List className="h-4 w-4" /> : r.type === 'product' ? <Package className="h-4 w-4" /> : <Users className="h-4 w-4" />,
+      icon:
+        r.type === 'wishlist' ? (
+          <List className="h-4 w-4" />
+        ) : r.type === 'product' ? (
+          <Package className="h-4 w-4" />
+        ) : (
+          <Users className="h-4 w-4" />
+        ),
       href: r.href,
       section: 'Search Results',
     })),
   ];
 
-  const navigate = useCallback((href: string) => {
-    if (href) {
-      router.push(href);
-      setOpen(false);
-    }
-  }, [router]);
+  const navigate = useCallback(
+    (href: string) => {
+      if (href) {
+        router.push(href);
+        setOpen(false);
+      }
+    },
+    [router]
+  );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -191,22 +249,25 @@ export function CommandPalette() {
         <div
           role="dialog"
           aria-label="Command palette"
-          className="overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+          className="border-border bg-card overflow-hidden rounded-xl border shadow-2xl"
         >
           {/* Input */}
-          <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-            <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+          <div className="border-border flex items-center gap-3 border-b px-4 py-3">
+            <Search className="text-muted-foreground h-4 w-4 shrink-0" aria-hidden />
             <input
               ref={inputRef}
               type="text"
               value={query}
-              onChange={(e) => { setQuery(e.target.value); setActiveIndex(0); }}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setActiveIndex(0);
+              }}
               onKeyDown={handleKeyDown}
               placeholder="Search or type a command..."
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+              className="text-foreground placeholder:text-muted-foreground flex-1 bg-transparent text-sm outline-none"
               aria-label="Search"
             />
-            <kbd className="hidden rounded border border-border bg-surface px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline">
+            <kbd className="border-border bg-surface text-muted-foreground hidden rounded border px-1.5 py-0.5 text-[10px] sm:inline">
               ESC
             </kbd>
           </div>
@@ -214,7 +275,7 @@ export function CommandPalette() {
           {/* Results */}
           <div className="max-h-[60vh] overflow-y-auto p-2">
             {allItems.length === 0 ? (
-              <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+              <p className="text-muted-foreground px-3 py-6 text-center text-sm">
                 {query ? 'No results found.' : 'Start typing to search...'}
               </p>
             ) : (
@@ -228,15 +289,17 @@ export function CommandPalette() {
                       'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
                       i === activeIndex
                         ? 'bg-accent/10 text-accent'
-                        : 'text-foreground hover:bg-surface',
+                        : 'text-foreground hover:bg-surface'
                     )}
                     onClick={() => navigate(item.href)}
                     onMouseEnter={() => setActiveIndex(i)}
                   >
-                    <span className="shrink-0 text-muted-foreground">{item.icon}</span>
+                    <span className="text-muted-foreground shrink-0">{item.icon}</span>
                     <span className="flex-1 truncate">{item.label}</span>
                     {item.description && (
-                      <span className="truncate text-xs text-muted-foreground">{item.description}</span>
+                      <span className="text-muted-foreground truncate text-xs">
+                        {item.description}
+                      </span>
                     )}
                   </li>
                 ))}
@@ -245,13 +308,11 @@ export function CommandPalette() {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between border-t border-border px-4 py-2">
-            <span className="text-[10px] text-muted-foreground">
+          <div className="border-border flex items-center justify-between border-t px-4 py-2">
+            <span className="text-muted-foreground text-[10px]">
               ↑↓ Navigate · ↵ Select · ESC Close
             </span>
-            <span className="text-[10px] text-muted-foreground">
-              ⌘K to toggle
-            </span>
+            <span className="text-muted-foreground text-[10px]">⌘K to toggle</span>
           </div>
         </div>
       </div>

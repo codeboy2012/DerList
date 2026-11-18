@@ -10,9 +10,9 @@
  * - Never trusts model-generated user/ownership data
  */
 
+import { generateOperationId, wishlistEvents } from '@/lib/events/wishlist-events';
 import { prisma } from '@/lib/prisma';
-import { WishlistRepository, type WishlistItemCreateInput } from '@/lib/repositories';
-import { wishlistEvents, generateOperationId } from '@/lib/events/wishlist-events';
+import { WishlistRepository } from '@/lib/repositories';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -183,7 +183,18 @@ async function executeGetWishlist(userId: string): Promise<ToolResult> {
           where: { purchased: false },
           orderBy: { position: 'asc' },
           take: 100,
-          select: { id: true, title: true, brand: true, retailer: true, currentPrice: true, currency: true, category: true, url: true, notes: true, starPriority: true },
+          select: {
+            id: true,
+            title: true,
+            brand: true,
+            retailer: true,
+            currentPrice: true,
+            currency: true,
+            category: true,
+            url: true,
+            notes: true,
+            starPriority: true,
+          },
         },
         _count: { select: { items: true } },
       },
@@ -194,35 +205,69 @@ async function executeGetWishlist(userId: string): Promise<ToolResult> {
       title: wl.title,
       totalItems: wl._count.items,
       items: wl.items.map((item) => ({
-        id: item.id, title: item.title, brand: item.brand, retailer: item.retailer,
-        price: item.currentPrice ? Number(item.currentPrice) : null, currency: item.currency,
-        category: item.category, url: item.url, notes: item.notes, priority: item.starPriority,
+        id: item.id,
+        title: item.title,
+        brand: item.brand,
+        retailer: item.retailer,
+        price: item.currentPrice ? Number(item.currentPrice) : null,
+        currency: item.currency,
+        category: item.category,
+        url: item.url,
+        notes: item.notes,
+        priority: item.starPriority,
       })),
     }));
 
     const totalItems = summary.reduce((sum, wl) => sum + wl.items.length, 0);
-    return { success: true, tool: 'get_wishlist', data: summary, activity: `Loaded wishlist (${totalItems} items)` };
+    return {
+      success: true,
+      tool: 'get_wishlist',
+      data: summary,
+      activity: `Loaded wishlist (${totalItems} items)`,
+    };
   } catch (err) {
-    return { success: false, tool: 'get_wishlist', error: err instanceof Error ? err.message : 'Failed', activity: 'Failed to load wishlist' };
+    return {
+      success: false,
+      tool: 'get_wishlist',
+      error: err instanceof Error ? err.message : 'Failed',
+      activity: 'Failed to load wishlist',
+    };
   }
 }
 
-async function executeAddToWishlist(userId: string, args: Record<string, unknown>): Promise<ToolResult> {
+async function executeAddToWishlist(
+  userId: string,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   const title = args.title as string | undefined;
   if (!title || typeof title !== 'string' || !title.trim()) {
-    return { success: false, tool: 'add_to_wishlist', error: 'title is required', activity: 'Failed to add item (no title)' };
+    return {
+      success: false,
+      tool: 'add_to_wishlist',
+      error: 'title is required',
+      activity: 'Failed to add item (no title)',
+    };
   }
 
   try {
     const wishlist = await getOrCreateWishlist(userId);
 
     const existing = await prisma.wishlistItem.findFirst({
-      where: { wishlistId: wishlist.id, title: { equals: title.trim(), mode: 'insensitive' }, purchased: false },
+      where: {
+        wishlistId: wishlist.id,
+        title: { equals: title.trim(), mode: 'insensitive' },
+        purchased: false,
+      },
       select: { id: true, title: true },
     });
 
     if (existing) {
-      return { success: true, tool: 'add_to_wishlist', data: { id: existing.id, title: existing.title, status: 'already_exists' }, activity: `"${title.trim()}" already in wishlist` };
+      return {
+        success: true,
+        tool: 'add_to_wishlist',
+        data: { id: existing.id, title: existing.title, status: 'already_exists' },
+        activity: `"${title.trim()}" already in wishlist`,
+      };
     }
 
     const item = await WishlistRepository.addItem({
@@ -235,29 +280,69 @@ async function executeAddToWishlist(userId: string, args: Record<string, unknown
       image: (args.image as string) || undefined,
       category: (args.category as string) || undefined,
       notes: (args.notes as string) || undefined,
-      starPriority: typeof args.starPriority === 'number' ? Math.max(1, Math.min(4, args.starPriority)) : undefined,
+      starPriority:
+        typeof args.starPriority === 'number'
+          ? Math.max(1, Math.min(4, args.starPriority))
+          : undefined,
     });
 
     wishlistEvents.emit({
-      type: 'wishlist.item.added', userId, wishlistId: wishlist.id,
-      operationId: generateOperationId(), timestamp: new Date().toISOString(),
-      item: { id: item.id, title: item.title, price: typeof args.currentPrice === 'number' ? args.currentPrice : null, category: (args.category as string) || null, status: 'added' },
+      type: 'wishlist.item.added',
+      userId,
+      wishlistId: wishlist.id,
+      operationId: generateOperationId(),
+      timestamp: new Date().toISOString(),
+      item: {
+        id: item.id,
+        title: item.title,
+        price: typeof args.currentPrice === 'number' ? args.currentPrice : null,
+        category: (args.category as string) || null,
+        status: 'added',
+      },
     });
 
-    return { success: true, tool: 'add_to_wishlist', data: { id: item.id, title: item.title, status: 'added' }, activity: `Added "${title.trim()}"` };
+    return {
+      success: true,
+      tool: 'add_to_wishlist',
+      data: { id: item.id, title: item.title, status: 'added' },
+      activity: `Added "${title.trim()}"`,
+    };
   } catch (err) {
-    return { success: false, tool: 'add_to_wishlist', error: err instanceof Error ? err.message : 'Failed', activity: `Failed to add "${title.trim()}"` };
+    return {
+      success: false,
+      tool: 'add_to_wishlist',
+      error: err instanceof Error ? err.message : 'Failed',
+      activity: `Failed to add "${title.trim()}"`,
+    };
   }
 }
 
-async function executeAddMultipleToWishlist(userId: string, args: Record<string, unknown>): Promise<ToolResult> {
+async function executeAddMultipleToWishlist(
+  userId: string,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   const rawItems = args.items;
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
-    return { success: false, tool: 'add_multiple_to_wishlist', error: 'items array required', activity: 'Failed (no items)' };
+    return {
+      success: false,
+      tool: 'add_multiple_to_wishlist',
+      error: 'items array required',
+      activity: 'Failed (no items)',
+    };
   }
 
   // Validate items
-  const items: { title: string; brand?: string; retailer?: string; currentPrice?: number; url?: string; image?: string; category?: string; notes?: string; starPriority?: number }[] = [];
+  const items: {
+    title: string;
+    brand?: string;
+    retailer?: string;
+    currentPrice?: number;
+    url?: string;
+    image?: string;
+    category?: string;
+    notes?: string;
+    starPriority?: number;
+  }[] = [];
   for (const raw of rawItems) {
     if (!raw || typeof raw !== 'object') continue;
     const r = raw as Record<string, unknown>;
@@ -272,12 +357,18 @@ async function executeAddMultipleToWishlist(userId: string, args: Record<string,
       image: typeof r.image === 'string' ? r.image : undefined,
       category: typeof r.category === 'string' ? r.category : undefined,
       notes: typeof r.notes === 'string' ? r.notes : undefined,
-      starPriority: typeof r.starPriority === 'number' ? Math.max(1, Math.min(4, r.starPriority)) : undefined,
+      starPriority:
+        typeof r.starPriority === 'number' ? Math.max(1, Math.min(4, r.starPriority)) : undefined,
     });
   }
 
   if (items.length === 0) {
-    return { success: false, tool: 'add_multiple_to_wishlist', error: 'No valid items', activity: 'Failed (no valid items)' };
+    return {
+      success: false,
+      tool: 'add_multiple_to_wishlist',
+      error: 'No valid items',
+      activity: 'Failed (no valid items)',
+    };
   }
 
   try {
@@ -294,12 +385,16 @@ async function executeAddMultipleToWishlist(userId: string, args: Record<string,
     const batchId = `import_${Date.now()}`;
     const operationId = generateOperationId();
     const results: { title: string; status: string; id?: string }[] = [];
-    let added = 0, alreadyExists = 0, failed = 0;
+    let added = 0,
+      alreadyExists = 0,
+      failed = 0;
 
     // Emit import started
     wishlistEvents.emit({
       type: 'wishlist.import.started',
-      userId, wishlistId: wishlist.id, operationId,
+      userId,
+      wishlistId: wishlist.id,
+      operationId,
       timestamp: new Date().toISOString(),
       progress: { total: items.length, completed: 0 },
     });
@@ -310,7 +405,10 @@ async function executeAddMultipleToWishlist(userId: string, args: Record<string,
         results.push({ title: item.title, status: 'already_exists', id: match.id });
         alreadyExists++;
         wishlistEvents.emit({
-          type: 'wishlist.import.progress', userId, wishlistId: wishlist.id, operationId,
+          type: 'wishlist.import.progress',
+          userId,
+          wishlistId: wishlist.id,
+          operationId,
           timestamp: new Date().toISOString(),
           item: { id: match.id, title: item.title, status: 'already_exists' },
           progress: { total: items.length, completed: added + alreadyExists + failed },
@@ -334,7 +432,7 @@ async function executeAddMultipleToWishlist(userId: string, args: Record<string,
             category: item.category ?? null,
             notes: item.notes ?? null,
             starPriority: item.starPriority ?? 1,
-            position: (await getNextPosition(wishlist.id)),
+            position: await getNextPosition(wishlist.id),
             metadata: meta,
           },
         });
@@ -345,12 +443,22 @@ async function executeAddMultipleToWishlist(userId: string, args: Record<string,
 
         // Emit item added event
         wishlistEvents.emit({
-          type: 'wishlist.item.added', userId, wishlistId: wishlist.id, operationId,
+          type: 'wishlist.item.added',
+          userId,
+          wishlistId: wishlist.id,
+          operationId,
           timestamp: new Date().toISOString(),
-          item: { id: created.id, title: item.title, price: item.currentPrice, category: item.category, priority: item.starPriority, status: 'added' },
+          item: {
+            id: created.id,
+            title: item.title,
+            price: item.currentPrice,
+            category: item.category,
+            priority: item.starPriority,
+            status: 'added',
+          },
           progress: { total: items.length, completed: added + alreadyExists + failed },
         });
-      } catch (err) {
+      } catch {
         results.push({ title: item.title, status: 'failed' });
         failed++;
       }
@@ -363,7 +471,10 @@ async function executeAddMultipleToWishlist(userId: string, args: Record<string,
 
     // Emit import completed
     wishlistEvents.emit({
-      type: 'wishlist.import.completed', userId, wishlistId: wishlist.id, operationId,
+      type: 'wishlist.import.completed',
+      userId,
+      wishlistId: wishlist.id,
+      operationId,
       timestamp: new Date().toISOString(),
       result: { total: items.length, added, alreadyExists, failed },
     });
@@ -375,7 +486,12 @@ async function executeAddMultipleToWishlist(userId: string, args: Record<string,
       activity: `Imported ${items.length} items: ${parts.join(', ')}`,
     };
   } catch (err) {
-    return { success: false, tool: 'add_multiple_to_wishlist', error: err instanceof Error ? err.message : 'Failed', activity: 'Failed to import' };
+    return {
+      success: false,
+      tool: 'add_multiple_to_wishlist',
+      error: err instanceof Error ? err.message : 'Failed',
+      activity: 'Failed to import',
+    };
   }
 }
 
@@ -383,7 +499,10 @@ async function executeAddMultipleToWishlist(userId: string, args: Record<string,
 // BULK REMOVE
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function executeRemoveMultipleFromWishlist(userId: string, args: Record<string, unknown>): Promise<ToolResult> {
+async function executeRemoveMultipleFromWishlist(
+  userId: string,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   try {
     const wishlist = await prisma.wishlist.findFirst({
       where: { ownerId: userId, archived: false },
@@ -391,7 +510,12 @@ async function executeRemoveMultipleFromWishlist(userId: string, args: Record<st
     });
 
     if (!wishlist) {
-      return { success: false, tool: 'remove_multiple_from_wishlist', error: 'No wishlist found', activity: 'No wishlist' };
+      return {
+        success: false,
+        tool: 'remove_multiple_from_wishlist',
+        error: 'No wishlist found',
+        activity: 'No wishlist',
+      };
     }
 
     let itemsToRemove: { id: string; title: string }[] = [];
@@ -425,7 +549,12 @@ async function executeRemoveMultipleFromWishlist(userId: string, args: Record<st
       }
 
       if (batchItems.length === 0) {
-        return { success: true, tool: 'remove_multiple_from_wishlist', data: { total: 0, removed: 0, failed: 0, results: [] }, activity: 'No recent import batch found' };
+        return {
+          success: true,
+          tool: 'remove_multiple_from_wishlist',
+          data: { total: 0, removed: 0, failed: 0, results: [] },
+          activity: 'No recent import batch found',
+        };
       }
 
       itemsToRemove = batchItems;
@@ -434,7 +563,12 @@ async function executeRemoveMultipleFromWishlist(userId: string, args: Record<st
     else if (Array.isArray(args.itemIds) && args.itemIds.length > 0) {
       const ids = (args.itemIds as string[]).filter((id) => typeof id === 'string');
       if (ids.length === 0) {
-        return { success: false, tool: 'remove_multiple_from_wishlist', error: 'No valid IDs', activity: 'No valid item IDs' };
+        return {
+          success: false,
+          tool: 'remove_multiple_from_wishlist',
+          error: 'No valid IDs',
+          activity: 'No valid item IDs',
+        };
       }
 
       // Verify all items belong to this user
@@ -445,16 +579,25 @@ async function executeRemoveMultipleFromWishlist(userId: string, args: Record<st
 
       itemsToRemove = items;
     } else {
-      return { success: false, tool: 'remove_multiple_from_wishlist', error: 'Provide itemIds array or lastImport: true', activity: 'Invalid arguments' };
+      return {
+        success: false,
+        tool: 'remove_multiple_from_wishlist',
+        error: 'Provide itemIds array or lastImport: true',
+        activity: 'Invalid arguments',
+      };
     }
 
     // Execute removals
     const operationId = generateOperationId();
     const results: { title: string; status: string; id: string }[] = [];
-    let removed = 0, failed = 0;
+    let removed = 0,
+      failed = 0;
 
     wishlistEvents.emit({
-      type: 'wishlist.remove.started', userId, wishlistId: wishlist.id, operationId,
+      type: 'wishlist.remove.started',
+      userId,
+      wishlistId: wishlist.id,
+      operationId,
       timestamp: new Date().toISOString(),
       progress: { total: itemsToRemove.length, completed: 0 },
     });
@@ -466,7 +609,10 @@ async function executeRemoveMultipleFromWishlist(userId: string, args: Record<st
         removed++;
 
         wishlistEvents.emit({
-          type: 'wishlist.item.removed', userId, wishlistId: wishlist.id, operationId,
+          type: 'wishlist.item.removed',
+          userId,
+          wishlistId: wishlist.id,
+          operationId,
           timestamp: new Date().toISOString(),
           item: { id: item.id, title: item.title, status: 'removed' },
           progress: { total: itemsToRemove.length, completed: removed + failed },
@@ -478,7 +624,10 @@ async function executeRemoveMultipleFromWishlist(userId: string, args: Record<st
     }
 
     wishlistEvents.emit({
-      type: 'wishlist.remove.completed', userId, wishlistId: wishlist.id, operationId,
+      type: 'wishlist.remove.completed',
+      userId,
+      wishlistId: wishlist.id,
+      operationId,
       timestamp: new Date().toISOString(),
       result: { total: itemsToRemove.length, removed, failed },
     });
@@ -494,14 +643,27 @@ async function executeRemoveMultipleFromWishlist(userId: string, args: Record<st
       activity: `Removed ${removed} items${failed > 0 ? `, ${failed} failed` : ''}`,
     };
   } catch (err) {
-    return { success: false, tool: 'remove_multiple_from_wishlist', error: err instanceof Error ? err.message : 'Failed', activity: 'Failed to remove items' };
+    return {
+      success: false,
+      tool: 'remove_multiple_from_wishlist',
+      error: err instanceof Error ? err.message : 'Failed',
+      activity: 'Failed to remove items',
+    };
   }
 }
 
-async function executeRemoveFromWishlist(userId: string, args: Record<string, unknown>): Promise<ToolResult> {
+async function executeRemoveFromWishlist(
+  userId: string,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   const itemId = args.itemId as string | undefined;
   if (!itemId || typeof itemId !== 'string') {
-    return { success: false, tool: 'remove_from_wishlist', error: 'itemId is required', activity: 'Failed (no ID)' };
+    return {
+      success: false,
+      tool: 'remove_from_wishlist',
+      error: 'itemId is required',
+      activity: 'Failed (no ID)',
+    };
   }
 
   try {
@@ -511,84 +673,183 @@ async function executeRemoveFromWishlist(userId: string, args: Record<string, un
     });
 
     if (!item || item.wishlist.ownerId !== userId) {
-      return { success: false, tool: 'remove_from_wishlist', error: 'Not found or access denied', activity: 'Item not found' };
+      return {
+        success: false,
+        tool: 'remove_from_wishlist',
+        error: 'Not found or access denied',
+        activity: 'Item not found',
+      };
     }
 
     await WishlistRepository.deleteItem(itemId);
 
     wishlistEvents.emit({
-      type: 'wishlist.item.removed', userId, operationId: generateOperationId(),
+      type: 'wishlist.item.removed',
+      userId,
+      operationId: generateOperationId(),
       timestamp: new Date().toISOString(),
       item: { id: itemId, title: item.title, status: 'removed' },
     });
 
-    return { success: true, tool: 'remove_from_wishlist', data: { id: itemId, title: item.title }, activity: `Removed "${item.title}"` };
+    return {
+      success: true,
+      tool: 'remove_from_wishlist',
+      data: { id: itemId, title: item.title },
+      activity: `Removed "${item.title}"`,
+    };
   } catch (err) {
-    return { success: false, tool: 'remove_from_wishlist', error: err instanceof Error ? err.message : 'Failed', activity: 'Failed to remove' };
+    return {
+      success: false,
+      tool: 'remove_from_wishlist',
+      error: err instanceof Error ? err.message : 'Failed',
+      activity: 'Failed to remove',
+    };
   }
 }
 
-async function executeUpdateWishlistItem(userId: string, args: Record<string, unknown>): Promise<ToolResult> {
+async function executeUpdateWishlistItem(
+  userId: string,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   const itemId = args.itemId as string | undefined;
   const changes = args.changes as Record<string, unknown> | undefined;
 
   if (!itemId || !changes) {
-    return { success: false, tool: 'update_wishlist_item', error: 'itemId and changes required', activity: 'Failed to update' };
+    return {
+      success: false,
+      tool: 'update_wishlist_item',
+      error: 'itemId and changes required',
+      activity: 'Failed to update',
+    };
   }
 
   try {
-    const item = await prisma.wishlistItem.findUnique({ where: { id: itemId }, include: { wishlist: { select: { ownerId: true } } } });
+    const item = await prisma.wishlistItem.findUnique({
+      where: { id: itemId },
+      include: { wishlist: { select: { ownerId: true } } },
+    });
     if (!item || item.wishlist.ownerId !== userId) {
-      return { success: false, tool: 'update_wishlist_item', error: 'Not found or access denied', activity: 'Item not found' };
+      return {
+        success: false,
+        tool: 'update_wishlist_item',
+        error: 'Not found or access denied',
+        activity: 'Item not found',
+      };
     }
 
     const safeChanges: Record<string, unknown> = {};
     if (typeof changes.notes === 'string') safeChanges.notes = changes.notes;
     if (typeof changes.category === 'string') safeChanges.category = changes.category;
-    if (typeof changes.starPriority === 'number' && changes.starPriority >= 1 && changes.starPriority <= 4) safeChanges.starPriority = changes.starPriority;
+    if (
+      typeof changes.starPriority === 'number' &&
+      changes.starPriority >= 1 &&
+      changes.starPriority <= 4
+    )
+      safeChanges.starPriority = changes.starPriority;
 
     if (Object.keys(safeChanges).length === 0) {
-      return { success: false, tool: 'update_wishlist_item', error: 'No valid changes', activity: 'No changes' };
+      return {
+        success: false,
+        tool: 'update_wishlist_item',
+        error: 'No valid changes',
+        activity: 'No changes',
+      };
     }
 
     await WishlistRepository.updateItem(itemId, safeChanges);
-    return { success: true, tool: 'update_wishlist_item', data: { id: itemId, title: item.title, changes: safeChanges }, activity: `Updated "${item.title}"` };
+    return {
+      success: true,
+      tool: 'update_wishlist_item',
+      data: { id: itemId, title: item.title, changes: safeChanges },
+      activity: `Updated "${item.title}"`,
+    };
   } catch (err) {
-    return { success: false, tool: 'update_wishlist_item', error: err instanceof Error ? err.message : 'Failed', activity: 'Failed to update' };
+    return {
+      success: false,
+      tool: 'update_wishlist_item',
+      error: err instanceof Error ? err.message : 'Failed',
+      activity: 'Failed to update',
+    };
   }
 }
 
-async function executeReorderWishlistItem(userId: string, args: Record<string, unknown>): Promise<ToolResult> {
+async function executeReorderWishlistItem(
+  userId: string,
+  args: Record<string, unknown>
+): Promise<ToolResult> {
   const itemId = args.itemId as string | undefined;
   const newPosition = args.newPosition as number | undefined;
   if (!itemId || typeof newPosition !== 'number') {
-    return { success: false, tool: 'reorder_wishlist_item', error: 'itemId and newPosition required', activity: 'Failed to reorder' };
+    return {
+      success: false,
+      tool: 'reorder_wishlist_item',
+      error: 'itemId and newPosition required',
+      activity: 'Failed to reorder',
+    };
   }
 
   try {
-    const item = await prisma.wishlistItem.findUnique({ where: { id: itemId }, include: { wishlist: { select: { ownerId: true } } } });
+    const item = await prisma.wishlistItem.findUnique({
+      where: { id: itemId },
+      include: { wishlist: { select: { ownerId: true } } },
+    });
     if (!item || item.wishlist.ownerId !== userId) {
-      return { success: false, tool: 'reorder_wishlist_item', error: 'Not found or access denied', activity: 'Item not found' };
+      return {
+        success: false,
+        tool: 'reorder_wishlist_item',
+        error: 'Not found or access denied',
+        activity: 'Item not found',
+      };
     }
 
     await WishlistRepository.updateItem(itemId, { position: newPosition });
-    return { success: true, tool: 'reorder_wishlist_item', data: { id: itemId, title: item.title, position: newPosition }, activity: `Moved "${item.title}"` };
+    return {
+      success: true,
+      tool: 'reorder_wishlist_item',
+      data: { id: itemId, title: item.title, position: newPosition },
+      activity: `Moved "${item.title}"`,
+    };
   } catch (err) {
-    return { success: false, tool: 'reorder_wishlist_item', error: err instanceof Error ? err.message : 'Failed', activity: 'Failed to reorder' };
+    return {
+      success: false,
+      tool: 'reorder_wishlist_item',
+      error: err instanceof Error ? err.message : 'Failed',
+      activity: 'Failed to reorder',
+    };
   }
 }
 
 async function executeClearWishlist(userId: string): Promise<ToolResult> {
   try {
-    const wishlists = await prisma.wishlist.findMany({ where: { ownerId: userId, archived: false }, select: { id: true } });
+    const wishlists = await prisma.wishlist.findMany({
+      where: { ownerId: userId, archived: false },
+      select: { id: true },
+    });
     if (wishlists.length === 0) {
-      return { success: true, tool: 'clear_wishlist', data: { removed: 0 }, activity: 'Already empty' };
+      return {
+        success: true,
+        tool: 'clear_wishlist',
+        data: { removed: 0 },
+        activity: 'Already empty',
+      };
     }
 
-    const result = await prisma.wishlistItem.deleteMany({ where: { wishlistId: { in: wishlists.map((w) => w.id) } } });
-    return { success: true, tool: 'clear_wishlist', data: { removed: result.count }, activity: `Cleared (${result.count} items removed)` };
+    const result = await prisma.wishlistItem.deleteMany({
+      where: { wishlistId: { in: wishlists.map((w) => w.id) } },
+    });
+    return {
+      success: true,
+      tool: 'clear_wishlist',
+      data: { removed: result.count },
+      activity: `Cleared (${result.count} items removed)`,
+    };
   } catch (err) {
-    return { success: false, tool: 'clear_wishlist', error: err instanceof Error ? err.message : 'Failed', activity: 'Failed to clear' };
+    return {
+      success: false,
+      tool: 'clear_wishlist',
+      error: err instanceof Error ? err.message : 'Failed',
+      activity: 'Failed to clear',
+    };
   }
 }
 

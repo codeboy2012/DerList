@@ -16,17 +16,13 @@ export async function updateStarPriorityAction(formData: FormData): Promise<void
   // Validate priority is 1-4
   if (isNaN(priority) || priority < 1 || priority > 4) return;
 
-  // Verify ownership
-  const item = await prisma.wishlistItem.findUnique({
-    where: { id: itemId },
-    select: { wishlist: { select: { ownerId: true } } },
-  });
-  if (!item || item.wishlist.ownerId !== user.id) return;
-
-  await prisma.wishlistItem.update({
-    where: { id: itemId },
+  // The item must belong to the submitted collection and that collection must
+  // belong to the caller; a valid wishlistId alone must not authorise an item.
+  const { count } = await prisma.wishlistItem.updateMany({
+    where: { id: itemId, wishlistId, wishlist: { ownerId: user.id } },
     data: { starPriority: priority },
   });
+  if (count === 0) return;
 
   revalidatePath(`/wishlists/${wishlistId}`);
 }

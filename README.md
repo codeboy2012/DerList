@@ -1,8 +1,8 @@
 # DerList
 
-**The open-source universal wishlist and shopping planner.**
+**A private, open-source wishlist and personal product organizer.**
 
-DerList is a self-hosted web application for organizing products you want to buy, researching products with AI, tracking prices, and managing wishlists — without subscriptions, ads, or vendor lock-in.
+DerList is a self-hosted web application for keeping private collections of the products you want. Record current and target prices, condition, availability and notes, import product details, and organize everything your way — without public sharing, a marketplace, subscriptions, ads, or vendor lock-in.
 
 > 🚧 **DerList is currently in active alpha development.**
 >
@@ -11,59 +11,47 @@ DerList is a self-hosted web application for organizing products you want to buy
 **Current version:** `0.11.5`  
 **Latest stable release:** `0.11.0`
 
-📋 **[View the full Changelog](https://github.com/codeboy2012/DerList/blob/main/CHNAGELOG.md)**
+📋 **[View the full Changelog](https://github.com/codeboy2012/DerList/blob/main/CHANGELOG.md)**
 
 ---
 
 ## ✨ Features
 
-### 🛒 Wishlists
+### 🛒 Wishlists & collections
 
-- Unlimited wishlists
-- Create, rename, duplicate, archive, and delete wishlists
-- Product organization
-- Categories and folders
-- Subfolders
-- Custom labels
-- Priority levels
+- Unlimited private collections
+- Create, rename, duplicate, archive, and delete collections
+- Categories/folders within a collection
+- Priority levels and star ratings
 - Quantity tracking
-- Desired price
+- Current price and per-item target price
+- Condition and availability notes
 - Purchase status
-- Need-by dates
-- Wishlist notes
+- Private notes per product
 - Top Picks
 - Product images
-- Search and filtering
-- Public, private, and unlisted wishlists
+- Search, sorting and filtering
+
+Every collection is private to its owner. There are no public wishlist pages, share links or
+catalogues, and no cross-account product search.
 
 ### 📦 Product Management
 
 Products can store detailed information including:
 
-- Product name
-- Brand
-- Manufacturer
-- Model
+- Product name, brand and model
 - Category
-- Subcategory
-- SKU
-- UPC
-- ASIN
-- MPN
-- Product URL
-- Store URL
-- Description
-- Notes
-- Tags
-- Specifications
-- Images
-- Pricing
-- Sellers
-- Shipping
-- Tax
-- Coupons
-- Promo codes
-- AI metadata
+- Condition and availability (as supplied by you or the import)
+- SKU, UPC, ASIN and MPN where an import provides them
+- Product URL and description
+- Private notes
+- Specifications and images
+- Current price and target price
+- Retailer and seller information
+- Purchase status and quantity
+
+Optional extended fields live in the product editor and its metadata JSON; they are only as
+complete as the import or your own edits. DerList never invents a value — unknown stays unknown.
 
 ### 🔗 Product Importing
 
@@ -139,21 +127,17 @@ The image system includes:
 
 ### 💰 Pricing
 
-Current product pricing functionality includes:
+Pricing features that exist today:
 
-- Current price
-- Currency
-- Price validation
-- Multiple sellers
-- Original/MSRP pricing support
-- Discount information
-- Shipping
-- Tax
-- Coupons
-- Promo codes
-- Manual pricing controls
+- Current price and currency per item
+- A per-item target price you set yourself
+- Original/MSRP and discount fields when an import supplies them
+- Manual price editing
+- Price history storage and charts, rendered when data exists
 
-Advanced price tracking and historical pricing are currently in development.
+Automated price monitoring is **not** active by default. It requires the separate worker service
+and a configured price provider; without them the history is simply empty. Price alerts are not
+implemented yet.
 
 ### 👥 Authentication
 
@@ -470,27 +454,24 @@ The roadmap continues through the `1.x` releases, with major milestones includin
 - Product intelligence
 - Advanced pricing
 - Wishlist intelligence
-- Price tracking
 - Universal importing
 - AI Shopping Assistant
-- Sharing
-- Gift registries
 - Browser extension
 - Notifications
 - Offline/PWA
-- PC Builder
-- Advanced PC Builder
 - Mobile applications
 - Advanced AI
-- Social and collaboration
 - Automation
 - Production readiness
+
+There is no public sharing, marketplace or PC builder in the current application; those are not
+committed roadmap items.
 
 The current major roadmap target is **v1.20.0**.
 
 DerList will continue beyond v1.20 with additional features and platform improvements.
 
-📋 **[View the complete DerList Changelog](https://github.com/codeboy2012/DerList/blob/main/CHNAGELOG.md)**
+📋 **[View the complete DerList Changelog](https://github.com/codeboy2012/DerList/blob/main/CHANGELOG.md)**
 
 ---
 
@@ -536,7 +517,7 @@ Built by [CodeBoy2012](https://github.com/codeboy2012) and contributors.
 
 ## 📚 Documentation
 
-- **[Changelog](https://github.com/codeboy2012/DerList/blob/main/CHNAGELOG.md)**
+- **[Changelog](https://github.com/codeboy2012/DerList/blob/main/CHANGELOG.md)**
 - **[GitHub Repository](https://github.com/codeboy2012/DerList)**
 - **[Issues](https://github.com/codeboy2012/DerList/issues)**
 - **[Releases](https://github.com/codeboy2012/DerList/releases)**

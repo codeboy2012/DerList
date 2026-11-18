@@ -31,7 +31,10 @@ export async function queryAI(prompt: string): Promise<AIResponse | null> {
         return null;
     }
   } catch (err) {
-    console.warn(`[AI] Provider ${provider} failed:`, err instanceof Error ? err.message : 'Unknown');
+    console.warn(
+      `[AI] Provider ${provider} failed:`,
+      err instanceof Error ? err.message : 'Unknown'
+    );
     return null;
   }
 }
@@ -45,7 +48,7 @@ function getConfiguredProvider(): AIProvider | null {
 }
 
 async function queryGemini(prompt: string): Promise<AIResponse> {
-  // @ts-ignore — optional dependency, only used when GEMINI_API_KEY is set
+  // @ts-expect-error — optional dependency, only used when GEMINI_API_KEY is set
   const { GoogleGenerativeAI } = await import('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
   const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL ?? 'gemini-2.0-flash' });
@@ -54,7 +57,7 @@ async function queryGemini(prompt: string): Promise<AIResponse> {
 }
 
 async function queryOpenAI(prompt: string): Promise<AIResponse> {
-  // @ts-ignore — optional dependency, only used when OPENAI_API_KEY is set
+  // @ts-expect-error — optional dependency, only used when OPENAI_API_KEY is set
   const { default: OpenAI } = await import('openai');
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
   const resp = await client.chat.completions.create({
@@ -66,7 +69,7 @@ async function queryOpenAI(prompt: string): Promise<AIResponse> {
 }
 
 async function queryAnthropic(prompt: string): Promise<AIResponse> {
-  // @ts-ignore — optional dependency, only used when ANTHROPIC_API_KEY is set
+  // @ts-expect-error — optional dependency, only used when ANTHROPIC_API_KEY is set
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
   const resp = await client.messages.create({

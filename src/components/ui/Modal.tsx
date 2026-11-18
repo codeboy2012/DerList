@@ -14,6 +14,7 @@ import {
 import { X } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/utils/cn';
+import { useIsClient } from '@/lib/hooks/use-is-client';
 
 export interface ModalProps {
   open: boolean;
@@ -57,13 +58,8 @@ export function Modal({
   const titleId = useId();
   const descId = useId();
   const previouslyFocused = useRef<HTMLElement | null>(null);
-  const [mounted, setMounted] = useState(false);
-
-  // Only render portal on client
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // Only render the portal after hydration, without a setState-in-effect.
+  const mounted = useIsClient();
 
   // Sync open state with the native <dialog> element
   useEffect(() => {

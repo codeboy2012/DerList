@@ -59,10 +59,12 @@ const AI_TEMPERATURE = 0.1;
  * Scratch state the pipeline attaches to the mutable identification input.
  * Providers communicate results through this bag instead of the public input.
  */
-interface IdentificationScratch {
+export interface IdentificationScratch {
   _noAIConfigured?: NoAIConfiguredResult;
   _searchEvidence?: SearchEvidence;
   _allSearchEvidence?: SearchEvidence[];
+  /** Image URLs gathered from search results, consumed by image resolution. */
+  _searchImages?: string[];
   _aiFailure?: { error: string; durationMs: number; isTimeout?: boolean };
   _aiResponse?: AIProductResponse;
   _aiMetadata?: AIIdentificationMetadata;
@@ -71,9 +73,14 @@ interface IdentificationScratch {
   _fieldSources?: FieldSourceMap;
 }
 
-type ScratchInput = IdentificationInput & IdentificationScratch;
+export type ScratchInput = IdentificationInput & IdentificationScratch;
 
-function scratchOf(input: IdentificationInput): ScratchInput {
+/**
+ * Typed access to the provider scratch bag attached to the mutable input.
+ * Providers communicate intermediate evidence through it; keeping the cast in
+ * one place avoids scattering `any` through the pipeline.
+ */
+export function scratchOf(input: IdentificationInput): ScratchInput {
   return input as ScratchInput;
 }
 

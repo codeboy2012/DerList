@@ -50,9 +50,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Source wishlist not found' }, { status: 404 });
   }
 
-  // Authorization: allow if user owns it OR it's public
-  if (source.ownerId !== user.id && source.visibility === 'PRIVATE') {
-    return NextResponse.json({ error: 'Wishlist not found' }, { status: 404 });
+  // Authorization: collections are private — only the owner may copy one.
+  // A foreign id is reported exactly like a missing row so it cannot be probed.
+  if (source.ownerId !== user.id) {
+    return NextResponse.json({ error: 'Source wishlist not found' }, { status: 404 });
   }
 
   // Options (all default to true)

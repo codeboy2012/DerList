@@ -1,14 +1,18 @@
 'use client';
 
-import { cn } from '@/utils/cn';
-import { ChevronDown } from 'lucide-react';
 import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
   type ButtonHTMLAttributes,
   type HTMLAttributes,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { cn } from '@/utils/cn';
 
 export interface DropdownItem {
   label: ReactNode;
@@ -62,19 +66,28 @@ export function Dropdown({
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [open]);
 
-  // Reset active index when opening
-  useEffect(() => {
-    if (open) setActiveIndex(items.length > 0 ? 0 : -1);
-  }, [open, items.length]);
+  const openMenu = useCallback(() => {
+    setActiveIndex(items.length > 0 ? 0 : -1);
+    setOpen(true);
+  }, [items.length]);
+
+  const toggleMenu = useCallback(() => {
+    if (open) {
+      setOpen(false);
+      setActiveIndex(-1);
+    } else {
+      openMenu();
+    }
+  }, [open, openMenu]);
 
   const handleTriggerKey = useCallback(
     (e: KeyboardEvent<HTMLButtonElement>) => {
       if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        setOpen(true);
+        openMenu();
       }
     },
-    [],
+    [openMenu]
   );
 
   const handleMenuKey = useCallback(
@@ -84,6 +97,7 @@ export function Dropdown({
         triggerRef.current?.focus();
         return;
       }
+      if (items.length === 0) return;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setActiveIndex((i) => (i + 1) % items.length);
@@ -106,7 +120,7 @@ export function Dropdown({
         }
       }
     },
-    [activeIndex, items, onSelect],
+    [activeIndex, items, onSelect]
   );
 
   return (
@@ -118,16 +132,13 @@ export function Dropdown({
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         aria-label={label}
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggleMenu}
         onKeyDown={handleTriggerKey}
         className="inline-flex items-center gap-2"
       >
         {trigger}
         <ChevronDown
-          className={cn(
-            'h-4 w-4 text-muted-foreground transition-transform',
-            open && 'rotate-180',
-          )}
+          className={cn('text-muted-foreground h-4 w-4 transition-transform', open && 'rotate-180')}
           aria-hidden
         />
       </button>
@@ -145,9 +156,9 @@ export function Dropdown({
           tabIndex={-1}
           onKeyDown={handleMenuKey}
           className={cn(
-            'absolute z-50 mt-2 min-w-[12rem] overflow-hidden rounded-lg border border-border bg-card p-1 shadow-xl',
+            'border-border bg-card absolute z-50 mt-2 min-w-[12rem] overflow-hidden rounded-lg border p-1 shadow-xl',
             'focus:outline-none',
-            align === 'end' ? 'right-0' : 'left-0',
+            align === 'end' ? 'right-0' : 'left-0'
           )}
         >
           {items.map((item, idx) => {
@@ -173,7 +184,7 @@ export function Dropdown({
                   isActive ? 'bg-surface text-foreground' : 'text-foreground',
                   'hover:bg-surface',
                   item.disabled && 'cursor-not-allowed opacity-50',
-                  item.destructive && 'text-danger hover:bg-danger/10',
+                  item.destructive && 'text-danger hover:bg-danger/10'
                 )}
               >
                 {item.icon && <span className="flex-shrink-0">{item.icon}</span>}

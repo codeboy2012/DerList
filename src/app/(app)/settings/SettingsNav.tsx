@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, Bot, DollarSign, Eye, Key, Settings, ShoppingCart, User } from 'lucide-react';
+import { Bot, Key, Palette, Settings, User } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 type NavItem = {
@@ -19,6 +19,7 @@ type NavItem = {
 const items: NavItem[] = [
   { href: '/settings/profile', label: 'Profile', icon: User },
   { href: '/settings/account', label: 'Account', icon: Key },
+  { href: '/settings/appearance', label: 'Appearance', icon: Palette },
   { href: '/settings/providers', label: 'API Providers', icon: Settings },
   { href: '/settings/ai', label: 'AI Settings', icon: Bot },
 ];

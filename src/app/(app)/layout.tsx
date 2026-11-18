@@ -1,8 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { requireUser } from '@/lib/auth';
-import { siteConfig } from '@/lib/site-config';
-import { Container } from '@/components/ui/Container';
 import { Logo } from '@/components/ui/Logo';
 import { AppNav } from './AppNav';
 
@@ -25,7 +23,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
       {/* Main content area */}
       <div className="flex flex-1 flex-col">
         {/* Top bar */}
-        <header className="border-border bg-background/80 sticky top-0 z-20 flex h-14 items-center justify-between border-b px-6 backdrop-blur-md">
+        <header className="glass border-border sticky top-0 z-20 flex h-14 items-center justify-between border-b px-6">
           <div className="flex items-center gap-2 md:hidden">
             {/* Space for hamburger button (positioned fixed in AppNav) */}
             <div className="w-8" />

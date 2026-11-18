@@ -17,10 +17,9 @@ const parsedClientEnv = clientEnvSchema.safeParse({
 });
 
 if (!parsedClientEnv.success) {
-  // eslint-disable-next-line no-console
   console.error(
     'Invalid public environment variables:',
-    parsedClientEnv.error.flatten().fieldErrors,
+    parsedClientEnv.error.flatten().fieldErrors
   );
 }
 

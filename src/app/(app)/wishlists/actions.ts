@@ -2,11 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createWishlistSchema, updateWishlistSchema } from '@/lib/validations/wishlist';
-
 import type { ActionState } from '../../(auth)/actions';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -14,11 +12,13 @@ import type { ActionState } from '../../(auth)/actions';
 // ─────────────────────────────────────────────────────────────────────────────
 
 function generateSlug(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 60) || 'wishlist';
+  return (
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 60) || 'wishlist'
+  );
 }
 
 async function uniqueSlug(ownerId: string, base: string): Promise<string> {
@@ -41,7 +41,7 @@ async function uniqueSlug(ownerId: string, base: string): Promise<string> {
 
 export async function createWishlistAction(
   _prevState: ActionState,
-  formData: FormData,
+  formData: FormData
 ): Promise<ActionState> {
   const user = await requireUser();
 
@@ -58,15 +58,16 @@ export async function createWishlistAction(
     return { success: false, fieldErrors: parsed.error.flatten().fieldErrors };
   }
 
-  const { title, description, visibility, icon, color } = parsed.data;
+  const { title, description, icon, color } = parsed.data;
   const slug = await uniqueSlug(user.id, generateSlug(title));
 
+  // DerList is a private personal wishlist: collections are never shared.
   const wishlist = await prisma.wishlist.create({
     data: {
       ownerId: user.id,
       title,
       description: description || null,
-      visibility,
+      visibility: 'PRIVATE',
       icon: icon || null,
       color: color || null,
       slug,
@@ -84,7 +85,7 @@ export async function createWishlistAction(
 
 export async function updateWishlistAction(
   _prevState: ActionState,
-  formData: FormData,
+  formData: FormData
 ): Promise<ActionState> {
   const user = await requireUser();
   const wishlistId = formData.get('wishlistId') as string;
@@ -112,7 +113,7 @@ export async function updateWishlistAction(
     return { success: false, fieldErrors: parsed.error.flatten().fieldErrors };
   }
 
-  const { title, description, visibility, icon, color, archived } = parsed.data;
+  const { title, description, icon, color, archived } = parsed.data;
 
   // Regenerate slug if title changed
   const newSlug = await uniqueSlug(user.id, generateSlug(title));
@@ -123,7 +124,7 @@ export async function updateWishlistAction(
     data: {
       title,
       description: description || null,
-      visibility,
+      visibility: 'PRIVATE',
       icon: icon || null,
       color: color || null,
       slug: slugToUse,

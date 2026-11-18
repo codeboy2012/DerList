@@ -25,25 +25,22 @@
 
 import { getProviderManager } from '@/lib/providers';
 import { validateProduct } from '../validation';
+import type { AIImportStatus, NoAIConfiguredResult } from './ai-identification-types';
+import { importLog } from './logging';
 import {
   AIIdentificationProvider,
+  scratchOf,
   SearchIdentificationProvider,
   StructuredDataProvider,
 } from './providers';
 import type {
   IdentificationInput,
-  IdentificationProvider,
   IdentificationResult,
   IdentifiedProduct,
   ImportStatus,
   ProviderAttempt,
   StageTiming,
 } from './types';
-import { importLog } from './logging';
-import type {
-  AIImportStatus,
-  NoAIConfiguredResult,
-} from './ai-identification-types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pipeline Configuration
@@ -92,7 +89,18 @@ export interface ExtendedIdentificationResult extends IdentificationResult {
  *
  * If no AI is configured, returns immediately with no_ai_configured status.
  */
-export async function identifyProduct(input: IdentificationInput): Promise<ExtendedIdentificationResult> {
+/**
+ * Structured metadata is typed with interfaces, while the identification
+ * result carries plain records. Bridge the two here instead of reintroducing
+ * `any` at every call site.
+ */
+function asPlainRecord<T>(value: T | undefined): Record<string, unknown> | undefined {
+  return value ? (value as unknown as Record<string, unknown>) : undefined;
+}
+
+export async function identifyProduct(
+  input: IdentificationInput
+): Promise<ExtendedIdentificationResult> {
   const startTime = Date.now();
   const attempts: ProviderAttempt[] = [];
   const timing: StageTiming = { totalMs: 0 };
@@ -124,7 +132,8 @@ export async function identifyProduct(input: IdentificationInput): Promise<Exten
 
     const noAIResult: NoAIConfiguredResult = {
       status: 'no_ai_configured',
-      message: 'AI product identification is not configured. Please enter the product details manually.',
+      message:
+        'AI product identification is not configured. Please enter the product details manually.',
       verifiedContext: {
         url: input.url ?? null,
         asin: input.asin ?? null,
@@ -141,7 +150,8 @@ export async function identifyProduct(input: IdentificationInput): Promise<Exten
       success: false,
       product: null,
       providersAttempted: [],
-      statusMessage: "AI identification isn't configured. DerList needs a connected AI provider to automatically identify products from URLs. Please enter the product details manually below.",
+      statusMessage:
+        "AI identification isn't configured. DerList needs a connected AI provider to automatically identify products from URLs. Please enter the product details manually below.",
       needsReview: true,
       durationMs: timing.totalMs,
       completeness: 0,
@@ -235,13 +245,16 @@ export async function identifyProduct(input: IdentificationInput): Promise<Exten
       timing.aiMs = duration;
 
       if (aiResult) {
-        const validation = validateProduct({
-          title: aiResult.title,
-          price: aiResult.price,
-          brand: aiResult.brand,
-          image: aiResult.imageUrl,
-          retailer: aiResult.retailer,
-        }, aiResult.confidence);
+        const validation = validateProduct(
+          {
+            title: aiResult.title,
+            price: aiResult.price,
+            brand: aiResult.brand,
+            image: aiResult.imageUrl,
+            retailer: aiResult.retailer,
+          },
+          aiResult.confidence
+        );
 
         attempts.push({
           provider: aiProvider.name,
@@ -271,7 +284,7 @@ export async function identifyProduct(input: IdentificationInput): Promise<Exten
           success: false,
           confidence: 0,
           durationMs: duration,
-          error: (input as any)._aiFailure?.error ?? 'AI returned no result',
+          error: scratchOf(input)._aiFailure?.error ?? 'AI returned no result',
         });
       }
     } catch (error) {
@@ -297,13 +310,16 @@ export async function identifyProduct(input: IdentificationInput): Promise<Exten
   // If AI failed but search has a valid result, use it as a fallback
   // (still needs review since AI is the authority)
   if (!bestResult && searchResult) {
-    const searchValidation = validateProduct({
-      title: searchResult.title,
-      price: searchResult.price,
-      brand: searchResult.brand,
-      image: searchResult.imageUrl,
-      retailer: searchResult.retailer,
-    }, searchResult.confidence);
+    const searchValidation = validateProduct(
+      {
+        title: searchResult.title,
+        price: searchResult.price,
+        brand: searchResult.brand,
+        image: searchResult.imageUrl,
+        retailer: searchResult.retailer,
+      },
+      searchResult.confidence
+    );
 
     if (searchValidation.isAcceptable) {
       bestResult = {
@@ -317,13 +333,16 @@ export async function identifyProduct(input: IdentificationInput): Promise<Exten
 
   // If neither AI nor search worked, try structured data
   if (!bestResult && structuredResult) {
-    const structValidation = validateProduct({
-      title: structuredResult.title,
-      price: structuredResult.price,
-      brand: structuredResult.brand,
-      image: structuredResult.imageUrl,
-      retailer: structuredResult.retailer,
-    }, structuredResult.confidence);
+    const structValidation = validateProduct(
+      {
+        title: structuredResult.title,
+        price: structuredResult.price,
+        brand: structuredResult.brand,
+        image: structuredResult.imageUrl,
+        retailer: structuredResult.retailer,
+      },
+      structuredResult.confidence
+    );
 
     if (structValidation.isAcceptable) {
       bestResult = {
@@ -356,7 +375,7 @@ export async function identifyProduct(input: IdentificationInput): Promise<Exten
         retailer: bestResult.retailer ?? undefined,
         url: bestResult.url ?? undefined,
         userId: input.userId,
-        searchImages: (input as any)._searchImages,
+        searchImages: scratchOf(input)._searchImages,
       });
 
       if (imageResult.imageUrl) {
@@ -389,7 +408,7 @@ export async function identifyProduct(input: IdentificationInput): Promise<Exten
   }
 
   // ── Check for identity conflict ──
-  const identityConflict = (input as any)._identityConflict;
+  const identityConflict = scratchOf(input)._identityConflict;
   if (identityConflict && !identityConflict.verified) {
     timing.totalMs = Date.now() - startTime;
     importLog('PIPELINE_COMPLETE', {
@@ -409,12 +428,12 @@ export async function identifyProduct(input: IdentificationInput): Promise<Exten
       importStatus: 'needs_review',
       timing,
       aiImportStatus: 'conflict',
-      identityVerification: identityConflict,
+      identityVerification: asPlainRecord(identityConflict),
     };
   }
 
   // ── Check for AI failure ──
-  const aiFailure = (input as any)._aiFailure;
+  const aiFailure = scratchOf(input)._aiFailure;
   if (!bestResult && aiFailure) {
     timing.totalMs = Date.now() - startTime;
     importLog('PIPELINE_COMPLETE', {
@@ -467,9 +486,9 @@ export async function identifyProduct(input: IdentificationInput): Promise<Exten
       importStatus,
       timing,
       aiImportStatus,
-      aiMetadata: (input as any)._aiMetadata ?? undefined,
-      fieldSources: (input as any)._fieldSources ?? undefined,
-      identityVerification: (input as any)._identityVerification ?? undefined,
+      aiMetadata: asPlainRecord(scratchOf(input)._aiMetadata),
+      fieldSources: asPlainRecord(scratchOf(input)._fieldSources),
+      identityVerification: asPlainRecord(scratchOf(input)._identityVerification),
     };
   }
 
@@ -489,8 +508,8 @@ export async function identifyProduct(input: IdentificationInput): Promise<Exten
       importStatus: 'needs_review',
       timing,
       aiImportStatus: 'needs_review',
-      aiMetadata: (input as any)._aiMetadata ?? undefined,
-      fieldSources: (input as any)._fieldSources ?? undefined,
+      aiMetadata: asPlainRecord(scratchOf(input)._aiMetadata),
+      fieldSources: asPlainRecord(scratchOf(input)._fieldSources),
     };
   }
 
@@ -526,7 +545,7 @@ export async function identifyProduct(input: IdentificationInput): Promise<Exten
 function enrichWithSupportingEvidence(
   aiResult: IdentifiedProduct,
   searchResult: IdentifiedProduct | null,
-  structuredResult: IdentifiedProduct | null,
+  structuredResult: IdentifiedProduct | null
 ): IdentifiedProduct {
   const enriched = { ...aiResult };
 
@@ -591,15 +610,19 @@ function enrichWithSupportingEvidence(
 
 function buildFailureMessage(input: IdentificationInput, attempts: ProviderAttempt[]): string {
   if (input.retailer === 'Amazon' && input.asin) {
-    return `Could not reliably identify Amazon product (ASIN: ${input.asin}). ` +
+    return (
+      `Could not reliably identify Amazon product (ASIN: ${input.asin}). ` +
       `Tried ${attempts.length} identification methods. ` +
-      'Please enter the product details manually.';
+      'Please enter the product details manually.'
+    );
   }
 
   if (input.url) {
-    return "Couldn't reliably identify this product. " +
+    return (
+      "Couldn't reliably identify this product. " +
       'The connected AI could not verify enough information from this URL. ' +
-      'Please enter the product details manually.';
+      'Please enter the product details manually.'
+    );
   }
 
   return "Couldn't identify this product. Please enter the details manually.";
@@ -607,31 +630,40 @@ function buildFailureMessage(input: IdentificationInput, attempts: ProviderAttem
 
 function buildAIFailureMessage(aiFailure: { error: string; isTimeout?: boolean }): string {
   if (aiFailure.isTimeout) {
-    return "Couldn't reliably identify this product. " +
-      'The AI provider timed out. Please try again or enter the product details manually.';
+    return (
+      "Couldn't reliably identify this product. " +
+      'The AI provider timed out. Please try again or enter the product details manually.'
+    );
   }
 
-  return "Couldn't reliably identify this product. " +
-    'The connected AI couldn\'t verify enough information from this URL. ' +
-    'Please enter the product details manually.';
+  return (
+    "Couldn't reliably identify this product. " +
+    "The connected AI couldn't verify enough information from this URL. " +
+    'Please enter the product details manually.'
+  );
 }
 
 function buildConflictMessage(
   input: IdentificationInput,
-  verification: { conflicts: Array<{ message: string; severity: string }> },
+  verification: { conflicts: Array<{ message: string; severity: string }> }
 ): string {
-  const critical = verification.conflicts.find((c: any) => c.severity === 'critical');
+  const critical = verification.conflicts.find((c) => c.severity === 'critical');
 
   if (critical) {
-    return `Identity conflict detected: ${critical.message} ` +
-      'Please review the product details carefully.';
+    return (
+      `Identity conflict detected: ${critical.message} ` +
+      'Please review the product details carefully.'
+    );
   }
 
   if (input.asin) {
-    return `Product identification produced conflicting results for ASIN ${input.asin}. ` +
-      'Please verify the product details.';
+    return (
+      `Product identification produced conflicting results for ASIN ${input.asin}. ` +
+      'Please verify the product details.'
+    );
   }
 
-  return 'Product identification produced conflicting results. ' +
-    'Please review the product details.';
+  return (
+    'Product identification produced conflicting results. ' + 'Please review the product details.'
+  );
 }

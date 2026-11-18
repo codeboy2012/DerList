@@ -28,9 +28,7 @@ import type {
   PriceProviderInterface,
   ProviderCategoryType,
   ProviderMetrics,
-  ReviewProviderInterface,
   SearchProviderInterface,
-  ShippingProviderInterface,
 } from './types';
 
 // ─────────────────────────────────────────────────────────────────────────────

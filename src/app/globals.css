@@ -42,6 +42,36 @@
     --glass-border: rgba(255, 255, 255, 0.06);
   }
 
+  /* Light theme — same identity, inverted surfaces. Accent is overridden
+     per-device by the local preferences system. */
+  [data-theme='light'] {
+    --background: #f6f7f9;
+    --foreground: #0b0b0f;
+    --surface: #ffffff;
+    --card: #ffffff;
+    --card-hover: #eef1f6;
+    --border: #e2e5ec;
+    --border-hover: #cbd1dd;
+    --muted: #949aa6;
+    --muted-foreground: #5b6270;
+    --secondary-foreground: #3d4350;
+
+    --primary: #0b0b0f;
+    --primary-foreground: #ffffff;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-foreground: #ffffff;
+    --accent-glow: rgba(37, 99, 235, 0.14);
+
+    --success: #059669;
+    --warning: #d97706;
+    --danger: #dc2626;
+
+    --ring: #2563eb;
+    --glass: rgba(255, 255, 255, 0.78);
+    --glass-border: rgba(15, 23, 42, 0.08);
+  }
+
   /* Honor reduced motion preferences */
   @media (prefers-reduced-motion: reduce) {
     *,
@@ -440,9 +470,10 @@ body {
     overflow-x: hidden;
   }
 
-  /* Stack stat cards on mobile */
+  /* Stack stat cards on mobile. minmax(0, 1fr) allows columns to shrink below
+     their content's intrinsic width, preventing horizontal overflow at 390px. */
   .lg\:grid-cols-5 {
-    grid-template-columns: repeat(2, 1fr) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 
@@ -473,4 +504,98 @@ body {
       transform: translateX(0);
     }
   }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Local preferences (device-scoped)
+   Theme, Liquid Glass, motion, transparency, focus and screen privacy are
+   controlled by data attributes set in src/lib/preferences/local-settings.ts.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Liquid Glass intensity */
+[data-glass='off'] .glass {
+  background: var(--card);
+  backdrop-filter: none;
+  border-color: var(--border);
+}
+
+[data-glass='subtle'] .glass {
+  backdrop-filter: blur(12px) saturate(150%);
+}
+
+[data-glass='full'] .glass {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01)), var(--glass);
+  backdrop-filter: blur(22px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 12px 40px rgba(0, 0, 0, 0.28);
+}
+
+[data-theme='light'][data-glass='full'] .glass,
+[data-theme='light'] [data-glass='full'] .glass {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 12px 32px rgba(15, 23, 42, 0.08);
+}
+
+/* Reduced motion */
+[data-motion='reduced'] *,
+[data-motion='reduced'] *::before,
+[data-motion='reduced'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+[data-motion='reduced'] .hover-lift:hover {
+  transform: none;
+}
+
+/* Reduced transparency — solid surfaces instead of blur */
+[data-transparency='reduced'] .glass,
+[data-transparency='reduced'] [class*='backdrop-blur'] {
+  backdrop-filter: none !important;
+  background-color: var(--card) !important;
+}
+
+/* Always-visible focus rings */
+[data-focus='always'] :focus {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Screen privacy — blur images and prices until hovered */
+[data-blur-images='true'] img[data-product-image] {
+  filter: blur(10px);
+  transition: filter 0.2s ease;
+}
+
+[data-blur-images='true'] a:hover img[data-product-image],
+[data-blur-images='true'] img[data-product-image]:hover {
+  filter: none;
+}
+
+[data-hide-prices='true'] [data-price] {
+  filter: blur(7px);
+  user-select: none;
+  transition: filter 0.2s ease;
+}
+
+[data-hide-prices='true'] [data-price]:hover {
+  filter: none;
+}
+
+/* Light theme tweaks for scrims that assume a dark background */
+[data-theme='light'] ::selection {
+  background: rgba(37, 99, 235, 0.2);
+}
+
+[data-theme='light'] ::-webkit-scrollbar-thumb {
+  background: #d5d9e2;
+}
+
+[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
+  background: #b9bfcc;
 }

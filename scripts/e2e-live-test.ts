@@ -7,9 +7,8 @@
  * This test verifies that the pipeline can ACTUALLY identify:
  * https://www.amazon.com/dp/B0GSS4SGZR
  */
-import { identifyProduct } from '../src/lib/products/identification';
-import type { IdentificationInput } from '../src/lib/products/identification';
 import { extractAsinFromUrl } from '../src/lib/importers/amazon';
+import { identifyProduct, type IdentificationInput } from '../src/lib/products/identification';
 import { normalizeUrl } from '../src/lib/products/normalize';
 
 // The real user ID from the database
@@ -65,7 +64,9 @@ async function runLiveTest() {
     console.log('Providers attempted:');
     for (const attempt of result.providersAttempted) {
       const icon = attempt.success ? '✓' : '✗';
-      console.log(`  ${icon} ${attempt.provider}: confidence=${attempt.confidence}, ${attempt.durationMs}ms`);
+      console.log(
+        `  ${icon} ${attempt.provider}: confidence=${attempt.confidence}, ${attempt.durationMs}ms`
+      );
       if (attempt.error) console.log(`    Error: ${attempt.error}`);
     }
     console.log('');
@@ -77,17 +78,26 @@ async function runLiveTest() {
       console.log('');
       console.log('Title:       ', result.product.title);
       console.log('Brand:       ', result.product.brand ?? '(none)');
-      console.log('Price:       ', result.product.price != null ? `$${result.product.price}` : 'null (unavailable)');
+      console.log(
+        'Price:       ',
+        result.product.price != null ? `$${result.product.price}` : 'null (unavailable)'
+      );
       console.log('Currency:    ', result.product.currency);
       console.log('Retailer:    ', result.product.retailer);
-      console.log('Image:       ', result.product.imageUrl ? result.product.imageUrl.substring(0, 100) + '...' : 'null');
+      console.log(
+        'Image:       ',
+        result.product.imageUrl ? result.product.imageUrl.substring(0, 100) + '...' : 'null'
+      );
       console.log('Category:    ', result.product.category ?? '(none)');
       console.log('ASIN:        ', result.product.asin);
       console.log('URL:         ', result.product.url);
       console.log('Confidence:  ', result.product.confidence);
       console.log('Completeness:', result.completeness + '%');
       console.log('Source:      ', result.product.source);
-      console.log('Description: ', result.product.description ? result.product.description.substring(0, 100) + '...' : '(none)');
+      console.log(
+        'Description: ',
+        result.product.description ? result.product.description.substring(0, 100) + '...' : '(none)'
+      );
       console.log('');
       console.log('Evidence:');
       for (const ev of result.product.evidence) {
@@ -119,7 +129,8 @@ async function runLiveTest() {
       }
 
       // Import status
-      console.log('Import Status:', (result as any).importStatus ?? 'unknown');
+      const importStatus = (result as { importStatus?: string }).importStatus ?? 'unknown';
+      console.log('Import Status:', importStatus);
       console.log('');
 
       // Verification checks
@@ -129,25 +140,39 @@ async function runLiveTest() {
       console.log('');
 
       const title = result.product.title;
-      const badTitles = ['Amazon', 'Amazon.com', 'Product', 'Untitled Product', 'undefined', 'null', ''];
+      const badTitles = [
+        'Amazon',
+        'Amazon.com',
+        'Product',
+        'Untitled Product',
+        'undefined',
+        'null',
+        '',
+      ];
       const titleOk = !badTitles.includes(title) && title.length > 5;
       console.log('Title is NOT garbage:', titleOk ? 'PASS' : 'FAIL');
 
-      const priceOk = result.product.price === null || (result.product.price > 5 && result.product.price !== 10);
+      const priceOk =
+        result.product.price === null || (result.product.price > 5 && result.product.price !== 10);
       console.log('Price is NOT arbitrary:', priceOk ? 'PASS' : 'FAIL');
 
       const brandOk = result.product.brand !== 'Amazon' || title.toLowerCase().includes('amazon');
       console.log('Brand is correct:', brandOk ? 'PASS' : 'FAIL');
 
-      const imageOk = !result.product.imageUrl || !result.product.imageUrl.includes('encrypted-tbn');
+      const imageOk =
+        !result.product.imageUrl || !result.product.imageUrl.includes('encrypted-tbn');
       console.log('Image is NOT Google thumbnail:', imageOk ? 'PASS' : 'FAIL');
 
       const urlNotTitle = title !== TEST_URL && !title.startsWith('https://');
       console.log('Title is NOT the URL:', urlNotTitle ? 'PASS' : 'FAIL');
 
       console.log('');
-      console.log('Overall:', titleOk && priceOk && brandOk && imageOk && urlNotTitle ? 'ALL CHECKS PASS' : 'SOME CHECKS FAILED');
-
+      console.log(
+        'Overall:',
+        titleOk && priceOk && brandOk && imageOk && urlNotTitle
+          ? 'ALL CHECKS PASS'
+          : 'SOME CHECKS FAILED'
+      );
     } else {
       console.log('No product identified.');
       console.log('');

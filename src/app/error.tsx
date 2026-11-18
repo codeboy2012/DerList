@@ -1,9 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Container } from '@/components/ui/Container';
-import { AlertTriangle } from 'lucide-react';
-import { useEffect } from 'react';
 
 export default function GlobalError({
   error,
@@ -14,7 +14,6 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     // Centralised place to report errors to telemetry later.
-    // eslint-disable-next-line no-console
     console.error('DerList: unhandled error', error);
   }, [error]);
 
@@ -22,12 +21,12 @@ export default function GlobalError({
     <Container className="flex min-h-[60vh] flex-col items-center justify-center gap-4 py-16 text-center">
       <div
         aria-hidden
-        className="flex h-12 w-12 items-center justify-center rounded-full bg-danger/10 text-danger"
+        className="bg-danger/10 text-danger flex h-12 w-12 items-center justify-center rounded-full"
       >
         <AlertTriangle className="h-6 w-6" />
       </div>
-      <h1 className="text-2xl font-semibold text-foreground">Something went wrong</h1>
-      <p className="max-w-md text-sm text-muted-foreground">
+      <h1 className="text-foreground text-2xl font-semibold">Something went wrong</h1>
+      <p className="text-muted-foreground max-w-md text-sm">
         {error.digest
           ? `An unexpected error occurred. Reference: ${error.digest}`
           : error.message || 'An unexpected error occurred.'}

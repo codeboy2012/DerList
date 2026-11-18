@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   LogOut,
   Mail,
-  Package,
   ScrollText,
   Settings,
   ShieldCheck,
@@ -21,7 +20,6 @@ const navItems = [
   { href: '/admin/providers', label: 'API Providers', icon: Settings },
   { href: '/admin/waitlist', label: 'Waitlist', icon: Mail },
   { href: '/admin/invitations', label: 'Invitations', icon: ShieldCheck },
-  { href: '/admin/products', label: 'Products', icon: Package },
   { href: '/admin/audit', label: 'Audit Log', icon: ScrollText },
 ] as const;
 

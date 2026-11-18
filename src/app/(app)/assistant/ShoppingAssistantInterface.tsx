@@ -11,20 +11,17 @@
  * - Conversation history sidebar
  * - Starter prompts
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
-  ArrowRight,
   Bot,
-  ChevronLeft,
   ExternalLink,
   List,
   Loader2,
   MessageCircle,
   Package,
   Plus,
-  RefreshCw,
   Send,
   Settings,
   ShoppingCart,
@@ -33,9 +30,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { LiveWishlistPanel } from '@/components/wishlist/LiveWishlistPanel';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -97,12 +92,16 @@ const STARTER_PROMPTS = [
 // Main Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function ShoppingAssistantInterface({
-  userId,
-  initialConversations,
-  hasProviders,
-  permissions,
-}: Props) {
+/**
+ * Message ids are generated inside event handlers. Keeping the impure call in
+ * a module-level helper keeps the component body pure for React's compiler
+ * checks (and makes the id scheme easy to change in one place).
+ */
+function messageId(prefix: 'temp' | 'msg'): string {
+  return `${prefix}-${Date.now()}`;
+}
+
+export function ShoppingAssistantInterface({ initialConversations, hasProviders }: Props) {
   const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
   const [activeConversation, setActiveConversation] = useState<Conversation | null>(null);
   const [message, setMessage] = useState('');
@@ -140,7 +139,7 @@ export function ShoppingAssistantInterface({
 
     // Optimistically add user message to UI
     const tempUserMsg: ConversationMessage = {
-      id: `temp-${Date.now()}`,
+      id: messageId('temp'),
       role: 'user',
       content: userMessage,
       timestamp: new Date().toISOString(),
@@ -180,7 +179,7 @@ export function ShoppingAssistantInterface({
       }
 
       const assistantMsg: ConversationMessage = {
-        id: `msg-${Date.now()}`,
+        id: messageId('msg'),
         role: 'assistant',
         content: data.message,
         data: {
@@ -211,7 +210,12 @@ export function ShoppingAssistantInterface({
           );
         }
         return [
-          { id: convId, title: userMessage.slice(0, 50), messages: [], updatedAt: new Date().toISOString() },
+          {
+            id: convId,
+            title: userMessage.slice(0, 50),
+            messages: [],
+            updatedAt: new Date().toISOString(),
+          },
           ...prev,
         ];
       });
@@ -252,13 +256,21 @@ export function ShoppingAssistantInterface({
         setActiveConversation({
           id: conv.id,
           title: conv.title,
-          messages: conv.messages.map((m: { id: string; role: string; content: string; data: unknown; createdAt: string }) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            data: m.data as Record<string, unknown> | null,
-            timestamp: m.createdAt,
-          })),
+          messages: conv.messages.map(
+            (m: {
+              id: string;
+              role: string;
+              content: string;
+              data: unknown;
+              createdAt: string;
+            }) => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              data: m.data as Record<string, unknown> | null,
+              timestamp: m.createdAt,
+            })
+          ),
           updatedAt: conv.updatedAt,
         });
         setShowSidebar(false);
@@ -354,7 +366,9 @@ export function ShoppingAssistantInterface({
             </div>
             <div className="flex-1 overflow-y-auto p-2">
               {conversations.length === 0 ? (
-                <p className="text-muted-foreground p-3 text-center text-xs">No conversations yet</p>
+                <p className="text-muted-foreground p-3 text-center text-xs">
+                  No conversations yet
+                </p>
               ) : (
                 <div className="space-y-1">
                   {conversations.map((conv) => (
@@ -442,7 +456,11 @@ export function ShoppingAssistantInterface({
             <div className="border-danger/20 bg-danger/5 mx-4 mb-2 flex items-center gap-2 rounded-lg border px-3 py-2">
               <AlertCircle className="text-danger h-4 w-4 shrink-0" />
               <span className="text-danger flex-1 text-sm">{error}</span>
-              <button type="button" onClick={() => setError(null)} className="text-danger/60 hover:text-danger">
+              <button
+                type="button"
+                onClick={() => setError(null)}
+                className="text-danger/60 hover:text-danger"
+              >
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -451,7 +469,7 @@ export function ShoppingAssistantInterface({
           {/* Input */}
           <div className="border-border border-t p-4">
             <form onSubmit={handleSubmit} className="mx-auto max-w-3xl">
-              <div className="border-border focus-within:border-accent/50 focus-within:ring-accent/20 flex items-end gap-2 rounded-xl border bg-card p-2 transition-colors focus-within:ring-2">
+              <div className="border-border focus-within:border-accent/50 focus-within:ring-accent/20 bg-card flex items-end gap-2 rounded-xl border p-2 transition-colors focus-within:ring-2">
                 <textarea
                   ref={inputRef}
                   value={message}
@@ -459,7 +477,7 @@ export function ShoppingAssistantInterface({
                   onKeyDown={handleKeyDown}
                   placeholder="Ask about products, compare items, or manage your wishlist..."
                   rows={1}
-                  className="max-h-[150px] min-h-[40px] flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
+                  className="placeholder:text-muted-foreground max-h-[150px] min-h-[40px] flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none"
                   disabled={isLoading}
                 />
                 <Button
@@ -554,26 +572,41 @@ interface BulkItemResultData {
 
 function ToolResultDisplay({ result }: { result: ToolResultData }) {
   // Check if this is a bulk import result
-  const bulkData = result.data as { total?: number; added?: number; alreadyExists?: number; failed?: number; results?: BulkItemResultData[] } | undefined;
+  const bulkData = result.data as
+    | {
+        total?: number;
+        added?: number;
+        alreadyExists?: number;
+        failed?: number;
+        results?: BulkItemResultData[];
+      }
+    | undefined;
   const isBulk = result.tool === 'add_multiple_to_wishlist' && bulkData?.results;
 
   if (isBulk && bulkData?.results) {
     return (
       <div className="bg-surface border-border rounded-xl border p-3 text-xs">
-        <div className={cn(
-          'mb-2 flex items-center gap-2 font-medium',
-          result.success ? 'text-success' : 'text-danger'
-        )}>
+        <div
+          className={cn(
+            'mb-2 flex items-center gap-2 font-medium',
+            result.success ? 'text-success' : 'text-danger'
+          )}
+        >
           {result.success ? <span>✓</span> : <AlertCircle className="h-3 w-3" />}
           {result.activity}
         </div>
         <div className="text-muted-foreground max-h-48 space-y-0.5 overflow-y-auto">
           {bulkData.results.map((item, i) => (
             <div key={i} className="flex items-center gap-2">
-              <span className={cn(
-                item.status === 'added' ? 'text-success' :
-                item.status === 'already_exists' ? 'text-muted-foreground' : 'text-danger'
-              )}>
+              <span
+                className={cn(
+                  item.status === 'added'
+                    ? 'text-success'
+                    : item.status === 'already_exists'
+                      ? 'text-muted-foreground'
+                      : 'text-danger'
+                )}
+              >
                 {item.status === 'added' ? '✓' : item.status === 'already_exists' ? '○' : '✗'}
               </span>
               <span className="truncate">{item.title}</span>
@@ -589,10 +622,12 @@ function ToolResultDisplay({ result }: { result: ToolResultData }) {
 
   // Default single-action display
   return (
-    <div className={cn(
-      'flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium',
-      result.success ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
-    )}>
+    <div
+      className={cn(
+        'flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium',
+        result.success ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
+      )}
+    >
       {result.success ? <span>✓</span> : <AlertCircle className="h-3 w-3" />}
       {result.activity}
     </div>
@@ -625,7 +660,8 @@ function ProductCard({ product }: { product: ProductResult }) {
       <div className="flex shrink-0 items-center gap-2">
         {product.currentPrice != null && (
           <span className="text-sm font-semibold">
-            {product.currency === 'USD' ? '$' : ''}{product.currentPrice.toFixed(2)}
+            {product.currency === 'USD' ? '$' : ''}
+            {product.currentPrice.toFixed(2)}
           </span>
         )}
         {product.url && (

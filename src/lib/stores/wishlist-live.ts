@@ -66,7 +66,13 @@ interface SSEEvent {
     status?: string;
   };
   progress?: { total: number; completed: number; current?: string };
-  result?: { total: number; added?: number; removed?: number; failed?: number; alreadyExists?: number };
+  result?: {
+    total: number;
+    added?: number;
+    removed?: number;
+    failed?: number;
+    alreadyExists?: number;
+  };
   error?: string;
 }
 
@@ -86,6 +92,8 @@ export function useLiveWishlist() {
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Set from an effect so the reconnect callback can call `connect` safely. */
+  const connectRef = useRef<(() => void) | null>(null);
 
   // Fetch initial wishlist data
   const fetchWishlist = useCallback(async () => {
@@ -143,7 +151,11 @@ export function useLiveWishlist() {
             next.items = [...prev.items, newItem];
           }
           if (next.activeOperation) {
-            next.activeOperation = { ...next.activeOperation, completed: event.progress?.completed ?? next.activeOperation.completed + 1, current: event.item?.title };
+            next.activeOperation = {
+              ...next.activeOperation,
+              completed: event.progress?.completed ?? next.activeOperation.completed + 1,
+              current: event.item?.title,
+            };
           }
           break;
         }
@@ -151,7 +163,11 @@ export function useLiveWishlist() {
         case 'wishlist.item.removed': {
           next.items = prev.items.filter((i) => i.id !== event.item?.id);
           if (next.activeOperation) {
-            next.activeOperation = { ...next.activeOperation, completed: event.progress?.completed ?? next.activeOperation.completed + 1, current: event.item?.title };
+            next.activeOperation = {
+              ...next.activeOperation,
+              completed: event.progress?.completed ?? next.activeOperation.completed + 1,
+              current: event.item?.title,
+            };
           }
           break;
         }
@@ -159,7 +175,14 @@ export function useLiveWishlist() {
         case 'wishlist.item.updated': {
           next.items = prev.items.map((i) => {
             if (i.id === event.item?.id) {
-              return { ...i, title: event.item.title ?? i.title, price: event.item.price ?? i.price, category: event.item.category ?? i.category, priority: event.item.priority ?? i.priority, _liveStatus: 'adding' as const };
+              return {
+                ...i,
+                title: event.item.title ?? i.title,
+                price: event.item.price ?? i.price,
+                category: event.item.category ?? i.category,
+                priority: event.item.priority ?? i.priority,
+                _liveStatus: 'adding' as const,
+              };
             }
             return i;
           });
@@ -168,7 +191,11 @@ export function useLiveWishlist() {
 
         case 'wishlist.import.progress':
           if (next.activeOperation && event.item?.status === 'already_exists') {
-            next.activeOperation = { ...next.activeOperation, completed: event.progress?.completed ?? next.activeOperation.completed + 1, current: event.item?.title };
+            next.activeOperation = {
+              ...next.activeOperation,
+              completed: event.progress?.completed ?? next.activeOperation.completed + 1,
+              current: event.item?.title,
+            };
           }
           break;
 
@@ -231,19 +258,31 @@ export function useLiveWishlist() {
 
       // Reconnect after 3 seconds
       reconnectTimerRef.current = setTimeout(() => {
-        connect();
+        connectRef.current?.();
         // Re-fetch full state after reconnect
-        fetchWishlist();
+        void fetchWishlist();
       }, 3000);
     };
   }, [handleEvent, fetchWishlist]);
 
-  // Initialize
   useEffect(() => {
-    fetchWishlist();
-    connect();
+    connectRef.current = connect;
+  }, [connect]);
+
+  // Initialize. The work is deferred by a microtask so the effect does not
+  // trigger a synchronous cascading render when the first state update lands.
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+      void fetchWishlist();
+      connect();
+    })();
 
     return () => {
+      cancelled = true;
       if (eventSourceRef.current) eventSourceRef.current.close();
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
     };

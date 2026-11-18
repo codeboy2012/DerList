@@ -43,7 +43,7 @@ export function isBrowserAvailable(): boolean {
  */
 export async function renderWithBrowser(
   url: string,
-  timeoutMs: number = 30000,
+  timeoutMs: number = 30000
 ): Promise<BrowserRenderResult | null> {
   if (!isBrowserAvailable()) {
     return null;
@@ -51,7 +51,7 @@ export async function renderWithBrowser(
 
   try {
     // Dynamic import to avoid bundling Playwright when not installed
-    // @ts-ignore — optional dependency, only used when playwright is installed
+    // @ts-expect-error — optional dependency, only used when playwright is installed
     const { chromium } = await import('playwright');
 
     const browser = await chromium.launch({
@@ -61,7 +61,8 @@ export async function renderWithBrowser(
 
     try {
       const context = await browser.newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        userAgent:
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         viewport: { width: 1920, height: 1080 },
       });
 
@@ -86,7 +87,10 @@ export async function renderWithBrowser(
     }
   } catch (err) {
     // Playwright not available or rendering failed — graceful fallback
-    console.warn('[browser] Rendering failed:', err instanceof Error ? err.message : 'Unknown error');
+    console.warn(
+      '[browser] Rendering failed:',
+      err instanceof Error ? err.message : 'Unknown error'
+    );
     return null;
   }
 }
@@ -97,7 +101,7 @@ export async function renderWithBrowser(
 export function shouldTryBrowser(
   domain: string | null,
   confidence: number,
-  hasPrice: boolean,
+  hasPrice: boolean
 ): boolean {
   if (!isBrowserAvailable()) return false;
 

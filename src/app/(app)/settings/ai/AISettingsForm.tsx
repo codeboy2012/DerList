@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertTriangle, Bot, Check, List, Loader2, Shield, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, List, Loader2, Shield, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useToast } from '@/components/ui/Toast';
@@ -67,7 +67,8 @@ export function AISettingsForm({ permissions: initialPermissions }: Props) {
   };
 
   const handleRevokeAll = async () => {
-    if (!confirm('Revoke all AI access? The assistant will not be able to access your wishlist.')) return;
+    if (!confirm('Revoke all AI access? The assistant will not be able to access your wishlist.'))
+      return;
     const cleared: Record<string, boolean> = {};
     for (const item of PERMISSION_ITEMS) {
       cleared[item.key] = false;
@@ -125,7 +126,7 @@ export function AISettingsForm({ permissions: initialPermissions }: Props) {
                     onChange={() => togglePermission(item.key)}
                     className="peer sr-only"
                   />
-                  <div className="peer-checked:bg-accent h-6 w-11 rounded-full bg-gray-600 transition-colors after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-transform after:content-[''] peer-checked:after:translate-x-5" />
+                  <div className="peer-checked:bg-accent h-6 w-11 rounded-full bg-gray-600 transition-colors after:absolute after:top-[2px] after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-transform after:content-[''] peer-checked:after:translate-x-5" />
                 </div>
               </label>
             );
@@ -133,8 +134,17 @@ export function AISettingsForm({ permissions: initialPermissions }: Props) {
         </div>
 
         <div className="mt-5 flex items-center gap-3">
-          <Button onClick={handleSave} disabled={!hasChanges || isSaving} size="md" className="gap-2">
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+          <Button
+            onClick={handleSave}
+            disabled={!hasChanges || isSaving}
+            size="md"
+            className="gap-2"
+          >
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
             Save Permissions
           </Button>
         </div>

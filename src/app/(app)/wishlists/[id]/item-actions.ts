@@ -1,11 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { createItemSchema } from '@/lib/validations/wishlist';
-
+import { isItemCondition } from '@/lib/wishlist/conditions';
 import type { ActionState } from '../../../(auth)/actions';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -13,11 +12,45 @@ import type { ActionState } from '../../../(auth)/actions';
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function verifyOwnership(wishlistId: string, userId: string) {
+  if (!wishlistId) return false;
   const wl = await prisma.wishlist.findUnique({
     where: { id: wishlistId },
     select: { ownerId: true },
   });
   return wl?.ownerId === userId;
+}
+
+/**
+ * Where-clause for an item that must belong to a specific collection owned by
+ * the caller.
+ *
+ * Every item mutation is scoped with this instead of trusting the submitted
+ * `itemId`: a valid `wishlistId` alone must never authorise an arbitrary item.
+ * The ownership check and the write are therefore the same query, which also
+ * removes the check/use race.
+ */
+function ownedItemWhere(itemId: string, wishlistId: string, userId: string) {
+  return {
+    id: itemId,
+    wishlistId,
+    wishlist: { ownerId: userId },
+  };
+}
+
+/**
+ * Load an item only when it belongs to the given collection *and* that
+ * collection belongs to the caller.
+ *
+ * Returns null for a missing item, a foreign collection and a mismatched
+ * item/collection pair alike, so callers cannot probe for records they do not
+ * own.
+ */
+async function findOwnedItem(itemId: string, wishlistId: string, userId: string) {
+  if (!itemId || !wishlistId) return null;
+  return prisma.wishlistItem.findFirst({
+    where: ownedItemWhere(itemId, wishlistId, userId),
+    select: { id: true, purchased: true },
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -26,7 +59,7 @@ async function verifyOwnership(wishlistId: string, userId: string) {
 
 export async function addItemAction(
   _prevState: ActionState,
-  formData: FormData,
+  formData: FormData
 ): Promise<ActionState> {
   const user = await requireUser();
   const wishlistId = formData.get('wishlistId') as string;
@@ -35,18 +68,25 @@ export async function addItemAction(
     return { success: false, error: 'Wishlist not found.' };
   }
 
+  // Fields omitted from the submitted form must be `undefined` (unknown), not
+  // `null` — the schema treats an absent value as "not provided".
+  const text = (key: string): string | undefined => {
+    const value = formData.get(key);
+    return typeof value === 'string' ? value : undefined;
+  };
+
   const raw = {
-    title: formData.get('title'),
-    description: formData.get('description'),
-    url: formData.get('url'),
-    image: formData.get('image'),
-    brand: formData.get('brand'),
-    retailer: formData.get('retailer'),
-    currentPrice: formData.get('currentPrice'),
-    currency: formData.get('currency') || 'USD',
-    priority: formData.get('priority') || 'MEDIUM',
-    quantity: formData.get('quantity') || '1',
-    notes: formData.get('notes'),
+    title: text('title'),
+    description: text('description'),
+    url: text('url'),
+    image: text('image'),
+    brand: text('brand'),
+    retailer: text('retailer'),
+    currentPrice: text('currentPrice'),
+    currency: text('currency') || 'USD',
+    priority: text('priority') || 'MEDIUM',
+    quantity: text('quantity') || '1',
+    notes: text('notes'),
   };
 
   const parsed = createItemSchema.safeParse(raw);
@@ -55,6 +95,10 @@ export async function addItemAction(
   }
 
   const data = parsed.data;
+
+  // Personal fields are optional and only stored when the user supplied them.
+  const conditionRaw = String(formData.get('condition') ?? '').trim();
+  const condition = isItemCondition(conditionRaw) ? conditionRaw : null;
 
   // Get next position
   const lastItem = await prisma.wishlistItem.findFirst({
@@ -72,8 +116,13 @@ export async function addItemAction(
       url: data.url || null,
       image: data.image || null,
       brand: data.brand || null,
+      model: optionalText(formData.get('model'), 100),
+      category: optionalText(formData.get('category'), 100),
+      condition,
+      availability: optionalText(formData.get('availability'), 200),
       retailer: data.retailer || null,
       currentPrice: data.currentPrice ?? null,
+      targetPrice: optionalNumber(formData.get('targetPrice')),
       currency: data.currency,
       priority: data.priority,
       quantity: data.quantity,
@@ -93,13 +142,17 @@ export async function addItemAction(
 
 export async function updateItemAction(
   _prevState: ActionState,
-  formData: FormData,
+  formData: FormData
 ): Promise<ActionState> {
   const user = await requireUser();
   const itemId = formData.get('itemId') as string;
   const wishlistId = formData.get('wishlistId') as string;
 
   if (!(await verifyOwnership(wishlistId, user.id))) {
+    return { success: false, error: 'Item not found.' };
+  }
+
+  if (!(await findOwnedItem(itemId, wishlistId, user.id))) {
     return { success: false, error: 'Item not found.' };
   }
 
@@ -126,8 +179,8 @@ export async function updateItemAction(
   const data = parsed.data;
   const purchased = raw.purchased;
 
-  await prisma.wishlistItem.update({
-    where: { id: itemId },
+  const updated = await prisma.wishlistItem.updateMany({
+    where: ownedItemWhere(itemId, wishlistId, user.id),
     data: {
       title: data.title,
       description: data.description || null,
@@ -145,6 +198,10 @@ export async function updateItemAction(
     },
   });
 
+  if (updated.count === 0) {
+    return { success: false, error: 'Item not found.' };
+  }
+
   revalidatePath(`/wishlists/${wishlistId}`);
   return { success: true };
 }
@@ -160,7 +217,10 @@ export async function deleteItemAction(formData: FormData): Promise<void> {
 
   if (!(await verifyOwnership(wishlistId, user.id))) return;
 
-  await prisma.wishlistItem.delete({ where: { id: itemId } });
+  // Scoped delete: the item must be in *this* collection, owned by the caller.
+  await prisma.wishlistItem.deleteMany({
+    where: ownedItemWhere(itemId, wishlistId, user.id),
+  });
 
   revalidatePath(`/wishlists/${wishlistId}`);
   revalidatePath('/dashboard');
@@ -177,14 +237,11 @@ export async function togglePurchasedAction(formData: FormData): Promise<void> {
 
   if (!(await verifyOwnership(wishlistId, user.id))) return;
 
-  const item = await prisma.wishlistItem.findUnique({
-    where: { id: itemId },
-    select: { purchased: true },
-  });
+  const item = await findOwnedItem(itemId, wishlistId, user.id);
   if (!item) return;
 
-  await prisma.wishlistItem.update({
-    where: { id: itemId },
+  await prisma.wishlistItem.updateMany({
+    where: ownedItemWhere(itemId, wishlistId, user.id),
     data: {
       purchased: !item.purchased,
       purchasedAt: !item.purchased ? new Date() : null,
@@ -201,13 +258,17 @@ export async function togglePurchasedAction(formData: FormData): Promise<void> {
 
 export async function quickEditItemAction(
   _prevState: ActionState,
-  formData: FormData,
+  formData: FormData
 ): Promise<ActionState> {
   const user = await requireUser();
   const itemId = formData.get('itemId') as string;
   const wishlistId = formData.get('wishlistId') as string;
 
   if (!(await verifyOwnership(wishlistId, user.id))) {
+    return { success: false, error: 'Item not found.' };
+  }
+
+  if (!(await findOwnedItem(itemId, wishlistId, user.id))) {
     return { success: false, error: 'Item not found.' };
   }
 
@@ -226,10 +287,11 @@ export async function quickEditItemAction(
   const validPriorities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
   const safePriority = validPriorities.includes(priority) ? priority : 'MEDIUM';
   const safeQuantity = isNaN(quantity) || quantity < 1 ? 1 : Math.min(quantity, 999);
-  const safeStarPriority = starPriority && starPriority >= 1 && starPriority <= 4 ? starPriority : undefined;
+  const safeStarPriority =
+    starPriority && starPriority >= 1 && starPriority <= 4 ? starPriority : undefined;
 
-  await prisma.wishlistItem.update({
-    where: { id: itemId },
+  const updated = await prisma.wishlistItem.updateMany({
+    where: ownedItemWhere(itemId, wishlistId, user.id),
     data: {
       title,
       notes: notes || null,
@@ -240,6 +302,132 @@ export async function quickEditItemAction(
     },
   });
 
+  if (updated.count === 0) {
+    return { success: false, error: 'Item not found.' };
+  }
+
   revalidatePath(`/wishlists/${wishlistId}`);
+  return { success: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Update Item Details (personal wishlist fields)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function optionalNumber(value: FormDataEntryValue | null): number | null {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return Math.round(parsed * 100) / 100;
+}
+
+function optionalText(value: FormDataEntryValue | null, max: number): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, max);
+}
+
+/**
+ * Update the personal details of a saved product.
+ *
+ * Handles the fields that belong to the wishlist entry itself (condition,
+ * target price, quantity, notes, collection) as opposed to the imported product
+ * record. Moving an item to another collection only re-parents the wishlist
+ * entry — the product record and all other wishlists that reference it are
+ * untouched.
+ */
+export async function updateItemDetailsAction(
+  _prevState: ActionState,
+  formData: FormData
+): Promise<ActionState> {
+  const user = await requireUser();
+  const itemId = String(formData.get('itemId') ?? '');
+  const wishlistId = String(formData.get('wishlistId') ?? '');
+
+  if (!(await verifyOwnership(wishlistId, user.id))) {
+    return { success: false, error: 'Wishlist not found.' };
+  }
+
+  const item = await prisma.wishlistItem.findUnique({
+    where: { id: itemId },
+    select: { id: true, wishlistId: true },
+  });
+
+  if (!item || item.wishlistId !== wishlistId) {
+    return { success: false, error: 'Item not found.' };
+  }
+
+  const title = String(formData.get('title') ?? '').trim();
+  if (!title) {
+    return { success: false, error: 'Product name is required.' };
+  }
+
+  const priorityRaw = String(formData.get('priority') ?? 'MEDIUM');
+  const priority = (['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const).includes(
+    priorityRaw as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+  )
+    ? (priorityRaw as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL')
+    : 'MEDIUM';
+
+  const quantityRaw = Number.parseInt(String(formData.get('quantity') ?? '1'), 10);
+  const quantity = Number.isNaN(quantityRaw) ? 1 : Math.min(Math.max(quantityRaw, 1), 999);
+
+  const conditionRaw = String(formData.get('condition') ?? '').trim();
+  const condition = isItemCondition(conditionRaw) ? conditionRaw : null;
+
+  const currencyRaw = String(formData.get('currency') ?? 'USD')
+    .trim()
+    .toUpperCase();
+  const currency = /^[A-Z]{3}$/.test(currencyRaw) ? currencyRaw : 'USD';
+
+  // Optional move to another collection owned by the same user.
+  const targetCollectionId = String(formData.get('collectionId') ?? '').trim();
+  let moveTo: string | null = null;
+  if (targetCollectionId && targetCollectionId !== wishlistId) {
+    if (!(await verifyOwnership(targetCollectionId, user.id))) {
+      return { success: false, error: 'Collection not found.' };
+    }
+    moveTo = targetCollectionId;
+  }
+
+  let position: number | undefined;
+  if (moveTo) {
+    const lastItem = await prisma.wishlistItem.findFirst({
+      where: { wishlistId: moveTo },
+      orderBy: { position: 'desc' },
+      select: { position: true },
+    });
+    position = (lastItem?.position ?? -1) + 1;
+  }
+
+  const updated = await prisma.wishlistItem.updateMany({
+    where: ownedItemWhere(itemId, wishlistId, user.id),
+    data: {
+      title: title.slice(0, 200),
+      description: optionalText(formData.get('description'), 1000),
+      brand: optionalText(formData.get('brand'), 100),
+      model: optionalText(formData.get('model'), 100),
+      category: optionalText(formData.get('category'), 100),
+      condition,
+      availability: optionalText(formData.get('availability'), 200),
+      currentPrice: optionalNumber(formData.get('currentPrice')),
+      targetPrice: optionalNumber(formData.get('targetPrice')),
+      currency,
+      quantity,
+      priority,
+      notes: optionalText(formData.get('notes'), 2000),
+      ...(moveTo ? { wishlistId: moveTo, position } : {}),
+    },
+  });
+
+  if (updated.count === 0) {
+    return { success: false, error: 'Item not found.' };
+  }
+
+  revalidatePath(`/wishlists/${wishlistId}`);
+  if (moveTo) revalidatePath(`/wishlists/${moveTo}`);
+  revalidatePath('/wishlists');
+  revalidatePath('/dashboard');
   return { success: true };
 }

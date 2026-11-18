@@ -69,6 +69,7 @@ export function ProductPrice({
   return (
     <div
       className="flex flex-col items-end gap-0.5"
+      data-price
       style={{ minHeight: size === 'sm' ? '36px' : '48px' }}
     >
       {/* Current price */}

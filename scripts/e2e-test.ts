@@ -4,13 +4,30 @@
  * Tests the full pipeline with:
  * https://www.amazon.com/dp/B0GSS4SGZR?ref_=cm_sw_r_cp_ud_dp_ARN85V7HGQ7BRN1Z8RM1
  */
-import { extractAsinFromUrl, AmazonImporter } from '../src/lib/importers/amazon';
-import { normalizeUrl, extractDomain, getRetailerName } from '../src/lib/products/normalize';
-import { validateProduct, validateImage } from '../src/lib/products/validation';
 import { universalImport } from '../src/lib/importers';
+import { AmazonImporter, extractAsinFromUrl } from '../src/lib/importers/amazon';
+import { extractDomain, getRetailerName, normalizeUrl } from '../src/lib/products/normalize';
+import { validateImage, validateProduct } from '../src/lib/products/validation';
 
-const URL_WITH_PARAMS = 'https://www.amazon.com/dp/B0GSS4SGZR?ref_=cm_sw_r_cp_ud_dp_ARN85V7HGQ7BRN1Z8RM1';
+const URL_WITH_PARAMS =
+  'https://www.amazon.com/dp/B0GSS4SGZR?ref_=cm_sw_r_cp_ud_dp_ARN85V7HGQ7BRN1Z8RM1';
 const URL_CLEAN = 'https://www.amazon.com/dp/B0GSS4SGZR';
+
+/** Fields the end-to-end script inspects on an import draft. */
+interface DraftProbe {
+  asin?: string;
+  url?: string;
+  title?: string;
+  brand?: string | null;
+  category?: string | null;
+  confidence?: number;
+  currency?: string | null;
+  currentPrice?: number | null;
+  image?: string | null;
+  retailer?: string | null;
+  source?: string;
+  _meta?: { directExtractionFailed?: boolean; needsIdentification?: boolean };
+}
 
 async function runFullE2ETest() {
   console.log('================================================================');
@@ -22,7 +39,11 @@ async function runFullE2ETest() {
   // TEST 1: URL Accepted
   console.log('1. URL ACCEPTED');
   const detection = AmazonImporter.detect(URL_WITH_PARAMS);
-  console.log('   PASS: Input accepted (match:', detection.match + ', confidence:', detection.confidence + ')');
+  console.log(
+    '   PASS: Input accepted (match:',
+    detection.match + ', confidence:',
+    detection.confidence + ')'
+  );
   console.log('');
 
   // TEST 2: Retailer Detected
@@ -56,7 +77,7 @@ async function runFullE2ETest() {
   console.log('6-9. FULL PIPELINE (universalImport)');
   console.log('   Calling universalImport...');
   const result = await universalImport(URL_WITH_PARAMS);
-  const draft = result.drafts[0] as any;
+  const draft = result.drafts[0] as DraftProbe;
 
   const extractionFailed = draft._meta?.directExtractionFailed ?? false;
   const needsId = draft._meta?.needsIdentification ?? false;
@@ -70,24 +91,38 @@ async function runFullE2ETest() {
   // TEST 10: Validation
   console.log('10. VALIDATION RUNS BEFORE ACCEPTANCE');
   const badValidation = validateProduct({
-    title: 'Amazon.com', price: 10, brand: null, image: null, retailer: 'Amazon'
+    title: 'Amazon.com',
+    price: 10,
+    brand: null,
+    image: null,
+    retailer: 'Amazon',
   });
   console.log('   "Amazon.com" title rejected:', !badValidation.isAcceptable);
   console.log('   $10 fallback price rejected:', !badValidation.priceValid.valid);
-  const pipelineValidation = validateProduct({
-    title: draft.title || null,
-    price: draft.currentPrice || null,
-    brand: draft.brand || null,
-    image: draft.image || null,
-    retailer: draft.retailer,
-  }, draft.confidence);
+  void validateProduct(
+    {
+      title: draft.title || null,
+      price: draft.currentPrice || null,
+      brand: draft.brand || null,
+      image: draft.image || null,
+      retailer: draft.retailer,
+    },
+    draft.confidence
+  );
   console.log('   Pipeline output validated - NOT blindly accepted');
   console.log('');
 
   // TEST 11: Title not garbage
   console.log('11. TITLE IS NOT GARBAGE');
   const title = draft.title;
-  const garbageTitles = ['Amazon', 'Amazon.com', 'Product', 'Untitled Product', 'undefined', 'null'];
+  const garbageTitles = [
+    'Amazon',
+    'Amazon.com',
+    'Product',
+    'Untitled Product',
+    'undefined',
+    'null',
+  ];
   if (!title || title === '') {
     console.log('   PASS: Title is empty (not pretending garbage is valid)');
   } else if (garbageTitles.includes(title)) {
@@ -161,7 +196,7 @@ async function runFullE2ETest() {
   // TEST 22: Duplicate detection
   console.log('22. DUPLICATE DETECTION');
   const result2 = await universalImport(URL_CLEAN);
-  const draft2 = result2.drafts[0] as any;
+  const draft2 = result2.drafts[0] as DraftProbe;
   console.log('   Same ASIN from both URLs:', draft.asin === draft2.asin);
   console.log('   Same canonical URL:', draft.url === draft2.url);
   console.log('   PASS: Same product identified - dedup by ASIN/URL works');
@@ -175,7 +210,10 @@ async function runFullE2ETest() {
   console.log('ASIN:                      ', asin1);
   console.log('Canonical URL:             ', norm1);
   console.log('Detected retailer:         ', retailer);
-  console.log('Product title:             ', draft.title || '(pending - requires search/AI provider)');
+  console.log(
+    'Product title:             ',
+    draft.title || '(pending - requires search/AI provider)'
+  );
   console.log('Brand:                     ', draft.brand || 'null (not invented)');
   console.log('Price:                     ', draft.currentPrice ?? 'null (not invented)');
   console.log('Currency:                  ', draft.currency ?? 'N/A');
@@ -209,7 +247,7 @@ async function runFullE2ETest() {
   console.log(' 13. NEVER pretends garbage data is a valid product');
 }
 
-runFullE2ETest().catch(err => {
+runFullE2ETest().catch((err) => {
   console.error('FATAL ERROR:', err);
   process.exit(1);
 });

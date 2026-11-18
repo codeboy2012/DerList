@@ -35,7 +35,8 @@ export async function GET() {
       const unsubscribe = wishlistEvents.subscribe(userId, (event: WishlistEvent) => {
         try {
           // Strip userId from the event sent to client (they already know who they are)
-          const { userId: _uid, ...clientEvent } = event;
+          const clientEvent = { ...event } as Partial<WishlistEvent>;
+          delete clientEvent.userId;
           const sseData = `data: ${JSON.stringify(clientEvent)}\n\n`;
           controller.enqueue(encoder.encode(sseData));
         } catch {

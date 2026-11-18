@@ -1,126 +1,102 @@
 /**
  * GET /uploads/[...path]
  *
- * Serves uploaded files from the persistent /app/uploads directory.
- * This route makes the Docker named volume accessible via HTTP without
- * placing uploads inside /public (which is baked into the image).
+ * Serves uploaded files from the persistent uploads directory.
  *
  * Security:
- * - Path traversal prevention (rejects .., encoded variants, absolute paths)
- * - Only serves files from within UPLOAD_DIR
- * - No authentication required (avatars/images must be publicly viewable)
+ * - Authentication required. Uploaded images belong to a private collection,
+ *   so anonymous callers get the same 404 as a missing file.
+ * - Authorisation: the Media row must belong to the caller (admins may review
+ *   any file). A file that exists on disk without a Media row is never served.
+ * - Path traversal prevention via `resolveUploadPath`, which compares resolved
+ *   paths with `path.relative` (works on Windows and POSIX) instead of string
+ *   prefixing.
+ * - Responses are private and non-scriptable.
  *
  * Caching:
- * - Immutable cache headers (uploaded files use unique random filenames)
+ * - `private` because the response is per-user; filenames are unique so the
+ *   browser can still cache within the session.
  */
 
 import { readFile, stat } from 'fs/promises';
-import { join, normalize, resolve } from 'path';
+import { join } from 'path';
+import { getCurrentUser } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { resolveUploadPath } from '@/lib/uploads/path';
 
 export const dynamic = 'force-dynamic';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads');
 
-/** Map file extensions to MIME types. */
+/** Map file extensions to MIME types. SVG is intentionally absent. */
 const MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
   '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
   '.avif': 'image/avif',
   '.ico': 'image/x-icon',
-  '.txt': 'text/plain',
-  '.pdf': 'application/pdf',
 };
 
 function getMimeType(filename: string): string {
   const dotIndex = filename.lastIndexOf('.');
   if (dotIndex < 0) return 'application/octet-stream';
-  const ext = filename.slice(dotIndex).toLowerCase();
-  return MIME_TYPES[ext] ?? 'application/octet-stream';
+  return MIME_TYPES[filename.slice(dotIndex).toLowerCase()] ?? 'application/octet-stream';
+}
+
+function notFound(): Response {
+  return new Response('Not Found', { status: 404 });
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ path: string[] }> }) {
+  const user = await getCurrentUser();
+  if (!user) return notFound();
+
   const { path: segments } = await params;
+  const resolvedPath = resolveUploadPath(UPLOAD_DIR, segments);
 
-  // Reject empty paths
-  if (!segments || segments.length === 0) {
-    return new Response('Not Found', { status: 404 });
-  }
-
-  // Reconstruct the relative path from segments
-  const relativePath = segments.join('/');
-
-  // ── Path traversal protection ──
-  // Reject any segment containing ".." or that is absolute
-  for (const segment of segments) {
-    if (
-      segment === '..' ||
-      segment === '.' ||
-      segment.includes('..') ||
-      segment.startsWith('/') ||
-      segment.includes('\0')
-    ) {
-      return new Response('Forbidden', { status: 403 });
-    }
-  }
-
-  // Decode and re-check (catches %2e%2e and similar encodings)
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(relativePath);
-  } catch {
-    return new Response('Bad Request', { status: 400 });
-  }
-  if (decoded.includes('..') || decoded.startsWith('/')) {
+  if (!resolvedPath.ok) {
     return new Response('Forbidden', { status: 403 });
   }
 
-  // Resolve the full filesystem path and verify it's within UPLOAD_DIR
-  const resolvedUploadDir = resolve(UPLOAD_DIR);
-  const fullPath = resolve(resolvedUploadDir, normalize(decoded));
+  // Only files registered as Media — and owned by this user — are readable.
+  // Media.storagePath uses forward slashes; resolveUploadPath normalises to it.
+  const media = await prisma.media.findFirst({
+    where: { storagePath: resolvedPath.relativePath },
+    select: { uploadedById: true },
+  });
 
-  if (!fullPath.startsWith(resolvedUploadDir + '/')) {
-    return new Response('Forbidden', { status: 403 });
+  const isAdmin = user.role === 'ADMIN' || user.role === 'OWNER';
+
+  if (!media || (media.uploadedById !== user.id && !isAdmin)) {
+    return notFound();
   }
 
-  // ── Serve the file ──
   try {
-    const fileStat = await stat(fullPath);
+    const fileStat = await stat(resolvedPath.absolutePath);
+    if (!fileStat.isFile()) return notFound();
 
-    if (!fileStat.isFile()) {
-      return new Response('Not Found', { status: 404 });
-    }
-
-    const fileBuffer = await readFile(fullPath);
-    const mimeType = getMimeType(fullPath);
+    const fileBuffer = await readFile(resolvedPath.absolutePath);
 
     return new Response(fileBuffer, {
       status: 200,
       headers: {
-        'Content-Type': mimeType,
+        'Content-Type': getMimeType(resolvedPath.absolutePath),
         'Content-Length': String(fileStat.size),
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cache-Control': 'private, max-age=3600',
         'X-Content-Type-Options': 'nosniff',
         'Cross-Origin-Resource-Policy': 'same-origin',
-        // Defence in depth: even if a dangerous type is ever stored, it cannot
-        // execute script or load subresources when opened directly.
         'Content-Security-Policy': "default-src 'none'; sandbox",
-        'Content-Disposition': 'inline',
       },
     });
-  } catch (err: unknown) {
-    // File doesn't exist or can't be read
-    if (
-      err &&
-      typeof err === 'object' &&
-      'code' in err &&
-      (err as NodeJS.ErrnoException).code === 'ENOENT'
-    ) {
-      return new Response('Not Found', { status: 404 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.error('Uploads: failed to read file', {
+        storagePath: resolvedPath.relativePath,
+        code: (error as NodeJS.ErrnoException).code,
+      });
     }
-    return new Response('Not Found', { status: 404 });
+    return notFound();
   }
 }

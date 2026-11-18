@@ -1,8 +1,7 @@
 import type { Metadata } from 'next';
-
+import { siteConfig } from '@/lib/site-config';
 import { Badge } from '@/components/ui/Badge';
 import { AnimatedSection } from '@/components/coming-soon/AnimatedSection';
-import { siteConfig } from '@/lib/site-config';
 
 export const metadata: Metadata = {
   title: `Changelog — ${siteConfig.name}`,
@@ -60,7 +59,10 @@ const releases = [
     changes: [
       { type: 'feature', text: 'Universal wishlists with full CRUD' },
       { type: 'feature', text: 'Wishlist items with priority, quantity, purchase status' },
-      { type: 'feature', text: 'Public wishlist sharing via /u/[username]/wishlist/[slug]' },
+      {
+        type: 'feature',
+        text: 'Public wishlist sharing via /u/[username]/wishlist/[slug] (removed in v0.12.0)',
+      },
       { type: 'feature', text: 'User dashboard with stats and recent activity' },
     ],
   },
@@ -103,14 +105,16 @@ const typeLabels: Record<string, string> = {
 export default function ChangelogPage() {
   return (
     <div className="flex flex-col">
-      <section className="border-b border-border py-24 sm:py-32">
+      <section className="border-border border-b py-24 sm:py-32">
         <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
           <AnimatedSection variant="fade-up">
-            <Badge variant="secondary" className="mb-4">Changelog</Badge>
-            <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+            <Badge variant="secondary" className="mb-4">
+              Changelog
+            </Badge>
+            <h1 className="text-foreground text-4xl font-bold tracking-tight sm:text-5xl">
               What&apos;s new in DerList.
             </h1>
-            <p className="mt-4 text-lg text-muted-foreground">
+            <p className="text-muted-foreground mt-4 text-lg">
               Every release, improvement, and fix — documented.
             </p>
           </AnimatedSection>
@@ -119,20 +123,26 @@ export default function ChangelogPage() {
 
       <section className="py-20 sm:py-28">
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
-          <div className="relative flex flex-col gap-10 pl-6 before:absolute before:left-0 before:top-2 before:h-[calc(100%-1rem)] before:w-px before:bg-border">
+          <div className="before:bg-border relative flex flex-col gap-10 pl-6 before:absolute before:top-2 before:left-0 before:h-[calc(100%-1rem)] before:w-px">
             {releases.map((release, i) => (
               <AnimatedSection key={release.version} variant="fade-up" delay={i * 60}>
                 <div className="relative">
-                  <span className="absolute -left-[25px] top-1.5 h-2.5 w-2.5 rounded-full bg-accent ring-4 ring-background" />
+                  <span className="bg-accent ring-background absolute top-1.5 -left-[25px] h-2.5 w-2.5 rounded-full ring-4" />
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-base font-semibold text-foreground">{release.version}</h2>
-                    <span className="text-xs text-muted-foreground">{release.date}</span>
-                    {release.badge && <Badge variant={release.badgeVariant} className="text-[10px]">{release.badge}</Badge>}
+                    <h2 className="text-foreground text-base font-semibold">{release.version}</h2>
+                    <span className="text-muted-foreground text-xs">{release.date}</span>
+                    {release.badge && (
+                      <Badge variant={release.badgeVariant} className="text-[10px]">
+                        {release.badge}
+                      </Badge>
+                    )}
                   </div>
                   <ul className="mt-3 space-y-1.5">
                     {release.changes.map((change, j) => (
-                      <li key={j} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <span className={`mt-0.5 shrink-0 text-[10px] font-semibold uppercase ${typeColors[change.type]}`}>
+                      <li key={j} className="text-muted-foreground flex items-start gap-2 text-sm">
+                        <span
+                          className={`mt-0.5 shrink-0 text-[10px] font-semibold uppercase ${typeColors[change.type]}`}
+                        >
                           {typeLabels[change.type]}
                         </span>
                         {change.text}

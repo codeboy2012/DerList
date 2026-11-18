@@ -17,15 +17,15 @@
  * 5. Never trust a mismatched ASIN.
  */
 
-import type { IdentificationInput } from './types';
-import type { SearchEvidence } from './providers/search-provider';
 import type {
   AIProductResponse,
-  IdentityVerificationResult,
   IdentityCheck,
   IdentityConflict,
+  IdentityVerificationResult,
 } from './ai-identification-types';
 import { validateImageUrl } from './image-resolution';
+import type { SearchEvidence } from './providers/search-provider';
+import type { IdentificationInput } from './types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -65,9 +65,8 @@ const BLOCKED_HOSTNAME_PATTERNS = [
 ];
 
 const BLOCKED_PORTS = new Set([
-  21, 22, 23, 25, 53, 110, 143, 389, 445, 465, 587, 636,
-  993, 995, 1433, 1521, 3306, 3389, 5432, 5900, 6379, 6380,
-  11211, 27017, 27018, 27019,
+  21, 22, 23, 25, 53, 110, 143, 389, 445, 465, 587, 636, 993, 995, 1433, 1521, 3306, 3389, 5432,
+  5900, 6379, 6380, 11211, 27017, 27018, 27019,
 ]);
 
 /**
@@ -131,9 +130,7 @@ export interface ValidateIdentityInput {
  * 9. Image URL safety
  * 10. Multiple evidence agreement
  */
-export function validateProductIdentity(
-  input: ValidateIdentityInput,
-): IdentityVerificationResult {
+export function validateProductIdentity(input: ValidateIdentityInput): IdentityVerificationResult {
   const { pipelineInput, aiResponse, searchEvidence, allSearchEvidence } = input;
   const checks: IdentityCheck[] = [];
   const conflicts: IdentityConflict[] = [];
@@ -150,7 +147,8 @@ export function validateProductIdentity(
         aiValue: aiResponse.product.asin ?? '(not returned)',
         evidenceValue: searchEvidence?.matchedAsin ? pipelineInput.asin : null,
         severity: 'critical',
-        message: `ASIN mismatch: input ${pipelineInput.asin} vs AI ${aiResponse.product.asin ?? 'null'}. ` +
+        message:
+          `ASIN mismatch: input ${pipelineInput.asin} vs AI ${aiResponse.product.asin ?? 'null'}. ` +
           'The AI returned a different product. Rejecting.',
       });
     }
@@ -194,7 +192,7 @@ export function validateProductIdentity(
   if (searchEvidence?.title && aiResponse.product.name && searchEvidence.matchedAsin) {
     const titleConsistencyCheck = verifyTitleConsistency(
       aiResponse.product.name,
-      searchEvidence.title,
+      searchEvidence.title
     );
     checks.push(titleConsistencyCheck);
 
@@ -205,7 +203,8 @@ export function validateProductIdentity(
         aiValue: aiResponse.product.name,
         evidenceValue: searchEvidence.title,
         severity: 'warning',
-        message: `AI title "${aiResponse.product.name}" significantly differs from search evidence "${searchEvidence.title}". ` +
+        message:
+          `AI title "${aiResponse.product.name}" significantly differs from search evidence "${searchEvidence.title}". ` +
           'Possible misidentification.',
       });
     }
@@ -266,7 +265,7 @@ export function validateProductIdentity(
   if (allSearchEvidence && allSearchEvidence.length > 1 && aiResponse.product.name) {
     const agreementCheck = verifyMultipleEvidenceAgreement(
       aiResponse.product.name,
-      allSearchEvidence,
+      allSearchEvidence
     );
     checks.push(agreementCheck);
   }
@@ -285,9 +284,9 @@ export function validateProductIdentity(
 
   // ── Calculate overall verification result ──
   const totalChecks = checks.length;
-  const passedChecks = checks.filter(c => c.passed).length;
-  const hasCriticalConflict = conflicts.some(c => c.severity === 'critical');
-  const warningCount = conflicts.filter(c => c.severity === 'warning').length;
+  const passedChecks = checks.filter((c) => c.passed).length;
+  const hasCriticalConflict = conflicts.some((c) => c.severity === 'critical');
+  const warningCount = conflicts.filter((c) => c.severity === 'warning').length;
 
   let confidence: number;
   if (hasCriticalConflict) {
@@ -297,7 +296,7 @@ export function validateProductIdentity(
   } else {
     confidence = Math.round((passedChecks / totalChecks) * 100);
     // Penalize for warnings
-    confidence = Math.max(0, confidence - (warningCount * 10));
+    confidence = Math.max(0, confidence - warningCount * 10);
   }
 
   return {
@@ -363,9 +362,7 @@ function verifyTitleNotUrl(title: string): IdentityCheck {
     expected: 'real product name',
     actual: title,
     passed: !isUrl,
-    reason: isUrl
-      ? `Title is a URL: "${title}" — not a product name`
-      : 'Title is not a URL',
+    reason: isUrl ? `Title is a URL: "${title}" — not a product name` : 'Title is not a URL',
   };
 }
 
@@ -374,13 +371,27 @@ function verifyTitleNotUrl(title: string): IdentityCheck {
  */
 function verifyTitleNotRetailer(title: string, retailer?: string): IdentityCheck {
   const genericRetailers = new Set([
-    'amazon', 'amazon.com', 'walmart', 'walmart.com', 'best buy', 'bestbuy',
-    'target', 'target.com', 'newegg', 'newegg.com', 'ebay', 'ebay.com',
-    'home depot', 'costco', 'aliexpress',
+    'amazon',
+    'amazon.com',
+    'walmart',
+    'walmart.com',
+    'best buy',
+    'bestbuy',
+    'target',
+    'target.com',
+    'newegg',
+    'newegg.com',
+    'ebay',
+    'ebay.com',
+    'home depot',
+    'costco',
+    'aliexpress',
   ]);
 
   const lower = title.trim().toLowerCase();
-  const isRetailerName = genericRetailers.has(lower);
+  const normalizedRetailer = retailer?.trim().toLowerCase();
+  const isRetailerName =
+    genericRetailers.has(lower) || (!!normalizedRetailer && lower === normalizedRetailer);
 
   return {
     field: 'title-not-retailer',
@@ -421,9 +432,8 @@ function verifyBrandConsistency(aiBrand: string, searchBrand: string): IdentityC
   const searchLower = searchBrand.toLowerCase().trim();
 
   // Exact match or containment
-  const matches = aiLower === searchLower ||
-    aiLower.includes(searchLower) ||
-    searchLower.includes(aiLower);
+  const matches =
+    aiLower === searchLower || aiLower.includes(searchLower) || searchLower.includes(aiLower);
 
   return {
     field: 'brand-consistency',
@@ -464,9 +474,7 @@ function verifyUrlSafety(url: string, fieldName: string): IdentityCheck {
     expected: 'safe public URL',
     actual: url.substring(0, 100),
     passed: safe,
-    reason: safe
-      ? `${fieldName} URL is safe`
-      : `${fieldName} URL failed SSRF safety check`,
+    reason: safe ? `${fieldName} URL is safe` : `${fieldName} URL failed SSRF safety check`,
   };
 }
 
@@ -497,9 +505,9 @@ function verifyImageSafety(url: string): IdentityCheck {
  */
 function verifyMultipleEvidenceAgreement(
   aiTitle: string,
-  allEvidence: SearchEvidence[],
+  allEvidence: SearchEvidence[]
 ): IdentityCheck {
-  const asinMatched = allEvidence.filter(e => e.matchedAsin && e.title);
+  const asinMatched = allEvidence.filter((e) => e.matchedAsin && e.title);
 
   if (asinMatched.length < 2) {
     return {
@@ -548,8 +556,25 @@ function verifyMultipleEvidenceAgreement(
  */
 function calculateTitleSimilarity(titleA: string, titleB: string): number {
   const stopWords = new Set([
-    'the', 'a', 'an', 'and', 'or', 'for', 'with', 'in', 'on', 'at',
-    'to', 'of', 'by', 'is', 'it', 'its', 'from', 'new', 'edition',
+    'the',
+    'a',
+    'an',
+    'and',
+    'or',
+    'for',
+    'with',
+    'in',
+    'on',
+    'at',
+    'to',
+    'of',
+    'by',
+    'is',
+    'it',
+    'its',
+    'from',
+    'new',
+    'edition',
   ]);
 
   const normalize = (title: string): Set<string> => {
@@ -558,7 +583,7 @@ function calculateTitleSimilarity(titleA: string, titleB: string): number {
         .toLowerCase()
         .replace(/[^a-z0-9\s]/g, ' ')
         .split(/\s+/)
-        .filter(w => w.length > 1 && !stopWords.has(w))
+        .filter((w) => w.length > 1 && !stopWords.has(w))
     );
   };
 

@@ -1,9 +1,9 @@
-import { AnimatedSection } from '@/components/coming-soon/AnimatedSection';
+import { ChevronRight } from 'lucide-react';
+import { siteConfig } from '@/lib/site-config';
 import { Badge } from '@/components/ui/Badge';
 import { Container } from '@/components/ui/Container';
 import { Section } from '@/components/ui/Section';
-import { siteConfig } from '@/lib/site-config';
-import { ChevronRight } from 'lucide-react';
+import { AnimatedSection } from '@/components/coming-soon/AnimatedSection';
 
 /**
  * FAQ content sourced from the README.
@@ -31,7 +31,7 @@ const faqs = [
   },
   {
     q: 'How is DerList different from other wishlist apps?',
-    a: 'Most alternatives are either subscription-locked, filled with ads, or limited to specific stores. DerList is open, store-agnostic, fully free, and combines wishlists, price tracking, and a PC builder in one tool.',
+    a: 'Most alternatives are either subscription-locked, filled with ads, or limited to specific stores. DerList is open, store-agnostic, fully free, and keeps private collections with product details and notes in one tool.',
   },
   {
     q: 'How can I contribute?',
@@ -48,7 +48,7 @@ const faqs = [
  */
 export function FAQSection() {
   return (
-    <Section id="faq" className="border-t border-border">
+    <Section id="faq" className="border-border border-t">
       <Container>
         <div className="mx-auto max-w-2xl text-center">
           <AnimatedSection variant="fade-up">
@@ -57,12 +57,12 @@ export function FAQSection() {
             </Badge>
           </AnimatedSection>
           <AnimatedSection variant="fade-up" delay={80}>
-            <h2 className="text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+            <h2 className="text-foreground text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
               Frequently asked questions.
             </h2>
           </AnimatedSection>
           <AnimatedSection variant="fade-up" delay={160}>
-            <p className="mt-4 text-lg text-muted-foreground">
+            <p className="text-muted-foreground mt-4 text-lg">
               Everything you need to know about {siteConfig.name}.
             </p>
           </AnimatedSection>
@@ -71,16 +71,16 @@ export function FAQSection() {
         <div className="mx-auto mt-14 max-w-3xl space-y-3">
           {faqs.map((item, i) => (
             <AnimatedSection key={item.q} variant="fade-up" delay={60 + (i % 4) * 50}>
-              <details className="group rounded-xl border border-border bg-card transition-colors open:border-accent/30 open:bg-card/80 [&_summary]:cursor-pointer">
-                <summary className="flex items-center justify-between gap-4 p-5 text-sm font-medium text-foreground marker:hidden [&::-webkit-details-marker]:hidden">
+              <details className="group border-border bg-card open:border-accent/30 open:bg-card/80 rounded-xl border transition-colors [&_summary]:cursor-pointer">
+                <summary className="text-foreground flex items-center justify-between gap-4 p-5 text-sm font-medium marker:hidden [&::-webkit-details-marker]:hidden">
                   {item.q}
                   <ChevronRight
-                    className="h-4 w-4 flex-shrink-0 text-muted-foreground transition-transform duration-200 group-open:rotate-90"
+                    className="text-muted-foreground h-4 w-4 flex-shrink-0 transition-transform duration-200 group-open:rotate-90"
                     aria-hidden
                   />
                 </summary>
-                <div className="px-5 pb-5 pt-0">
-                  <p className="text-sm leading-relaxed text-muted-foreground">{item.a}</p>
+                <div className="px-5 pt-0 pb-5">
+                  <p className="text-muted-foreground text-sm leading-relaxed">{item.a}</p>
                 </div>
               </details>
             </AnimatedSection>

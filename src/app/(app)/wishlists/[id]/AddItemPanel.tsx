@@ -13,6 +13,7 @@
  */
 import { Card } from '@/components/ui/Card';
 import { UniversalInput } from '@/components/product';
+import { ManualAddForm } from './ManualAddForm';
 
 interface AddItemPanelProps {
   wishlistId: string;
@@ -28,6 +29,7 @@ export function AddItemPanel({ wishlistId }: AddItemPanelProps) {
         </p>
       </div>
       <UniversalInput wishlistId={wishlistId} />
+      <ManualAddForm wishlistId={wishlistId} />
     </Card>
   );
 }

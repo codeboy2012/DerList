@@ -15,8 +15,9 @@
 import { getProviderManager } from '@/lib/providers';
 import type { SearchProvider, SearchResult } from '@/lib/providers/types';
 import { sanitizeBrand, sanitizeImage, sanitizePrice, sanitizeTitle } from '../../validation';
-import type { IdentificationInput, IdentificationProvider, IdentifiedProduct } from '../types';
 import { importLog } from '../logging';
+import type { IdentificationInput, IdentificationProvider, IdentifiedProduct } from '../types';
+import { scratchOf } from './ai-provider';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -102,17 +103,18 @@ export class SearchIdentificationProvider implements IdentificationProvider {
 
       // Store evidence in the input for downstream providers (AI)
       // This modifies the input object so the AI provider can access search evidence
-      (input as any)._searchEvidence = best;
+      scratchOf(input)._searchEvidence = best;
 
       // Store all valid image URLs from search results for image resolution
       const allSearchImages = evidence
         .map((e) => e.imageUrl)
         .filter((img): img is string => img != null && img.length > 0);
-      (input as any)._searchImages = allSearchImages;
+      scratchOf(input)._searchImages = allSearchImages;
 
       return {
         title,
-        brand: sanitizeBrand(best.brand ?? this.extractBrandFromTitle(title), input.retailer) ?? null,
+        brand:
+          sanitizeBrand(best.brand ?? this.extractBrandFromTitle(title), input.retailer) ?? null,
         price: sanitizePrice(best.price, 'search-result', confidence) ?? null,
         currency: best.currency ?? 'USD',
         retailer: input.retailer ?? best.retailer ?? null, // Prefer input retailer (Amazon) over search result retailer
@@ -152,9 +154,9 @@ export class SearchIdentificationProvider implements IdentificationProvider {
 
     if (input.asin && input.retailer?.toLowerCase() === 'amazon') {
       // For Amazon products with ASIN: try multiple search strategies
-      queries.push(input.asin);                           // 1. Exact ASIN
-      queries.push(`${input.asin} Amazon`);               // 2. ASIN + retailer
-      queries.push(`site:amazon.com ${input.asin}`);      // 3. Site-scoped
+      queries.push(input.asin); // 1. Exact ASIN
+      queries.push(`${input.asin} Amazon`); // 2. ASIN + retailer
+      queries.push(`site:amazon.com ${input.asin}`); // 3. Site-scoped
     } else if (input.asin) {
       // Non-Amazon ASIN/SKU
       queries.push(input.asin);
@@ -179,7 +181,7 @@ export class SearchIdentificationProvider implements IdentificationProvider {
   private async executeMultiSearch(
     provider: SearchProvider,
     queries: string[],
-    input: IdentificationInput,
+    input: IdentificationInput
   ): Promise<SearchEvidence[]> {
     const allEvidence: SearchEvidence[] = [];
     const TIMEOUT_MS = 8000;
@@ -239,15 +241,21 @@ export class SearchIdentificationProvider implements IdentificationProvider {
   private resultToEvidence(
     result: SearchResult,
     query: string,
-    input: IdentificationInput,
+    input: IdentificationInput
   ): SearchEvidence {
     // Check if the result URL contains the ASIN
-    const matchedAsin = !!(input.asin && result.url && 
-      result.url.toUpperCase().includes(input.asin.toUpperCase()));
+    const matchedAsin = !!(
+      input.asin &&
+      result.url &&
+      result.url.toUpperCase().includes(input.asin.toUpperCase())
+    );
 
     // Check if it's from the expected retailer
-    const matchedRetailer = !!(input.retailer && result.retailer &&
-      result.retailer.toLowerCase().includes(input.retailer.toLowerCase()));
+    const matchedRetailer = !!(
+      input.retailer &&
+      result.retailer &&
+      result.retailer.toLowerCase().includes(input.retailer.toLowerCase())
+    );
 
     // Score this result
     let confidence = 0.3; // Base
@@ -267,9 +275,7 @@ export class SearchIdentificationProvider implements IdentificationProvider {
 
     return {
       title: result.title || null,
-      brand: result.retailer !== input.retailer
-        ? this.extractBrandFromTitle(result.title)
-        : null,
+      brand: result.retailer !== input.retailer ? this.extractBrandFromTitle(result.title) : null,
       price: result.price,
       currency: result.currency ?? 'USD',
       imageUrl: result.image,
@@ -289,17 +295,20 @@ export class SearchIdentificationProvider implements IdentificationProvider {
   // Confidence Calculation
   // ─────────────────────────────────────────────────────────────────────────
 
-  private calculateEvidenceConfidence(evidence: SearchEvidence, input: IdentificationInput): number {
+  private calculateEvidenceConfidence(
+    evidence: SearchEvidence,
+    input: IdentificationInput
+  ): number {
     let confidence = 30; // Base for any search result
 
     // Evidence-based scoring per spec
-    if (evidence.matchedAsin) confidence += 30;           // Exact ASIN match
+    if (evidence.matchedAsin) confidence += 30; // Exact ASIN match
     if (evidence.url?.includes('amazon.com') && input.retailer === 'Amazon') {
-      confidence += 20;                                   // Exact Amazon URL
+      confidence += 20; // Exact Amazon URL
     } else if (evidence.matchedRetailer) {
       confidence += 10;
     }
-    if (sanitizeTitle(evidence.title)) confidence += 15;   // Verified product title
+    if (sanitizeTitle(evidence.title)) confidence += 15; // Verified product title
     if (evidence.brand && sanitizeBrand(evidence.brand, input.retailer)) confidence += 10;
     if (evidence.price != null && evidence.price > 0) confidence += 10; // Verified price
     if (sanitizeImage(evidence.imageUrl)) confidence += 5; // Verified image
@@ -317,7 +326,8 @@ export class SearchIdentificationProvider implements IdentificationProvider {
     if (evidence.matchedAsin) strings.push('Exact ASIN match in result URL');
     if (evidence.matchedRetailer) strings.push(`Retailer match: ${evidence.retailer}`);
     if (evidence.price) strings.push(`Price: $${evidence.price}`);
-    if (evidence.rating) strings.push(`Rating: ${evidence.rating}/5 (${evidence.reviewCount ?? 0} reviews)`);
+    if (evidence.rating)
+      strings.push(`Rating: ${evidence.rating}/5 (${evidence.reviewCount ?? 0} reviews)`);
     return strings;
   }
 
@@ -344,7 +354,9 @@ export class SearchIdentificationProvider implements IdentificationProvider {
         const slug = pathParts.reduce((a, b) => (a.length > b.length ? a : b));
         return slug.replace(/[-_+]/g, ' ').trim();
       }
-    } catch { /* invalid URL */ }
+    } catch {
+      /* invalid URL */
+    }
     return null;
   }
 }

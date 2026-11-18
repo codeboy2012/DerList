@@ -66,7 +66,7 @@ interface KeepaProductImageResponse {
  */
 export async function getKeepaImageCandidates(
   asin: string,
-  userId: string,
+  userId: string
 ): Promise<ImageCandidate[]> {
   const candidates: ImageCandidate[] = [];
 
@@ -76,7 +76,7 @@ export async function getKeepaImageCandidates(
 
     // Check if the price provider is Keepa
     if (!priceProvider || priceProvider.id !== 'keepa') {
-      importLog('KEEPA_IMAGE_SKIPPED' as any, { reason: 'No Keepa provider configured' });
+      importLog('KEEPA_IMAGE_SKIPPED', { reason: 'No Keepa provider configured' });
       return [];
     }
 
@@ -85,11 +85,11 @@ export async function getKeepaImageCandidates(
     // PriceProvider interface doesn't expose images
     const apiKey = await getKeepaApiKey(userId);
     if (!apiKey) {
-      importLog('KEEPA_IMAGE_SKIPPED' as any, { reason: 'Could not retrieve Keepa API key' });
+      importLog('KEEPA_IMAGE_SKIPPED', { reason: 'Could not retrieve Keepa API key' });
       return [];
     }
 
-    importLog('KEEPA_IMAGE_STARTED' as any, { asin });
+    importLog('KEEPA_IMAGE_STARTED', { asin });
 
     // Query Keepa product endpoint
     const params = new URLSearchParams({
@@ -113,20 +113,20 @@ export async function getKeepaImageCandidates(
       clearTimeout(timeout);
 
       if (!response.ok) {
-        importLog('KEEPA_IMAGE_API_ERROR' as any, { status: response.status });
+        importLog('KEEPA_IMAGE_API_ERROR', { status: response.status });
         return [];
       }
 
       const data: KeepaProductImageResponse = await response.json();
 
       if (data.error) {
-        importLog('KEEPA_IMAGE_API_ERROR' as any, { error: data.error.message });
+        importLog('KEEPA_IMAGE_API_ERROR', { error: data.error.message });
         return [];
       }
 
       const product = data.products?.[0];
       if (!product?.imagesCSV) {
-        importLog('KEEPA_IMAGE_NO_DATA' as any, { asin });
+        importLog('KEEPA_IMAGE_NO_DATA', { asin });
         return [];
       }
 
@@ -138,11 +138,11 @@ export async function getKeepaImageCandidates(
         .filter((id) => id.length > 0);
 
       if (imageIds.length === 0) {
-        importLog('KEEPA_IMAGE_EMPTY' as any, { asin });
+        importLog('KEEPA_IMAGE_EMPTY', { asin });
         return [];
       }
 
-      importLog('KEEPA_IMAGE_FOUND' as any, { asin, imageCount: imageIds.length });
+      importLog('KEEPA_IMAGE_FOUND', { asin, imageCount: imageIds.length });
 
       // Convert image IDs to full CDN URLs
       // Use the first image (primary product image) with high-res suffix
@@ -156,7 +156,7 @@ export async function getKeepaImageCandidates(
         candidates.push({
           url: imageUrl,
           source: 'amazon-page' as ImageSource, // Image comes from Amazon's CDN via Keepa
-          confidence: 85 - (i * 5), // First image is highest confidence
+          confidence: 85 - i * 5, // First image is highest confidence
         });
       }
 
@@ -166,7 +166,7 @@ export async function getKeepaImageCandidates(
     }
   } catch (error) {
     // Keepa failures are NEVER fatal to the import
-    importLog('KEEPA_IMAGE_ERROR' as any, {
+    importLog('KEEPA_IMAGE_ERROR', {
       error: error instanceof Error ? error.message : 'Unknown',
       asin,
     });

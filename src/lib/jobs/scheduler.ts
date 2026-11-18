@@ -27,12 +27,8 @@ export async function scheduleProductRefreshes(): Promise<number> {
 
   // Tier 1: High-demand products (10+ wishlist items) — refresh every 6 hours
   const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
-  // Tier 2: Active products (2-9 wishlist items) — refresh every 12 hours
-  const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
   // Tier 3: Low-activity products (1 wishlist item) — refresh every 24 hours
   const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  // Tier 4: Untracked products — refresh weekly
-  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   const productsToRefresh = await prisma.product.findMany({
     where: {
@@ -42,17 +38,11 @@ export async function scheduleProductRefreshes(): Promise<number> {
         // Tier 1: High-demand — stale after 6 hours
         {
           wishlistItems: { some: {} },
-          OR: [
-            { lastFetchedAt: null },
-            { lastFetchedAt: { lt: sixHoursAgo } },
-          ],
+          OR: [{ lastFetchedAt: null }, { lastFetchedAt: { lt: sixHoursAgo } }],
         },
         // Tier 3+4: Everything else stale after 24h or never fetched
         {
-          OR: [
-            { lastFetchedAt: null },
-            { lastFetchedAt: { lt: twentyFourHoursAgo } },
-          ],
+          OR: [{ lastFetchedAt: null }, { lastFetchedAt: { lt: twentyFourHoursAgo } }],
         },
       ],
     },
@@ -80,10 +70,7 @@ export async function getSchedulerStatus() {
       where: {
         source: 'IMPORTED',
         canonicalUrl: { not: null },
-        OR: [
-          { lastFetchedAt: null },
-          { lastFetchedAt: { lt: normalThreshold } },
-        ],
+        OR: [{ lastFetchedAt: null }, { lastFetchedAt: { lt: normalThreshold } }],
       },
     }),
     prisma.product.count({

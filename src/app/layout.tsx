@@ -1,8 +1,10 @@
+import type { Metadata, Viewport } from 'next';
+import { Geist, Geist_Mono } from 'next/font/google';
+import { PREFERENCES_BOOT_SCRIPT } from '@/lib/preferences/local-settings';
 import { siteConfig } from '@/lib/site-config';
 import { CommandPalette } from '@/components/ui/CommandPalette';
 import { ToastProvider } from '@/components/ui/Toast';
-import type { Metadata, Viewport } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { PreferencesProvider } from '@/components/preferences/PreferencesProvider';
 import './globals.css';
 
 const geistSans = Geist({
@@ -27,9 +29,9 @@ export const metadata: Metadata = {
   applicationName: siteConfig.name,
   keywords: [
     'wishlist',
-    'shopping planner',
-    'price tracker',
-    'PC builder',
+    'personal organizer',
+    'collection tracker',
+    'product organizer',
     'open source',
     siteConfig.name,
   ],
@@ -73,28 +75,33 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
       lang="en"
+      data-theme="dark"
       className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       suppressHydrationWarning
     >
-      <body className="flex min-h-screen flex-col bg-background font-sans text-foreground antialiased">
-        <ToastProvider>
-          <CommandPalette />
-          <a
-            href="#main-content"
-            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:text-foreground focus:shadow-lg"
-          >
-            Skip to main content
-          </a>
-          <main id="main-content" className="flex min-h-screen flex-col">
-            {children}
-          </main>
-        </ToastProvider>
+      <head>
+        {/* Apply stored local preferences before first paint (no theme flash). */}
+        <script dangerouslySetInnerHTML={{ __html: PREFERENCES_BOOT_SCRIPT }} />
+      </head>
+      <body className="bg-background text-foreground flex min-h-screen flex-col font-sans antialiased">
+        <PreferencesProvider>
+          <ToastProvider>
+            <CommandPalette />
+            <a
+              href="#main-content"
+              className="focus:bg-card focus:text-foreground sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:px-3 focus:py-2 focus:text-sm focus:shadow-lg"
+            >
+              Skip to main content
+            </a>
+            <main id="main-content" className="flex min-h-screen flex-col">
+              {children}
+            </main>
+          </ToastProvider>
+        </PreferencesProvider>
       </body>
     </html>
   );
