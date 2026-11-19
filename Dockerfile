@@ -4,7 +4,20 @@
 # Includes automatic migration support via entrypoint script.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── Stage 1: Dependencies ──
+# ── Stage 1: Prisma client ──
+# The generated client contains the platform-independent WASM query compiler.
+# Generate it once on the build platform so arm64 builds do not have to run the
+# Prisma schema engine under QEMU.
+FROM --platform=$BUILDPLATFORM node:26-alpine AS prisma-client
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+COPY prisma.config.ts ./prisma.config.ts
+RUN npm ci --omit=dev
+RUN npx prisma generate
+
+# ── Stage 2: Dependencies ──
 FROM node:26-alpine AS deps
 WORKDIR /app
 
@@ -12,26 +25,24 @@ COPY package.json package-lock.json ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./prisma.config.ts
 RUN npm ci --omit=dev
-# Generate Prisma client in production node_modules (needed for seed at runtime)
-RUN npx prisma generate
+# Use the client generated once on the build platform (needed for seed at runtime)
+COPY --from=prisma-client /app/node_modules/.prisma ./node_modules/.prisma
 
-# ── Stage 2: Build ──
+# ── Stage 3: Build ──
 FROM node:26-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 RUN npm ci
+COPY --from=prisma-client /app/node_modules/.prisma ./node_modules/.prisma
 
 COPY . .
-
-# Generate Prisma Client
-RUN npx prisma generate
 
 # Build Next.js
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-# ── Stage 3: Production ──
+# ── Stage 4: Production ──
 FROM node:26-alpine AS runner
 WORKDIR /app
 
