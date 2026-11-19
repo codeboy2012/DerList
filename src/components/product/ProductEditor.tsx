@@ -31,6 +31,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { escapeHtmlAttribute } from '@/lib/html/text';
 import { toSafeImageSrc } from '@/lib/security/url';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -640,7 +641,7 @@ export function ProductEditor({
       {safeImagePreview && (
         <div className="relative w-fit">
           <img
-            src={safeImagePreview}
+            src={escapeHtmlAttribute(safeImagePreview)}
             alt={title || 'Product'}
             className="border-border h-20 w-20 rounded-lg border object-cover"
           />

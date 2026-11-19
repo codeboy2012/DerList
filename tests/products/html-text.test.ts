@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { decodeHtmlEntitiesOnce, extractElements, htmlToText } from '@/lib/html/text';
+import {
+  decodeHtmlEntitiesOnce,
+  escapeHtmlAttribute,
+  extractElements,
+  htmlToText,
+} from '@/lib/html/text';
 
 describe('decodeHtmlEntitiesOnce', () => {
   it('decodes exactly once', () => {
@@ -13,6 +18,18 @@ describe('decodeHtmlEntitiesOnce', () => {
       '&unknown; &amp no-semicolon'
     );
     expect(decodeHtmlEntitiesOnce('&#x110000;')).toBe('&#x110000;');
+  });
+});
+
+describe('escapeHtmlAttribute', () => {
+  it('encodes attribute-terminating characters without changing URL syntax', () => {
+    expect(escapeHtmlAttribute('https://cdn.example/a.jpg?w=100&h=200')).toBe(
+      'https://cdn.example/a.jpg?w=100&h=200'
+    );
+    expect(escapeHtmlAttribute('https://cdn.example/" onerror="alert(1)')).toBe(
+      'https://cdn.example/%22 onerror=%22alert(1)'
+    );
+    expect(escapeHtmlAttribute("https://cdn.example/'><script>")).not.toMatch(/['"<>]/);
   });
 });
 

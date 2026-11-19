@@ -11,6 +11,16 @@
  * (which escapes text again) or include it in an AI prompt as untrusted data.
  */
 
+/**
+ * Escape characters that can terminate an HTML attribute. They are
+ * percent-encoded rather than entity-encoded so the value remains a valid URL
+ * (including query strings, whose `&` separators are safe in a quoted
+ * attribute).
+ */
+export function escapeHtmlAttribute(value: string): string {
+  return value.replace(/[<>"']/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
 const NAMED_ENTITIES: Readonly<Record<string, string>> = {
   amp: '&',
   apos: "'",
