@@ -46,6 +46,8 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Removed nested `<main>` landmarks: the root layout now provides the skip-link wrapper, each
+  route group renders exactly one `<main>`, and authentication pages have their own main landmark.
 - The product drawer focus trap now ignores hidden, inert and `aria-hidden` controls. Previously a
   closed overflow menu could be mistaken for the last focusable element, allowing Tab to leave the
   drawer. The Playwright focus-trap test now covers the corrected boundary behavior.

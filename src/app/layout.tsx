@@ -97,9 +97,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             >
               Skip to main content
             </a>
-            <main id="main-content" className="flex min-h-screen flex-col">
+            {/* Each route-group layout owns the single <main> landmark. */}
+            <div id="main-content" tabIndex={-1} className="flex min-h-screen flex-col">
               {children}
-            </main>
+            </div>
           </ToastProvider>
         </PreferencesProvider>
       </body>
