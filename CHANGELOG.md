@@ -110,6 +110,9 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - Activating a menu item with Space restores focus to its trigger on key release instead of
   letting the keyup reopen the menu, and the product editor drawer keeps Tab focus inside its
   `aria-modal` panel.
+- The `worker` compose service no longer inherits the image's `/api/health` check, which probes a
+  port the worker never listens on and therefore reported it unhealthy forever. Worker liveness is
+  verified by the CI worker job and by the worker's own log output.
 
 ### Security
 

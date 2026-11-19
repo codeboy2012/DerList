@@ -194,6 +194,10 @@ jobs:
           echo "applied migrations: $migrations_before, users: $users_before"
           test "$users_before" = "1"
 
+          # Stop the worker first so the database restart is a controlled
+          # outage rather than a mid-flight connection drop.
+          docker compose stop worker
+
           echo "--- restarting PostgreSQL ---"
           docker compose restart db
           for attempt in $(seq 1 30); do
@@ -210,6 +214,19 @@ jobs:
           echo "after restart -> migrations: $migrations_after, users: $users_after"
           test "$migrations_after" = "$migrations_before"
           test "$users_after" = "$users_before"
+
+          # Bring the worker back against the persisted database and require a
+          # second clean start in the same container.
+          docker compose start worker
+          for attempt in $(seq 1 30); do
+            if [ "$(docker compose logs --no-color worker | grep -c 'worker.started')" -ge 2 ]; then
+              break
+            fi
+            sleep 2
+          done
+          test "$(docker compose logs --no-color worker | grep -c 'worker.started')" -ge 2
+          test "$(docker inspect --format '{{.State.Status}}' "$(docker compose ps -q worker)")" = "running"
+          test "$(docker inspect --format '{{.RestartCount}}' "$(docker compose ps -q worker)")" = "0"
 
       - name: Verify uploads persist across a container restart
         run: |
@@ -235,12 +252,21 @@ jobs:
       - name: Verify the worker service
         run: |
           set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if docker compose logs --no-color worker | grep -q 'worker.started'; then
+              break
+            fi
+            sleep 2
+          done
+          docker compose logs --no-color worker | grep -q 'worker.started'
+
           docker compose ps
           state=$(docker inspect --format '{{.State.Status}}' "$(docker compose ps -q worker)")
           restarts=$(docker inspect --format '{{.RestartCount}}' "$(docker compose ps -q worker)")
           echo "worker state: $state, restarts: $restarts"
           test "$state" = "running"
           test "$restarts" = "0"
+          docker compose exec -T worker sh -lc 'test -x node_modules/.bin/tsx'
           docker compose logs --no-color worker | tail -20
 
       - name: Check container logs for startup errors
@@ -248,7 +274,7 @@ jobs:
           set -euo pipefail
           docker compose logs --no-color app > /tmp/app.log
           docker compose logs --no-color worker > /tmp/worker.log
-          if grep -nE '❌|Unhandled|FATAL|Error:' /tmp/app.log /tmp/worker.log; then
+          if grep -nE '❌|Unhandled|FATAL|Error:|worker\.fatal' /tmp/app.log /tmp/worker.log; then
             echo "Startup errors were found in the container logs."
             exit 1
           fi

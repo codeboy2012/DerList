@@ -88,6 +88,11 @@ services:
       app:
         condition: service_healthy
     entrypoint: ['node_modules/.bin/tsx', 'scripts/worker.ts']
+    # The image health check probes the Next.js server on port 3000. The worker
+    # runs no HTTP server, so inheriting that check would report it unhealthy
+    # forever. Liveness is verified by the CI worker job instead.
+    healthcheck:
+      disable: true
     environment:
       DATABASE_URL: 'postgresql://${POSTGRES_USER:-derlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-derlist}'
       NODE_ENV: production
