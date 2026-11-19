@@ -1,771 +1,803 @@
-# DerList
+<p align="center">
+  <img src="public/icons/icon-192.png" width="88" height="88" alt="DerList app icon">
+</p>
 
-**A private, open-source wishlist and personal product organizer.**
+<h1 align="center">DerList</h1>
 
-DerList is a self-hosted web application for keeping private collections of the products you want. Record current and target prices, condition, availability and notes, import product details, and organize everything your way — without public sharing, a marketplace, subscriptions, ads, or vendor lock-in.
+<p align="center">
+  <strong>Your wants, organized. Your data, private.</strong><br>
+  A self-hosted wishlist and product research workspace for the things you actually want.
+</p>
 
-> **DerList is now in Open Beta.**
->
-> Anyone can create an account with a username, an email address, GitHub or Google — no
-> invitation, approval, allowlist or waitlist is involved. Beta software still changes between
-> releases, so keep your own export of anything you cannot afford to lose.
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#getting-started">Getting Started</a> ·
+  <a href="#self-hosting-with-docker">Docker</a> ·
+  <a href="#development">Development</a> ·
+  <a href="#roadmap">Roadmap</a> ·
+  <a href="#project-links">Links</a>
+</p>
 
-- **Current release:** `0.14.1` — Container images and automated quality gate
-- **Release status:** Published
-- **Container image:** `ghcr.io/codeboy2012/derlist`
-- **In development:** `0.15.0` — Importing improvements
+DerList is a private, open-source home for the products you are considering. Save a product
+from a retailer, keep the details that matter, organize it into collections, and decide what is
+actually worth buying — without turning your wants into a public profile or somebody else's
+marketplace.
 
-📋 **[View the full Changelog](https://github.com/codeboy2012/DerList/blob/main/CHANGELOG.md)**
+It is built for people who want a useful list, not another shopping feed: collections stay
+private to their owner, product links go back to the original retailer, and the database can
+live on your own server.
 
----
+> [!IMPORTANT]
+> **Open Beta.** Public registration is implemented in v0.14.0+ and is enabled on current
+> self-hosted v0.14.1 installations. Anyone can create an account with a username, an email
+> address, GitHub, or Google — no invite code or approval is involved. OAuth buttons appear only
+> when that provider is configured. Beta software changes between releases, so export your data
+> before upgrading.
 
-## ✨ Features
+## Project Statistics
 
-### 🛒 Wishlists & collections
+<div align="center">
 
-- Unlimited private collections
-- Create, rename, duplicate, archive, and delete collections
-- Manual collection ordering
-- Categories/folders within a collection
-- Bulk select, move, categorize, prioritize, archive, and delete products
-- Product archive with read-only details, restore, and permanent deletion
-- Priority levels and star ratings
-- Quantity tracking
-- Current price and per-item target price
-- Condition and availability notes
-- Purchase status
-- Private notes per product
-- Top Picks
-- Product images
-- Search, sorting and filtering
+<a href="https://github.com/codeboy2012/DerList"><img src="https://img.shields.io/github/stars/codeboy2012/DerList?style=for-the-badge&amp;label=Stars" alt="GitHub stars for DerList"></a>
+<a href="https://github.com/codeboy2012/DerList/forks"><img src="https://img.shields.io/github/forks/codeboy2012/DerList?style=for-the-badge&amp;label=Forks" alt="GitHub forks of DerList"></a>
+<a href="https://github.com/codeboy2012/DerList"><img src="https://img.shields.io/github/watchers/codeboy2012/DerList?style=for-the-badge&amp;label=Watchers" alt="GitHub watchers of DerList"></a>
+<a href="https://github.com/codeboy2012/DerList/releases"><img src="https://img.shields.io/github/downloads/codeboy2012/DerList/total?style=for-the-badge&amp;label=Release%20downloads" alt="GitHub release downloads for DerList"></a>
+<br>
+<a href="https://github.com/codeboy2012/DerList/releases/latest"><img src="https://img.shields.io/github/v/release/codeboy2012/DerList?style=for-the-badge&amp;label=Latest%20release" alt="Latest DerList release"></a>
+<a href="LICENSE.md"><img src="https://img.shields.io/github/license/codeboy2012/DerList?style=for-the-badge&amp;label=License" alt="DerList license"></a>
+<a href="https://github.com/codeboy2012/DerList/actions/workflows/publish-image.yml"><img src="https://img.shields.io/github/actions/workflow/status/codeboy2012/DerList/publish-image.yml?branch=main&amp;style=for-the-badge&amp;label=Quality%20gate" alt="DerList quality gate status"></a>
+<a href="https://github.com/codeboy2012/DerList/pkgs/container/derlist"><img src="https://img.shields.io/badge/GHCR-ghcr.io%2Fcodeboy2012%2Fderlist-2496ED?style=for-the-badge&amp;logo=docker&amp;logoColor=white" alt="DerList container image on GHCR"></a>
 
-Every collection is private to its owner. There are no public wishlist pages, share links or
-catalogues, and no cross-account product search.
+</div>
 
-### 📦 Product Management
+## Star History
 
-Products can store detailed information including:
+<a href="https://www.star-history.com/?repos=codeboy2012%2FDerList&amp;type=date&amp;legend=top-left">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=codeboy2012/DerList&amp;type=Date&amp;theme=dark&amp;legend=top-left">
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=codeboy2012/DerList&amp;type=Date&amp;legend=top-left">
+    <img alt="Star history chart for DerList" src="https://api.star-history.com/svg?repos=codeboy2012/DerList&amp;type=Date&amp;legend=top-left">
+  </picture>
+</a>
 
-- Product name, brand and model
-- Category
-- Condition and availability (as supplied by you or the import)
-- SKU, UPC, ASIN and MPN where an import provides them
-- Product URL and description
-- Private notes
-- Specifications and images
-- Current price and target price
-- Retailer and seller information
-- Purchase status and quantity
+## Current Release
 
-Optional extended fields live in the product editor and its metadata JSON; they are only as
-complete as the import or your own edits. DerList never invents a value — unknown stays unknown.
+<p align="center">
+  <strong>v0.14.1</strong> · Open Beta · released 19 November 2026
+</p>
 
-### 🔗 Product Importing
+|                          |                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| **Version**              | `0.14.1`                                                                         |
+| **Release status**       | Open Beta release, published on GitHub                                           |
+| **Application baseline** | v0.14.0 Open Beta registration, with the v0.13.0 organization work               |
+| **Container image**      | `ghcr.io/codeboy2012/derlist:v0.14.1`                                            |
+| **Platforms**            | `linux/amd64`, `linux/arm64`                                                     |
+| **Distribution**         | Published container image; build from source is also supported                   |
+| **License**              | MIT                                                                              |
+| **Release notes**        | [v0.14.1 on GitHub](https://github.com/codeboy2012/DerList/releases/tag/v0.14.1) |
 
-Paste a product URL and DerList attempts to identify the product automatically.
+v0.14.1 is the container and quality-gate release. It publishes the application as a
+multi-platform GHCR image and adds the automated gate that builds, tests, scans, and verifies
+the image before promoting release tags. The application behaviour is the v0.14.0 Open Beta
+release: public username/email registration, first-time GitHub and Google registration, optional
+email verification and password recovery, and the wishlist organization tools from v0.13.0.
 
-Current importing supports:
+### What changed
 
-- Amazon
-- Best Buy
-- Newegg
-- PCPartPicker
-- Generic product URLs
-- Multiple URLs
-- ASIN extraction
-- URL normalization
-- Product validation
-- Search-provider fallback
-- AI enrichment
+- Multi-platform images at `ghcr.io/codeboy2012/derlist`, with `linux/amd64` and `linux/arm64`.
+- Immutable `vX.Y.Z` release tags, digest-first verification, SBOM and provenance attestations.
+- `latest` is promoted only for non-prerelease releases after the full quality gate passes.
+- The main quality gate covers unit/integration tests, Playwright E2E, Prisma validation and
+  migration status, TypeScript, ESLint, production builds, security checks, and Docker runtime
+  verification; a separate CodeQL workflow scans the code.
+- A published-image Compose example with PostgreSQL, the app, the worker, persistent volumes,
+  healthchecks, restart policies, and an optional Caddy HTTPS profile.
+- Documentation for upgrading, backups, restore, logs, reverse proxies, OAuth callbacks and SMTP.
+- The worker deliberately keeps `healthcheck: disable: true`; it serves no HTTP and is verified
+  by its running state, restart count, and structured startup log instead.
 
-DerList is designed to **avoid inventing product information** when reliable data cannot be found.
+There are no standalone binary installers. Use the container image or run from source.
 
-If an AI provider is unavailable or a product cannot be reliably identified, DerList falls back to manual product entry.
+> **Hosted instance status:** [derlist.dpdns.org](https://derlist.dpdns.org) is live, but it is
+> still serving an older invite-only build. `/register` currently returns 404 there. The hosted
+> instance has not been updated to v0.14.1, so use a self-hosted v0.14.1 installation for the
+> current Open Beta registration flow.
 
-### 🤖 AI Product Research
+[All releases](https://github.com/codeboy2012/DerList/releases) ·
+[Changelog](CHANGELOG.md) ·
+[Release notes](https://github.com/codeboy2012/DerList/releases/tag/v0.14.1)
 
-DerList supports AI-powered product research using configured AI providers.
+## Features
 
-AI can help identify and enrich:
+### Collections and wishlists
 
-- Product names
-- Brands
-- Models
-- Categories
-- Subcategories
-- Product identifiers
-- Descriptions
-- Specifications
-- Tags
-- Pricing information
-- Sellers
-- Product metadata
+Wishlists are the collections in DerList. Each one belongs to exactly one account.
 
-The research pipeline includes:
+- Create, rename, duplicate, archive, and delete collections.
+- Add a description, an emoji icon, and a custom colour.
+- Keep collections in a manual order with keyboard-accessible move controls.
+- Create categories inside a collection, with an optional description, notes, icon, and external
+  link — useful for a build list, a room, or any group with its own reference page.
+- Search within a collection by title, brand, model, category, notes, or retailer.
+- Sort by price, name, newest, or priority; filter by purchased state.
+- Switch between a flat list and the category view.
+- Curate **Top Picks** for a collection, or let DerList surface the highest-priority unpurchased
+  products as **Most Wanted**.
 
-- AI provider selection
-- Search-provider fallback
-- AI enrichment
-- Product validation
-- Confidence scoring
-- Completeness scoring
-- Per-field source tracking
-- Import status tracking
-- Structured AI responses
-- Product identity verification
+Every collection is private. There are no public wishlist pages, share links, profiles, or
+cross-account product search.
 
-More AI research improvements are actively being developed.
+### Product records
 
-### 🖼️ Product Images
+A product can be as detailed as you need it to be:
 
-DerList supports product image discovery and validation.
+- Name, description, brand, and model.
+- Product URL, image, retailer, condition, and availability notes.
+- Current price, target price, original price, currency, and deal notes.
+- Quantity, purchase status, personal notes, and a category.
+- A four-level priority scale, from “Want” to “Must have”.
+- Extended specifications, identifiers, and other details through the product editor.
+- SKU, MPN, and GTIN where the import or your own edit supplies them.
 
-The image system includes:
+Unknown values stay unknown. DerList does not invent a brand, price, or specification to fill a
+blank field.
 
-- Search image candidates
-- Image validation
-- HTTP verification
-- SSRF protection
-- Google thumbnail rejection
-- Trusted image sources
-- Keepa image-provider architecture
-- Image source tracking
-- Image fallback handling
+### Import and research
 
-### 💰 Pricing
+The import workflow is designed to save typing, not to pretend every retailer exposes perfect
+data.
 
-Pricing features that exist today:
+- Paste one product URL or several URLs at once.
+- Dedicated URL handlers exist for Amazon, Best Buy, Newegg, and PCPartPicker; generic product
+  pages use standard page metadata.
+- Paste copied product text or a shopping list, review the detected products, and save the ones
+  you want.
+- Add a product manually when a page cannot be read or you already know the details.
+- Search a configured shopping provider and review a matching product.
+- Optionally use an AI provider for research and enrichment; AI-generated information is kept
+  separate from data you entered or imported.
+- Optional image discovery and validation help avoid broken or unsafe image URLs.
 
-- Current price and currency per item
-- A per-item target price you set yourself
-- Original/MSRP and discount fields when an import supplies them
-- Manual price editing
-- Price history storage and charts, rendered when data exists
+Importing is best-effort. Retailer markup changes, blocked requests, and missing metadata can
+require manual correction. The website-data and file-import tabs are placeholders in this build;
+CSV and DerList-backup import are not implemented.
 
-Automated price monitoring is **not** active by default. It requires the separate worker service
-and a configured price provider; without them the history is simply empty. Price alerts are not
-implemented yet.
+### Organization, archive, and bulk actions
 
-### 👥 Authentication
+- Select products in the current collection and move them to another collection.
+- Set a category or priority for a selection in one action.
+- Archive selected products, or restore and permanently delete them from the archived view.
+- Open an archived product's read-only detail page before deciding whether to restore it.
+- Duplicate a collection with its items and category relationships.
+- Copy a compact plain-text list of products to the clipboard when you need to share it manually.
+- Mark products as purchased and filter them out of the active view.
 
-- **Public registration** with a username or an email address
-- Sign in with either your email address or your username
-- GitHub OAuth (when configured)
-- Google OAuth (when configured)
-- First-time OAuth registration for provider-verified emails
-- Email verification (when SMTP is configured)
-- Password recovery by email (when SMTP is configured)
-- Case-insensitive, normalised email and username uniqueness
-- Secure, database-backed session management
-- User roles and an admin panel
-- Optional administrator invitations for pre-provisioned accounts
+Archived products stay in your account but are excluded from normal collection views,
+dashboard statistics, global search, and AI organizer input until restored.
 
-### 🛠️ Administration
+### Accounts and authentication
 
-The administration system provides:
+- Public registration with a username or an email address.
+- Sign in with either your email address or your username.
+- Optional GitHub and Google OAuth; a first-time OAuth sign-in creates an account only when the
+  provider returns a verified email address.
+- Link or disconnect OAuth providers from account settings.
+- Optional email verification and password recovery over SMTP. These flows are hidden when SMTP
+  is not configured rather than pretending a message was sent.
+- Database-backed sessions, password changes, and a list of active sessions.
+- Account deletion with typed confirmation and password confirmation when the account has one.
+- Instance administration for users, invitations, audit logs, and provider configuration.
 
-- User management
-- Invitation management
-- System oversight
-- Provider configuration
-- AI provider configuration
-- Application administration
+### Data ownership and export
 
-### 📱 Responsive Interface
+- **Settings → Account → Export my data** downloads a JSON account export.
+- The export includes account details, collections, categories, items, archive state, ordering,
+  notes, prices, and extended metadata.
+- Provider API keys and other encrypted secrets are deliberately excluded.
+- The export is a download, not a restore format. File import, CSV export, and bulk export are
+  planned but not implemented in v0.14.1.
 
-DerList works across:
+### Privacy and security
 
-- Desktop
-- Laptop
-- Tablet
-- Mobile browsers
+- Private-by-default collections and owner-scoped data access.
+- Authorization checks on collection, product, category, upload, and top-pick operations.
+- Argon2id password hashing and hashed session tokens.
+- HttpOnly, SameSite session cookies and security headers.
+- Rate-limited registration and password-recovery endpoints.
+- Encrypted provider credentials using `PROVIDER_ENCRYPTION_KEY`.
+- SSRF protections and URL validation around product importing and image fetching.
+- Uploads served through an authenticated route rather than a public directory.
+- No public catalogue, public wishlist pages, or social graph.
 
-The interface supports:
+Operational note: the shipped Compose stack runs one application process. Registration and
+password-recovery limits are in-process, and the rate limiter trusts the first forwarded hop.
+Keep DerList behind the provided Caddy proxy or another trusted reverse proxy, and do not scale
+the app horizontally without a shared rate-limit store. The worker must not be scaled above one
+replica; it uses a PostgreSQL advisory lock.
 
-- Dark mode
-- Responsive layouts
-- Modern product cards
-- Product editor
-- Wishlist organization
-- AI research progress
-- Live import status
+### Appearance and accessibility
 
----
+- System, light, and dark themes.
+- Six accent colours.
+- Three Liquid Glass levels: off, subtle, and full.
+- Reduce motion and reduce transparency options.
+- Always-show focus rings.
+- Blur product images and prices for screen sharing.
+- Device-local preferences that do not leave the browser.
 
-# 🚀 Quick Start
+### What DerList is not
 
-## Docker
+| Not in this build                           | What happens instead                                                                                                                                                       |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shopping cart or checkout                   | Product actions open the original retailer page in a new tab. DerList does not process purchases.                                                                          |
+| Public wishlists, sharing, or a marketplace | Collections are private. There are no public pages, share links, or cross-account discovery.                                                                               |
+| Separate Watchlists or Market Finds feeds   | Wishlists, categories, product lookup, Top Picks, and importing are the current organization model. There is no separate watchlist or Market Finds module in the codebase. |
+| CSV/JSON re-import                          | The account JSON export is download-only. File import is not implemented.                                                                                                  |
+| Automatic price alerts                      | Price history appears only when a configured provider has recorded data. Automated monitoring and alerts are not enabled by default.                                       |
 
-DerList is published as a multi-platform container image to the GitHub Container Registry.
+## Screenshots
 
-### Pull the published image
+> **Screenshots are coming.** DerList does not currently ship checked-in UI screenshots. This
+> section is reserved for real captures of collections, product details, and the import flow once
+> the Open Beta interface stabilizes. No mockups or unrelated images are used here.
+
+## Getting Started
+
+### Use a current instance
+
+The Open Beta registration flow is available on a v0.14.1 instance. If you need one, use the
+[Docker quick start](#quick-start-with-the-published-image).
+
+1. Open `/register`.
+2. Choose a username and email address, or register with an email address and let DerList generate
+   a username. GitHub and Google appear only when those providers are configured.
+3. Sign in with either your username or email address.
+
+No invitation, approval, allowlist, or waitlist is involved on a current instance.
+
+### Create your first collection
+
+From the dashboard, create a collection, give it a name and optional description, and choose an
+icon and colour. Collections can be archived rather than deleted, and the order can be adjusted
+later.
+
+### Add and organize products
+
+Open a collection and add a product by URL, copied text, product lookup, or manual entry. Review the
+import before saving it. Once a product is saved, you can set its target price, priority, quantity,
+condition, category, notes, and purchase status.
+
+Use categories for larger collections, bulk actions for repetitive changes, and Top Picks for the
+short list you want to see first.
+
+### Open the original listing
+
+DerList is not a store. Product rows provide **Visit Store**, and the product detail page provides
+a **View on …** link to the original source URL. Category metadata can also carry an external link,
+such as a build list. These links open in a new tab; there is no cart or checkout inside DerList.
+
+### Take your data with you
+
+Go to **Settings → Account** and choose **Export my data**. Keep the JSON file somewhere safe. It
+is the supported way to take a copy of your collections and products in v0.14.1.
+
+## Self-Hosting with Docker
+
+DerList is designed to run as a small Docker Compose stack:
+
+- the Next.js application;
+- a background worker;
+- PostgreSQL 16;
+- persistent database and upload volumes;
+- an optional Caddy reverse proxy for HTTPS.
+
+### Image and tags
+
+The official image is published to the GitHub Container Registry:
 
 ```bash
 docker pull ghcr.io/codeboy2012/derlist:latest
 ```
 
-| Tag          | Meaning                                                            |
-| ------------ | ------------------------------------------------------------------ |
-| `latest`     | Newest non-prerelease release. Never moved by a main-branch build. |
-| `vX.Y.Z`     | Exact release version. Immutable once published.                   |
-| `X.Y`        | Release minor line.                                                |
-| `X`          | Release major line.                                                |
-| `main`       | Latest build from a successful `main` run. Not a release.          |
-| `<full-SHA>` | Exact commit that produced the image.                              |
+The GHCR package is public, so the pull command works without registry credentials.
 
-Supported platforms are **`linux/amd64`** and **`linux/arm64`**. Pre-release tags such as
-`v0.15.0-beta.1` never update `latest`, `X.Y` or `X`.
+| Tag          | Meaning                                                                            |
+| ------------ | ---------------------------------------------------------------------------------- |
+| `latest`     | Newest non-prerelease release. Never moved by a main-branch build or a prerelease. |
+| `vX.Y.Z`     | Exact release version. Immutable once published. Use this for production.          |
+| `X.Y`        | Release minor line.                                                                |
+| `X`          | Release major line.                                                                |
+| `main`       | Latest successful build from the `main` branch. Not a release.                     |
+| `<full-SHA>` | The exact commit that produced the image.                                          |
 
-Pin a release for a reproducible deployment instead of tracking `latest`:
+Supported platforms are **`linux/amd64`** and **`linux/arm64`**. Prerelease tags such as
+`v0.15.0-beta.1` never update `latest`, `X.Y`, or `X`.
 
-```bash
-DERLIST_IMAGE=ghcr.io/codeboy2012/derlist:v0.14.1 \
-  docker compose -f docker-compose.ghcr.yml pull
-```
-
-### Run the published image with Compose
-
-The [`docker-compose.ghcr.yml`](./docker-compose.ghcr.yml) example runs the published image,
-PostgreSQL, the background worker, persistent database and upload volumes, healthchecks, restart
-policies, and an optional Caddy HTTPS profile.
+Pin a release instead of tracking `latest`:
 
 ```bash
-cp .env.example .env
-# Edit .env before starting. POSTGRES_PASSWORD is required and has no default.
+export DERLIST_IMAGE=ghcr.io/codeboy2012/derlist:v0.14.1
+docker compose -f docker-compose.ghcr.yml pull
 docker compose -f docker-compose.ghcr.yml up -d
 ```
 
-For production, set at minimum:
+### Quick start with the published image
 
-```env
-POSTGRES_PASSWORD=your-secure-password
-NEXT_PUBLIC_APP_URL=https://your-domain.example
-
-# Optional instance owner. Normal public registration does not need this.
-ADMIN_EMAIL=admin@example.com
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=your-secure-password
-
-# Required only if you store third-party provider credentials.
-PROVIDER_ENCRYPTION_KEY=replace-with-a-generated-key
-```
-
-Generate the encryption key with `npm run generate-encryption-key`. Keep `.env` untracked; the
-repository and Compose files contain no credentials. The app port is bound to
-`127.0.0.1:${APP_PORT:-3000}` in the GHCR Compose example so it is not exposed directly to the
-internet. Use the Caddy profile or another trusted reverse proxy for public access.
-
-Once the containers are healthy, open **[http://localhost:3000](http://localhost:3000)** or your
-configured public URL. Create an account at **`/register`**. The optional `ADMIN_*` seed account is
-the instance owner and is not required for normal registration.
-
-### Build from source
+The repository includes [`docker-compose.ghcr.yml`](docker-compose.ghcr.yml), which runs the
+published image, PostgreSQL, the worker, persistent volumes, and the optional Caddy profile.
 
 ```bash
 git clone https://github.com/codeboy2012/DerList.git
 cd DerList
 cp .env.example .env
-# Edit .env and configure at minimum POSTGRES_PASSWORD.
-docker compose up -d --build
 ```
 
-The source-build Compose file (`docker-compose.yml`) builds the same production image locally and
-is intended for development of the image itself. Published releases should use
-`docker-compose.ghcr.yml`.
+Edit `.env` before starting:
 
-### Verify the installation
+- Change `POSTGRES_PASSWORD`. It is required and has no default.
+- Set `NEXT_PUBLIC_APP_URL` to the public origin users will visit.
+- Replace or remove the example `ADMIN_*` values before the first start. The example password is
+  a placeholder, not a secure setup.
+
+Then start the stack:
+
+```bash
+docker compose -f docker-compose.ghcr.yml up -d
+```
+
+The app container waits for PostgreSQL, applies pending Prisma migrations with
+`prisma migrate deploy`, optionally creates the first owner account when all required `ADMIN_*`
+values are set, and then starts the server.
 
 ```bash
 docker compose -f docker-compose.ghcr.yml ps
-curl -fsS http://localhost:3000/api/health
+curl -fsS http://127.0.0.1:3000/api/health
 ```
 
-### View logs
+Open `http://localhost:3000` on the server, or the public URL you configured. Registration is at
+`/register`.
+
+The published-image Compose file binds the app to `127.0.0.1:${APP_PORT:-3000}` by default. That is
+intentional: use the Caddy profile or another trusted reverse proxy for internet access rather than
+exposing the app port directly.
+
+### Configuration
+
+The Compose stack reads `.env` and constructs `DATABASE_URL` for the app and worker. The Docker
+image does not contain `.env` files.
+
+| Variable                                    | Required        | Purpose                                                                                                            |
+| ------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `POSTGRES_PASSWORD`                         | **Yes**         | PostgreSQL password. No default. Avoid special characters such as `$`, `#`, `%`, `@`, and `!`, or URL-encode them. |
+| `POSTGRES_USER`                             | No              | Database user. Defaults to `derlist`.                                                                              |
+| `POSTGRES_DB`                               | No              | Database name. Defaults to `derlist`.                                                                              |
+| `NEXT_PUBLIC_APP_URL`                       | Recommended     | Public origin used for OAuth callbacks, emailed links, and absolute URLs. Defaults to `http://localhost:3000`.     |
+| `APP_PORT`                                  | No              | Host port. Defaults to `3000`; the GHCR Compose file binds it to loopback.                                         |
+| `ADMIN_EMAIL`                               | No              | First-run owner email. Seed runs only when email, password, and username are all set.                              |
+| `ADMIN_PASSWORD`                            | No              | First-run owner password. Change the example value before starting.                                                |
+| `ADMIN_USERNAME`                            | No              | First-run owner username.                                                                                          |
+| `ADMIN_DISPLAY_NAME`                        | No              | Owner display name. Defaults to `Admin`.                                                                           |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | No              | Enables GitHub OAuth when both are set.                                                                            |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | No              | Enables Google OAuth when both are set.                                                                            |
+| `SMTP_HOST`                                 | No              | SMTP server. Email verification and password recovery stay hidden without it.                                      |
+| `SMTP_PORT`                                 | No              | SMTP port. Defaults to `587`.                                                                                      |
+| `SMTP_SECURE`                               | No              | `true` for implicit TLS, usually port 465. Defaults to `false` for STARTTLS.                                       |
+| `SMTP_USER` / `SMTP_PASSWORD`               | No              | SMTP credentials when your server requires them.                                                                   |
+| `SMTP_FROM`                                 | No              | Sender address, for example `DerList <no-reply@example.com>`.                                                      |
+| `PROVIDER_ENCRYPTION_KEY`                   | No              | AES-256-GCM key for stored provider credentials. Required only if you configure providers.                         |
+| `WORKER_POLL_INTERVAL_MS`                   | No              | Worker queue poll interval. Defaults to `5000`.                                                                    |
+| `WORKER_SCHEDULE_INTERVAL_MS`               | No              | Worker refresh schedule. Defaults to `900000`.                                                                     |
+| `WORKER_BATCH_SIZE`                         | No              | Worker batch size. Defaults to `10`.                                                                               |
+| `DERLIST_IMAGE`                             | No              | Image used by `docker-compose.ghcr.yml`. Defaults to `latest`; pin a release for production.                       |
+| `DOMAIN`                                    | Only with Caddy | Public hostname for the optional HTTPS profile.                                                                    |
+
+Advanced runtime detail: uploads are written under `UPLOAD_DIR` (default
+`process.cwd()/uploads`, which is `/app/uploads` in the image). The Compose stack mounts that
+path as the `uploads` volume.
+
+Generate a provider encryption key from a checkout with:
 
 ```bash
-docker compose -f docker-compose.ghcr.yml logs -f app worker
+npm run generate-encryption-key
 ```
 
-Use `docker inspect --format '{{.State.Health.Status}}' <container>` to check a service health
-status. The worker intentionally has no HTTP healthcheck because it does not serve HTTP; its
-liveness is its running state and its structured `worker.started` log line.
+Keep the key somewhere safe. Existing encrypted provider credentials cannot be decrypted without
+it.
 
-### Back up and restore
+OAuth callback URLs:
 
-Back up the database and uploads before any upgrade, migration or image change. Keep the backup
-outside the Docker volumes.
+| Provider | Console                                             | Callback URL                                 |
+| -------- | --------------------------------------------------- | -------------------------------------------- |
+| GitHub   | <https://github.com/settings/developers>            | `{NEXT_PUBLIC_APP_URL}/auth/github/callback` |
+| Google   | <https://console.cloud.google.com/apis/credentials> | `{NEXT_PUBLIC_APP_URL}/auth/google/callback` |
+
+### Data, volumes, and persistence
+
+| Volume         | Mount                     | Contents                                    |
+| -------------- | ------------------------- | ------------------------------------------- |
+| `pgdata`       | PostgreSQL data directory | Database files.                             |
+| `uploads`      | `/app/uploads`            | Uploaded images and other persistent files. |
+| `caddy_data`   | `/data` in Caddy          | TLS certificates and Caddy state.           |
+| `caddy_config` | `/config` in Caddy        | Caddy configuration state.                  |
+
+Back up the database with `pg_dump` and the uploads volume separately. Do not copy a live
+PostgreSQL data directory as your only backup.
+
+### Healthchecks, restarts, and processes
+
+- **App:** the image and Compose healthcheck probe `http://127.0.0.1:3000/api/health`.
+- **Database:** `pg_isready` checks the configured user and database.
+- **Worker:** the worker has no HTTP server, so its healthcheck is intentionally disabled. Check
+  that it is running with zero unexpected restarts and that `worker.started` appears in its logs.
+- **Restarts:** services use `restart: unless-stopped`; the GHCR app and worker also use an init
+  process and a 30-second stop grace period.
+- **Worker concurrency:** run exactly one worker. A PostgreSQL advisory lock prevents multiple
+  workers from processing the queue, but the service is not designed to scale horizontally.
+
+### Upgrades and migrations
+
+> [!WARNING]
+> Back up the database and uploads before changing images. The app container applies pending
+> migrations on startup, and an image rollback does **not** reverse a migration that has already
+> run.
+
+For a database created before v0.13.0, run the category-integrity preflight before upgrading. For a
+database created before v0.14.0, also run the public-registration identity preflight. Both scripts
+are read-only and must report `blocking_violations_total = 0`.
 
 ```bash
-# Database (custom format, restorable with pg_restore)
+# Back up first. See "Backups and restore" below.
+
+docker compose -f docker-compose.ghcr.yml exec -T db \
+  sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' \
+  < scripts/preflight-wishlist-category-integrity.sql
+
+docker compose -f docker-compose.ghcr.yml exec -T db \
+  sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1' \
+  < scripts/preflight-public-registration.sql
+```
+
+If either report shows a blocking violation, stop and fix the data before starting the new image.
+The migrations fail closed rather than guessing how to merge invalid records.
+
+Then pin the intended release, pull it, and start it:
+
+```bash
+export DERLIST_IMAGE=ghcr.io/codeboy2012/derlist:v0.14.1
+docker compose -f docker-compose.ghcr.yml pull
+docker compose -f docker-compose.ghcr.yml up -d
+```
+
+The entrypoint applies migrations before the app serves traffic. To roll back the application,
+pin the previous image and restore the database backup as well if a migration already ran.
+
+### Backups and restore
+
+```bash
+# Database — custom format, restorable with pg_restore.
 docker compose -f docker-compose.ghcr.yml exec -T db \
   sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
   > "derlist-$(date +%Y%m%d-%H%M%S).dump"
 
-# Uploaded files
+# Uploads.
 docker compose -f docker-compose.ghcr.yml exec -T app \
   tar czf - -C /app/uploads . > "derlist-uploads-$(date +%Y%m%d-%H%M%S).tgz"
 ```
 
-Restore into a stopped stack and verify the result before serving traffic:
+Restore into a stopped stack and test the result before serving traffic:
 
 ```bash
-# Stop writers first.
 docker compose -f docker-compose.ghcr.yml stop app worker
 
-# Restore the database.
 docker compose -f docker-compose.ghcr.yml exec -T db \
   sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' \
   < derlist-YYYYMMDD-HHMMSS.dump
 
-# Restore uploads.
-docker compose -f docker-compose.ghcr.yml exec -T app \
-  tar xzf - -C /app/uploads < derlist-uploads-YYYYMMDD-HHMMSS.tgz
+# The app container is stopped, so restore uploads through a one-off container
+# that still mounts the uploads volume.
+docker compose -f docker-compose.ghcr.yml run --rm --no-deps -T \
+  --entrypoint sh app -c 'tar xzf - -C /app/uploads' \
+  < derlist-uploads-YYYYMMDD-HHMMSS.tgz
 
 docker compose -f docker-compose.ghcr.yml up -d
 ```
 
-Test a restore on a disposable copy before relying on it. Backups are only useful if they have
-been restored successfully at least once.
+A backup is only proven when you have restored it successfully on a disposable copy.
+
+### Logs and troubleshooting
+
+```bash
+docker compose -f docker-compose.ghcr.yml logs -f app worker
+docker compose -f docker-compose.ghcr.yml ps
+docker inspect --format '{{.State.Health.Status}}' \
+  "$(docker compose -f docker-compose.ghcr.yml ps -q app)"
+```
+
+| Symptom                                  | Check                                                                                                                 |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| App exits during startup                 | `POSTGRES_PASSWORD` is set, the database is healthy, and migrations are not blocked.                                  |
+| App is healthy but the public site fails | Caddy is running, DNS points at the host, ports 80/443 are open, and `NEXT_PUBLIC_APP_URL` matches the public origin. |
+| OAuth login redirects with an error      | The provider callback URL matches `{NEXT_PUBLIC_APP_URL}/auth/{provider}/callback` exactly.                           |
+| No verification or reset emails          | SMTP is configured. Without SMTP, these flows are intentionally hidden.                                               |
+| Uploads fail or disappear                | The `uploads` volume is mounted at `/app/uploads` and writable by the non-root image user.                            |
+| Worker appears unhealthy                 | Expected: it has no HTTP healthcheck. Check `worker.started`, its running state, and restart count.                   |
+| Migrations fail after an upgrade         | Stop, inspect the preflight reports and logs, and restore the backup if needed. Do not retry blindly.                 |
 
 ### Reverse proxy and HTTPS
 
-The GHCR Compose example binds the app to loopback. The optional Caddy profile terminates TLS and
-proxies to `app:3000`:
+The GHCR Compose file includes a Caddy profile. Point the domain's DNS at the host, allow inbound
+ports 80 and 443, and set `NEXT_PUBLIC_APP_URL` to the HTTPS origin.
 
 ```bash
 DOMAIN=derlist.example.com \
   docker compose -f docker-compose.ghcr.yml --profile with-caddy up -d
 ```
 
-Point the domain's DNS at the host, allow inbound ports 80 and 443, and set
-`NEXT_PUBLIC_APP_URL=https://derlist.example.com`. Caddy obtains and renews certificates
-automatically. If you use another reverse proxy, proxy to `127.0.0.1:3000` (or the app service on
-the Compose network), set `X-Forwarded-For`/`X-Real-IP`, and do not expose the app port directly.
-The registration rate limiter trusts the first forwarded hop, so direct internet access to the app
-port would make IP-based limits bypassable.
+Caddy obtains and renews certificates automatically. If you use another reverse proxy, proxy to
+the app on the Compose network (or `127.0.0.1:3000`), set `X-Forwarded-For`/`X-Real-IP`, and do not
+expose the app port directly to the internet. The rate limiter trusts the first forwarded hop, so
+direct access would make IP-based limits bypassable.
 
-### Upgrading an existing installation
+### Build from source
 
-**Changing the image does not make a production database safe to migrate.** The app container
-applies pending Prisma migrations on startup (`prisma migrate deploy`), so back up the database
-and uploads, identify the actual production database, and run the preflights below before
-replacing a running image.
-
-```bash
-# 1. Back up first (see "Back up and restore").
-# 2. Pull the intended release, not latest, for a controlled upgrade.
-DERLIST_IMAGE=ghcr.io/codeboy2012/derlist:v0.14.1 \
-  docker compose -f docker-compose.ghcr.yml pull
-# 3. Start it; the entrypoint applies migrations before serving traffic.
-DERLIST_IMAGE=ghcr.io/codeboy2012/derlist:v0.14.1 \
-  docker compose -f docker-compose.ghcr.yml up -d
-```
-
-Pin the previous version to roll back the application image. If a migration already ran, restore
-the database backup as well; image rollback alone does not reverse a schema migration.
-
-Databases created before v0.13.0 must pass the category-integrity preflight
-before the new image starts. Databases created before v0.14.0 must also pass the
-public-registration identity preflight. Both scripts are read-only:
-
-```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f scripts/preflight-wishlist-category-integrity.sql
-
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-  -f scripts/preflight-public-registration.sql
-```
-
-`blocking_violations_total` must be `0` in both reports. A nonzero value in the
-category preflight means at least one product references a category in another
-collection. A nonzero value in the registration preflight means two accounts
-already share an email address or username case-insensitively. In either case
-the migration aborts without modifying or deleting any data. The script headers
-document every check and the expected pre-migration values.
-
-Deployment order: back up the database, run both preflights, then start the new
-image and let the entrypoint apply migrations before the app serves traffic.
-The v0.14.0 migration `20261119180000_public_registration` lowercases existing
-emails and usernames, adds CHECK constraints that keep them lowercase, and adds
-`email_tokens` for verification and reset links. It fails closed rather than
-guessing how to merge duplicate identities.
-
-### Email delivery (optional)
-
-Email verification and password recovery need SMTP. Configure `SMTP_HOST`,
-`SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD` and `SMTP_FROM`, and
-set `NEXT_PUBLIC_APP_URL` to the public origin users visit because emailed links
-are built from it.
-
-When SMTP is not configured, DerList does not offer either flow. The login and
-registration pages still work, and `/forgot-password` explains that recovery is
-unavailable instead of claiming an email was sent. No email credentials are
-included in the repository or the Docker image.
-
-### Account registration and OAuth setup
-
-Registration lives at `/register` and offers two methods:
-
-- **Username** — choose a username, add an email address and password.
-- **Email** — add an email address and password; a username is generated and can be changed in
-  Settings → Profile.
-
-Both methods create the same account. Sign in at `/login` with either the email address or the
-username. OAuth buttons only appear for providers whose client ID and secret are set:
-
-| Provider | Console                                           | Callback URL                                 |
-| -------- | ------------------------------------------------- | -------------------------------------------- |
-| GitHub   | https://github.com/settings/developers            | `{NEXT_PUBLIC_APP_URL}/auth/github/callback` |
-| Google   | https://console.cloud.google.com/apis/credentials | `{NEXT_PUBLIC_APP_URL}/auth/google/callback` |
-
-A first-time OAuth sign-in creates an account only when the provider returns a **verified** email
-address. An unverified provider email never creates or links an account. If the provider account
-is already linked, it signs in normally; an existing account with the same verified email is
-linked once, and an account already linked to a different user is rejected.
-
-### Runtime configuration
-
-Environment variables are read from the container environment at runtime. The
-image does not contain `.env` files: `.dockerignore` keeps them out of the
-build context and `npm run build` removes Next.js's intentional `.env` and
-`.env.production` copies from `.next/standalone`. This also applies when the
-standalone output is deployed without Docker.
-
-Uploads are written under `UPLOAD_DIR` (default `process.cwd()/uploads`, which
-is `/app/uploads` in the image). `docker-compose.yml` mounts that path as the
-`uploads` volume, and PostgreSQL data as the `pgdata` volume.
-
-### Background worker
-
-Background refreshes and price history are processed by the `worker` service.
-`docker compose up -d` starts it alongside the app, and it must not be scaled
-to more than one replica — it holds a PostgreSQL advisory lock so only one
-worker processes jobs at a time.
-
-```bash
-docker compose logs -f worker
-```
-
-If the worker stops unexpectedly, jobs left in a running state are recovered
-on the next startup instead of blocking the queue.
-
-### Health check
-
-```text
-http://localhost:3000/api/health
-```
-
----
-
-# 📋 Requirements
-
-### Recommended
-
-- Docker
-- Docker Compose v2+
-- Linux server
-- 2 GB+ RAM
-- PostgreSQL 16+
-
-DerList is primarily developed and tested on Linux with Docker.
-
-Windows and macOS Docker deployments may work but are not currently the primary supported self-hosting environments.
-
----
-
-# 🧠 AI Providers
-
-AI functionality is optional.
-
-DerList is designed to support multiple AI providers so users can choose which services they want to connect.
-
-AI providers can be configured through the DerList provider system.
-
-When an AI provider is available, DerList can use it for product identification and research.
-
-When no AI provider is configured, DerList will not fabricate product information and will instead allow the user to enter product details manually.
-
----
-
-# 🏗️ Architecture
-
-```text
-┌───────────────────────────────────────────────┐
-│                 DerList                      │
-├───────────────────────────────────────────────┤
-│                                               │
-│  ┌─────────────────────────────────────────┐  │
-│  │           Next.js Application           │  │
-│  │                                         │  │
-│  │  React 19                              │  │
-│  │  Next.js App Router                    │  │
-│  │  API Routes                             │  │
-│  │  Server Actions                         │  │
-│  └───────────────────┬─────────────────────┘  │
-│                      │                        │
-│                      ▼                        │
-│  ┌─────────────────────────────────────────┐  │
-│  │              Prisma ORM                 │  │
-│  └───────────────────┬─────────────────────┘  │
-│                      │                        │
-│                      ▼                        │
-│  ┌─────────────────────────────────────────┐  │
-│  │             PostgreSQL 16               │  │
-│  └─────────────────────────────────────────┘  │
-│                                               │
-│  External Providers                           │
-│  ├── AI Providers                             │
-│  ├── Search Providers                         │
-│  ├── Product Data Providers                   │
-│  └── Image Providers                          │
-│                                               │
-└───────────────────────────────────────────────┘
-```
-
-### Technology Stack
-
-| Component      | Technology                          |
-| -------------- | ----------------------------------- |
-| Frontend       | Next.js 16                          |
-| UI             | React 19                            |
-| Styling        | Tailwind CSS 4                      |
-| Language       | TypeScript                          |
-| Backend        | Next.js API Routes + Server Actions |
-| Database       | PostgreSQL 16                       |
-| ORM            | Prisma 7                            |
-| Authentication | Custom session-based authentication |
-| Deployment     | Docker                              |
-| Reverse Proxy  | Caddy (optional)                    |
-
----
-
-# 🔐 Security
-
-DerList includes multiple security protections for self-hosted deployments.
-
-- Argon2id password hashing
-- SHA-256 hashed session tokens
-- HttpOnly cookies
-- Secure cookies
-- SameSite protection
-- Server-side authorization
-- Zod input validation
-- Rate-limited public registration and password recovery
-- Optional email verification and password recovery over SMTP
-- Encrypted provider API keys
-- SSRF protection
-- Private network blocking
-- Internal hostname blocking
-- Image URL validation
-- HTTP image verification
-- No API secrets exposed to clients
-
-DerList's product import system is specifically designed to prevent malicious URLs from being used to access internal services.
-
----
-
-# 🧪 Development
-
-Clone the repository:
+The source-build Compose file builds the same production image locally:
 
 ```bash
 git clone https://github.com/codeboy2012/DerList.git
 cd DerList
+cp .env.example .env
+# Edit .env and configure at least POSTGRES_PASSWORD.
+docker compose up -d --build
 ```
 
-Install dependencies:
+Use `docker-compose.yml` when developing the image itself. For a published release, prefer
+`docker-compose.ghcr.yml` so you run the verified image rather than a local rebuild. The source
+Compose file publishes `APP_PORT` on the host; put it behind a firewall or trusted proxy.
+
+## Development
+
+### Requirements
+
+- Node.js 22 LTS recommended (the production image uses Node 22).
+- npm.
+- PostgreSQL 16, local or reachable.
+- Docker and Docker Compose v2 for the container workflow.
+- Chromium for Playwright: `npx playwright install chromium`.
+
+### Local setup
+
+Install dependencies and start a local PostgreSQL instance:
 
 ```bash
 npm ci
+
+docker run --name derlist-dev-db -d \
+  -e POSTGRES_USER=derlist \
+  -e POSTGRES_PASSWORD=derlist \
+  -e POSTGRES_DB=derlist \
+  -p 127.0.0.1:5432:5432 \
+  postgres:16-alpine
 ```
 
-Start PostgreSQL:
+Create a local `.env` with the database URL and the development origin:
 
-```bash
-docker compose up db -d
+```env
+DATABASE_URL=postgresql://derlist:derlist@127.0.0.1:5432/derlist
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-Configure `.env.local` with your database connection.
-
-Run migrations:
+Then generate the Prisma client, apply the existing migrations, and start the dev server:
 
 ```bash
-npx prisma migrate dev
-```
-
-Start the development server:
-
-```bash
+npx prisma generate
+npx prisma migrate deploy
 npm run dev
 ```
 
+Open `http://localhost:3000` and register at `/register`. The `ADMIN_*` seed account is optional
+for local work; if you set it, do not use the example password from `.env.example`.
+
+For schema changes, use `npm run db:migrate` instead of `migrate deploy` so Prisma creates a new
+development migration.
+
+### Commands
+
+| Command                           | What it does                                                                        |
+| --------------------------------- | ----------------------------------------------------------------------------------- |
+| `npm run dev`                     | Start the Next.js development server.                                               |
+| `npm run build`                   | Create the production build.                                                        |
+| `npm start`                       | Start the production server.                                                        |
+| `npm run lint`                    | Run ESLint.                                                                         |
+| `npm run format`                  | Format the repository with Prettier.                                                |
+| `npm run format:check`            | Check formatting without writing.                                                   |
+| `npm test`                        | Run the database-backed Vitest suite.                                               |
+| `npm run test:watch`              | Run Vitest in watch mode.                                                           |
+| `npm run test:e2e`                | Run Playwright; it starts the dev server on port 3100 unless `E2E_BASE_URL` is set. |
+| `npm run db:generate`             | Generate the Prisma client.                                                         |
+| `npm run db:migrate`              | Create and apply a development migration.                                           |
+| `npm run db:seed`                 | Seed the optional owner account from `ADMIN_*`.                                     |
+| `npm run db:studio`               | Open Prisma Studio.                                                                 |
+| `npm run generate-encryption-key` | Generate a provider encryption key.                                                 |
+| `npx tsc --noEmit`                | Typecheck without emitting files.                                                   |
+
+### Testing
+
+Both Vitest and Playwright need a reachable PostgreSQL database configured through
+`DATABASE_URL`. Install Chromium once before the first E2E run. The E2E configuration starts the
+development server automatically and uses port 3100 by default.
+
+```bash
+npm test
+npm run test:e2e
+```
+
+The release gate also runs ESLint, TypeScript, Prisma validation/migration status, the production
+build, security tests, and the Docker Compose runtime verification. CodeQL runs as a separate
+workflow. See the [CI workflow](.github/workflows/ci.yml) and
+[publish workflow](.github/workflows/publish-image.yml) for the exact commands.
+
+### Docker development
+
+To exercise the production image and Compose stack locally:
+
+```bash
+cp .env.example .env
+# Set POSTGRES_PASSWORD and any optional configuration.
+docker compose up -d --build
+```
+
+The source build uses the same multi-stage Dockerfile as the published image. The worker runs from
+the same image with a different entrypoint.
+
+## Contributing
+
+DerList is maintained in public and contributions are welcome.
+
+### Bugs and feature requests
+
+- Open a bug report through the [issue chooser](https://github.com/codeboy2012/DerList/issues/new/choose).
+- Use the feature-request template for ideas and improvements.
+- Include the version or commit, deployment method, steps to reproduce, and any relevant logs.
+- For security-sensitive reports, avoid posting exploit details publicly; contact the maintainer
+  through GitHub first.
+
+### Pull requests
+
+1. Fork the repository and create a focused branch.
+2. Make the change, including tests and documentation where appropriate.
+3. Run the relevant checks:
+
+   ```bash
+   npm test
+   npm run lint
+   npx tsc --noEmit
+   npm run build
+   ```
+
+4. Open a pull request against `main` with a clear explanation and a linked issue when one exists.
+
+Keep unrelated refactors out of a fix. If you change the Docker configuration, database schema, or
+authentication flow, include the verification steps you used.
+
+## Roadmap
+
+DerList is built in phases, not dates. The canonical feature inventory and status details live in
+[ROADMAP.md](ROADMAP.md); this is a concise summary.
+
+| Phase   | Scope                                                                                         | Status         |
+| ------- | --------------------------------------------------------------------------------------------- | -------------- |
+| v0.13.0 | Wishlist organization, bulk actions, archive/restore, duplication                             | Shipped        |
+| v0.14.0 | Open Beta, public registration, OAuth registration, email flows, onboarding                   | Shipped        |
+| v0.14.1 | Multi-platform container images, CI quality gate, security checks, Docker docs                | Shipped        |
+| v0.15.0 | Importing improvements: extraction, progress, retries, history, duplicates, re-identification | In development |
+| v0.16.0 | Advanced private search, saved searches, product comparison                                   | Planned        |
+| v0.17.0 | AI product identification, organization, and assistant improvements                           | Planned        |
+| v0.18.0 | Price refresh, history, retailer comparisons, target-price monitoring                         | Planned        |
+| v0.19.0 | Research workspace, availability research, reminders, notifications                           | Planned        |
+| v0.20.0 | Portability, broader exports, personalization, dashboard layouts                              | Planned        |
+| v1.0.0  | A mature, polished personal product organizer with reliable self-hosting                      | Long-term      |
+
+Current Open Beta priorities are reliability, import quality, search and comparison, clearer
+documentation, and the self-hosting experience. Planned work is not a promise of a release date,
+and features may change as the project learns from real use.
+
+[Read the full roadmap](ROADMAP.md) ·
+[Changelog](CHANGELOG.md) ·
+[All releases](https://github.com/codeboy2012/DerList/releases)
+
+## Architecture and Stack
+
+```text
+Browser
+   │  HTTPS
+   ▼
+Caddy (optional) ──► Next.js app ──► Prisma ──► PostgreSQL 16
+                          │
+                          ├── /app/uploads volume
+                          └── background worker ──► optional providers
+```
+
+| Layer           | Technology                                                         |
+| --------------- | ------------------------------------------------------------------ |
+| Application     | Next.js 16 App Router, React 19, Server Actions and route handlers |
+| Language        | TypeScript 5                                                       |
+| Styling         | Tailwind CSS 4                                                     |
+| Database        | PostgreSQL 16                                                      |
+| ORM             | Prisma 7                                                           |
+| Authentication  | Custom database-backed sessions, Arctic OAuth, Argon2id            |
+| Background jobs | Node worker using the same application image                       |
+| Container       | Docker, Node 22 Alpine, non-root user, healthcheck                 |
+| Reverse proxy   | Caddy 2 (optional profile)                                         |
+| Tests           | Vitest and Playwright                                              |
+| Delivery        | GitHub Actions, GHCR, CodeQL, Dependabot                           |
+
+DerList stores user data in PostgreSQL and persistent files in the uploads volume. AI, shopping,
+price, and vision providers are optional integrations; the core collection and product workflows
+do not require an external AI service.
+
+## Credits
+
+DerList is maintained by [CodeBoy2012](https://github.com/codeboy2012) and contributors.
+
+It stands on a lot of open-source work, including:
+
+- [Next.js](https://nextjs.org/) and [React](https://react.dev/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [Prisma](https://www.prisma.io/) and [PostgreSQL](https://www.postgresql.org/)
+- [Node.js](https://nodejs.org/), [Docker](https://www.docker.com/), and [Caddy](https://caddyserver.com/)
+- [Arctic](https://arcticjs.dev/), [Argon2](https://github.com/ranisalt/node-argon2), and
+  [Zod](https://zod.dev/)
+- [Nodemailer](https://nodemailer.com/) and [Lucide](https://lucide.dev/)
+- [Vitest](https://vitest.dev/) and [Playwright](https://playwright.dev/)
+- [GitHub Actions](https://github.com/features/actions) and
+  [GitHub Container Registry](https://ghcr.io/)
+
+Each dependency retains its own license and copyright. Product names, retailer names, and marks
+belong to their respective owners; DerList does not claim third-party work as its own.
+
+## Built with Freebuff
+
+[Freebuff](https://freebuff.com) is an AI coding agent that assisted DerList's development:
+exploring the codebase, implementing changes, debugging, testing, and supporting development
+workflows. Its source is available in the
+[Freebuff GitHub project](https://github.com/CodebuffAI/freebuff).
+
+Freebuff assisted the maintainers; it does not replace them, does not create or maintain DerList,
+and does not own the project. Changes are reviewed and tested as part of the normal development
+process.
+
+## License
+
+DerList is open source under the [MIT License](LICENSE.md). Copyright © 2026 CodeBoy2012.
+
+The MIT license covers DerList's source code. Third-party libraries, services, product names,
+retailer names, and trademarks remain subject to their own licenses and ownership. DerList is not
+affiliated with the retailers whose pages you save, and it is not a shopping or payment service.
+
+## Project Links
+
+| Resource             | Link                                                                      |
+| -------------------- | ------------------------------------------------------------------------- |
+| Repository           | <https://github.com/codeboy2012/DerList>                                  |
+| Releases             | <https://github.com/codeboy2012/DerList/releases>                         |
+| Latest release       | <https://github.com/codeboy2012/DerList/releases/tag/v0.14.1>             |
+| Issues               | <https://github.com/codeboy2012/DerList/issues>                           |
+| New issue            | <https://github.com/codeboy2012/DerList/issues/new/choose>                |
+| Pull requests        | <https://github.com/codeboy2012/DerList/pulls>                            |
+| Container package    | <https://github.com/codeboy2012/DerList/pkgs/container/derlist>           |
+| Changelog            | [CHANGELOG.md](CHANGELOG.md)                                              |
+| Roadmap              | [ROADMAP.md](ROADMAP.md)                                                  |
+| License              | [LICENSE.md](LICENSE.md)                                                  |
+| Documentation source | <https://github.com/codeboy2012/DerList/tree/main/docs>                   |
+| Hosted instance      | <https://derlist.dpdns.org> — older invite-only build; no `/register` yet |
+| Freebuff             | <https://freebuff.com>                                                    |
+| Freebuff on GitHub   | <https://github.com/CodebuffAI/freebuff>                                  |
+| Maintainer           | <https://github.com/codeboy2012>                                          |
+
 ---
 
-## Development Commands
-
-| Command                  | Description              |
-| ------------------------ | ------------------------ |
-| `npm run dev`            | Start development server |
-| `npm run build`          | Create production build  |
-| `npm run lint`           | Run ESLint               |
-| `npm run format`         | Format code              |
-| `npx prisma studio`      | Open Prisma Studio       |
-| `npx prisma migrate dev` | Create/apply migrations  |
-
----
-
-# 🧪 Testing
-
-DerList includes automated tests for core functionality. Database-backed Vitest tests cover the
-service and authorization layer, and a Playwright suite covers critical browser workflows
-(`npm run test:e2e`). Install the browser once with `npx playwright install chromium` before the
-first browser-test run.
-
-Current test coverage includes:
-
-- Product validation
-- ASIN extraction
-- URL normalization
-- Search providers
-- AI providers
-- Image validation
-- Image HTTP verification
-- SSRF protection
-- Completeness scoring
-- Product identification
-- Import behavior
-
-Run the unit/service suite with `npm test` (Vitest, database-backed) and the browser suite with
-`npm run test:e2e` (Playwright). Both need a reachable PostgreSQL database configured through
-`DATABASE_URL`.
-
-### Known limitations
-
-- DerList is in Open Beta; the roadmap in [ROADMAP.md](./ROADMAP.md) records what is
-  implemented and what is not.
-- Registration and password-recovery rate limits are per application process. A multi-replica
-  deployment must put a shared store behind `src/lib/security/rate-limit.ts`. The shipped Docker
-  Compose stack runs one app process.
-- The rate limiter trusts the first `X-Forwarded-For` hop. Expose DerList behind the provided
-  Caddy reverse proxy (or another proxy that sets the header) rather than directly to the
-  internet.
-- Email verification and password recovery require SMTP. The sender is unit-tested with a mocked
-  transport; no live mailbox delivery was verified for this release.
-- A production database preflight and migration were not executed because no production target
-  or credentials were available in the release environment. The scripts are provided for the
-  operator.
-- Automated price monitoring and alerts are not implemented. Price history appears only when data
-  exists.
-- Accessibility work is keyboard- and focus-based; no screen-reader audit has been performed.
-- The Docker image and compose stack are verified in CI (build, runtime, health, persistence,
-  non-root user, image contents). Runtime verification on the operator's own host is still
-  recommended before exposing an instance publicly.
-- Browsers and screen readers vary; the Playwright suite runs Chromium on Linux.
-
----
-
-# 🗺️ Roadmap
-
-DerList follows a long-term, private-first release roadmap. The canonical feature inventory,
-release scope, and status details live in **[ROADMAP.md](./ROADMAP.md)**. This section is a
-concise summary only.
-
-### Current release
-
-**v0.14.1 — Container images and automated quality gate** (published 2026-11-19)
-
-Multi-platform images at `ghcr.io/codeboy2012/derlist` with immutable release tags, digest-first
-verification, SBOM and provenance, plus a CI gate covering E2E, security, CodeQL, dependency
-review, and real Docker Compose runtime verification. The application behaviour is the v0.14.0
-Open Beta release.
-
-### Previous release
-
-**v0.14.0 — Open Beta and public registration**
-
-Public registration with a username or email address, first-time GitHub and Google registration,
-sign-in with either identifier, optional email verification and password recovery over SMTP,
-rate-limited authentication endpoints, case-insensitive identity constraints, and first-run
-dashboard onboarding without sample data. Accounts created through OAuth can set a password later.
-
-**v0.13.0 — Wishlist and organization**
-
-Bulk product actions, product archive/restore, wishlist duplication, manual collection ordering,
-and the v0.13.0 release-hardening pass.
-
-### In development
-
-**v0.15.0 — Importing improvements**
-
-Better extraction, import progress, retries, history, duplicate detection and re-identification
-are planned; nothing from that scope is part of v0.14.1.
-
-### Later proposed releases
-
-- **v0.15.0 — Importing improvements**
-- **v0.16.0 — Search and comparison**
-- **v0.17.0 — AI intelligence**
-- **v0.18.0 — Price intelligence**
-- **v0.19.0 — Research and notifications**
-- **v0.20.0 — Portability and personalization**
-- **v1.0.0 — Complete personal product organizer**
-
-These are proposed groupings, not promises or fixed release dates. Detailed scope for every
-release is maintained in **[ROADMAP.md](./ROADMAP.md)**.
-
-There is no public sharing, marketplace, or PC builder in the current application; those are
-not committed roadmap items.
-
-📋 **[View the complete DerList Changelog](https://github.com/codeboy2012/DerList/blob/main/CHANGELOG.md)**
-
----
-
-# 🤝 Contributing
-
-Contributions are welcome.
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests
-5. Run `npm run lint`
-6. Run `npm run build`
-7. Submit a pull request
-
-Please make sure new features include appropriate tests and documentation where applicable.
-
----
-
-# 📄 License
-
-DerList is open source software licensed under the MIT License.
-
-See [LICENSE.md](./LICENSE.md) for the full license.
-
----
-
-# ❤️ DerList
-
-DerList is being built as an open-source alternative to traditional shopping and wishlist platforms.
-
-The goal is simple:
-
-> **One place to save, research, organize, compare, and eventually buy the things you want.**
-
-No subscriptions.
-No advertisements.
-No vendor lock-in.
-
-Built by [CodeBoy2012](https://github.com/codeboy2012) and contributors.
-
----
-
-## 📚 Documentation
-
-- **[Master feature inventory & roadmap](./ROADMAP.md)**
-- **[Changelog](https://github.com/codeboy2012/DerList/blob/main/CHANGELOG.md)**
-- **[GitHub Repository](https://github.com/codeboy2012/DerList)**
-- **[Issues](https://github.com/codeboy2012/DerList/issues)**
-- **[Releases](https://github.com/codeboy2012/DerList/releases)**
-
----
+<p align="center">
+  <sub>DerList is built in public. If it is useful to you, try it, star the repository, or open an issue.</sub>
+</p>
