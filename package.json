@@ -74,7 +74,7 @@
   },
   "allowScripts": {
     "@prisma/engines@7.10.1": true,
-    "argon2@0.45.1": true,
+    "argon2@0.45.2": true,
     "esbuild@0.28.1": true,
     "prisma@7.10.1": true,
     "unrs-resolver@1.12.2": true
