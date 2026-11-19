@@ -1,3 +1,4 @@
+import { htmlToText } from '@/lib/html/text';
 import type { ExtractionResult, RetailerParser } from '../engine/types';
 
 export const walmartParser: RetailerParser = {
@@ -66,7 +67,7 @@ export const walmartParser: RetailerParser = {
       const titleMatch =
         html.match(/<h1[^>]*itemprop=["']name["'][^>]*>([\s\S]*?)<\/h1>/i) ??
         html.match(/<h1[^>]*id=["']main-title["'][^>]*>([\s\S]*?)<\/h1>/i);
-      if (titleMatch) result.title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
+      if (titleMatch) result.title = htmlToText(titleMatch[1]);
     }
 
     let conf = 0;

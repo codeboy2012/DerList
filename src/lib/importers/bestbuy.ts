@@ -6,10 +6,11 @@
  */
 
 import { importProductFromUrl } from '@/lib/products';
+import { isUrlOnDomain, parseHttpUrl } from '@/lib/security/url';
 import type { DetectResult, Importer, ImportResult } from './types';
 
-const BESTBUY_PATTERN = /^https?:\/\/(www\.)?bestbuy\.com/i;
-const SKU_PATTERN = /\/(\d{7})\.p/;
+const BESTBUY_DOMAINS = ['bestbuy.com', 'bestbuy.ca'] as const;
+const SKU_PATTERN = /^\/(?:[^/]+\/)*?(\d{7})\.p(?:\/|$)/;
 
 export const BestBuyImporter: Importer = {
   id: 'bestbuy',
@@ -17,7 +18,7 @@ export const BestBuyImporter: Importer = {
 
   detect(input: string): DetectResult {
     const trimmed = input.trim();
-    if (BESTBUY_PATTERN.test(trimmed)) {
+    if (BESTBUY_DOMAINS.some((domain) => isUrlOnDomain(trimmed, domain))) {
       return { match: true, confidence: 90 };
     }
     return { match: false, confidence: 0 };
@@ -25,7 +26,8 @@ export const BestBuyImporter: Importer = {
 
   async extract(input: string): Promise<ImportResult> {
     const url = input.trim();
-    const skuMatch = url.match(SKU_PATTERN);
+    const parsed = parseHttpUrl(url);
+    const skuMatch = parsed?.pathname.match(SKU_PATTERN);
     const sku = skuMatch?.[1] ?? undefined;
 
     const result = await importProductFromUrl(url);

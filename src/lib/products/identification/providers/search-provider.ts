@@ -14,6 +14,7 @@
 
 import { getProviderManager } from '@/lib/providers';
 import type { SearchProvider, SearchResult } from '@/lib/providers/types';
+import { isUrlOnDomain } from '@/lib/security/url';
 import { sanitizeBrand, sanitizeImage, sanitizePrice, sanitizeTitle } from '../../validation';
 import { importLog } from '../logging';
 import type { IdentificationInput, IdentificationProvider, IdentifiedProduct } from '../types';
@@ -303,7 +304,7 @@ export class SearchIdentificationProvider implements IdentificationProvider {
 
     // Evidence-based scoring per spec
     if (evidence.matchedAsin) confidence += 30; // Exact ASIN match
-    if (evidence.url?.includes('amazon.com') && input.retailer === 'Amazon') {
+    if (isUrlOnDomain(evidence.url, 'amazon.com') && input.retailer === 'Amazon') {
       confidence += 20; // Exact Amazon URL
     } else if (evidence.matchedRetailer) {
       confidence += 10;

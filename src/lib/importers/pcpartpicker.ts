@@ -6,12 +6,17 @@
  * Scrapes the build page to extract individual parts, prices, and compatibility.
  */
 
+import { htmlToText } from '@/lib/html/text';
+import { safeFetch } from '@/lib/security/safe-fetch';
+import { isHostnameForDomain, parseHttpUrl } from '@/lib/security/url';
 import type { ProductDraft } from '@/lib/services/product';
 import type { DetectResult, Importer, ImportResult } from './types';
 
-const PCPP_PATTERN =
-  /^https?:\/\/(www\.)?(pcpartpicker\.com|uk\.pcpartpicker\.com|ca\.pcpartpicker\.com|de\.pcpartpicker\.com|au\.pcpartpicker\.com)\/list\//i;
-const PCPP_USER_PATTERN = /^https?:\/\/(www\.)?pcpartpicker\.com\/user\/[^/]+\/saved\//i;
+function isPcPartPickerUrl(input: string): boolean {
+  const parsed = parseHttpUrl(input);
+  if (!parsed || !isHostnameForDomain(parsed.hostname, 'pcpartpicker.com')) return false;
+  return parsed.pathname.startsWith('/list/') || /^\/user\/[^/]+\/saved\//i.test(parsed.pathname);
+}
 
 export const PCPartPickerImporter: Importer = {
   id: 'pcpartpicker',
@@ -19,7 +24,7 @@ export const PCPartPickerImporter: Importer = {
 
   detect(input: string): DetectResult {
     const trimmed = input.trim();
-    if (PCPP_PATTERN.test(trimmed) || PCPP_USER_PATTERN.test(trimmed)) {
+    if (isPcPartPickerUrl(trimmed)) {
       return { match: true, confidence: 95 };
     }
     return { match: false, confidence: 0 };
@@ -31,13 +36,17 @@ export const PCPartPickerImporter: Importer = {
     // Fetch the PCPartPicker page
     let html: string;
     try {
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-          Accept: 'text/html',
+      const response = await safeFetch(
+        url,
+        {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            Accept: 'text/html',
+          },
         },
-      });
+        { maxRedirects: 5, maxResponseBytes: 5 * 1024 * 1024 }
+      );
 
       if (!response.ok) {
         return { drafts: [], isBatch: true, batchName: 'PC Build' };
@@ -110,9 +119,9 @@ function parsePCPartPickerHtml(html: string): ProductDraft[] {
 
     if (!nameMatch) continue;
 
-    const category = typeMatch ? stripHtml(typeMatch[1]).trim() : undefined;
-    const title = stripHtml(nameMatch[1]).trim();
-    const priceText = priceMatch ? stripHtml(priceMatch[1]).trim() : '';
+    const category = typeMatch ? htmlToText(typeMatch[1]) : undefined;
+    const title = htmlToText(nameMatch[1]);
+    const priceText = priceMatch ? htmlToText(priceMatch[1]) : '';
     const productUrl = linkMatch?.[1] ? resolveUrl(linkMatch[1]) : undefined;
 
     if (!title) continue;
@@ -190,7 +199,7 @@ function extractBuildName(html: string): string | null {
     html.match(/<title>([^<]*?)(?:\s*-\s*PCPartPicker)?<\/title>/i);
 
   if (titleMatch) {
-    const name = stripHtml(titleMatch[1]).trim();
+    const name = htmlToText(titleMatch[1]);
     if (name && name !== 'PCPartPicker' && name.length > 2) {
       return name;
     }
@@ -211,16 +220,6 @@ function extractCompatibility(html: string): string | null {
   return null;
 }
 
-function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/g, '"');
-}
-
 function parsePrice(text: string): number | null {
   const match = text.match(/\$?([\d,]+\.?\d*)/);
   if (!match) return null;
@@ -229,6 +228,13 @@ function parsePrice(text: string): number | null {
 }
 
 function resolveUrl(path: string): string {
-  if (path.startsWith('http')) return path;
-  return `https://pcpartpicker.com${path}`;
+  try {
+    const resolved = new URL(path, 'https://pcpartpicker.com');
+    if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') {
+      return 'https://pcpartpicker.com/';
+    }
+    return resolved.toString();
+  } catch {
+    return 'https://pcpartpicker.com/';
+  }
 }

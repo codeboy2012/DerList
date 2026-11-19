@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { Browser, BrowserContext, BrowserContextOptions } from '@playwright/test';
 import { SESSION_COOKIE_NAME } from '../../src/lib/auth/constants';
 import { prisma } from '../../src/lib/prisma';
@@ -9,7 +9,7 @@ const configuredBaseUrl =
 const origin = new URL(configuredBaseUrl).origin;
 
 export function uniqueSuffix(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
 }
 
 export async function createTestUser(label: string) {

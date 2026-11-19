@@ -1,3 +1,5 @@
+import { getHttpHostname, isGoogleEncryptedThumbnailHost } from '@/lib/security/url';
+
 /**
  * Product Data Validation Module
  *
@@ -188,8 +190,6 @@ const INVALID_IMAGE_PATTERNS: RegExp[] = [
   /no[-_]?image/i,
   /default[-_]?image/i,
   /coming[-_]?soon/i,
-  // Google encrypted thumbnails (low quality, often wrong)
-  /encrypted-tbn\d*\.gstatic\.com/i,
   // Common logo/icon patterns (not product images)
   /\/favicon/i,
   /\/logo\b/i,
@@ -234,13 +234,19 @@ export function validateTitle(title: string | null | undefined): ValidationResul
 
   // Exact match against known invalid titles
   if (INVALID_TITLE_EXACT.has(lower)) {
-    return { valid: false, reason: `Title "${trimmed}" is a generic/retailer page title, not a product.` };
+    return {
+      valid: false,
+      reason: `Title "${trimmed}" is a generic/retailer page title, not a product.`,
+    };
   }
 
   // Pattern match against invalid title patterns
   for (const pattern of INVALID_TITLE_PATTERNS) {
     if (pattern.test(trimmed)) {
-      return { valid: false, reason: `Title "${trimmed}" matches invalid pattern (likely page title, not product).` };
+      return {
+        valid: false,
+        reason: `Title "${trimmed}" matches invalid pattern (likely page title, not product).`,
+      };
     }
   }
 
@@ -270,7 +276,7 @@ export function validateTitle(title: string | null | undefined): ValidationResul
 export function validatePrice(
   price: number | null | undefined,
   source?: string,
-  confidence?: number,
+  confidence?: number
 ): ValidationResult {
   // Null price is valid — means "price unavailable"
   if (price == null) {
@@ -306,7 +312,10 @@ export function validatePrice(
 
   // Unusually high prices (> $100,000) — flag for review but don't reject
   if (price > 100000) {
-    return { valid: true, reason: `Price $${price.toLocaleString()} is very high — verify this is correct.` };
+    return {
+      valid: true,
+      reason: `Price $${price.toLocaleString()} is very high — verify this is correct.`,
+    };
   }
 
   return { valid: true };
@@ -326,7 +335,7 @@ export function validatePrice(
  */
 export function validateBrand(
   brand: string | null | undefined,
-  retailer?: string | null,
+  retailer?: string | null
 ): ValidationResult {
   // Null/empty brand is valid — not every product has a known brand
   if (!brand || typeof brand !== 'string' || brand.trim().length === 0) {
@@ -393,11 +402,23 @@ export function validateImage(image: string | null | undefined): ValidationResul
   const trimmed = image.trim();
 
   // Must be a valid URL
-  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://') && !trimmed.startsWith('//')) {
+  if (
+    !trimmed.startsWith('http://') &&
+    !trimmed.startsWith('https://') &&
+    !trimmed.startsWith('//')
+  ) {
     if (trimmed.startsWith('data:')) {
       return { valid: false, reason: 'Image is a data URI, not a hosted image.' };
     }
     return { valid: false, reason: `Image URL is invalid: "${trimmed.slice(0, 80)}"` };
+  }
+
+  const hostname = getHttpHostname(trimmed);
+  if (hostname && isGoogleEncryptedThumbnailHost(hostname)) {
+    return {
+      valid: false,
+      reason: 'Image URL is a Google encrypted thumbnail (low quality, often wrong).',
+    };
   }
 
   // Check against known invalid patterns
@@ -435,7 +456,7 @@ export function validateImage(image: string | null | undefined): ValidationResul
  */
 export function validateProduct(
   input: ProductValidationInput,
-  baseConfidence: number = 50,
+  baseConfidence: number = 50
 ): ProductValidationReport {
   const titleResult = validateTitle(input.title);
   const priceResult = validatePrice(input.price);
@@ -493,7 +514,7 @@ export function validateProduct(
 export function sanitizePrice(
   price: number | null | undefined,
   source?: string,
-  confidence?: number,
+  confidence?: number
 ): number | null {
   if (price == null) return null;
   const result = validatePrice(price, source, confidence);
@@ -514,7 +535,7 @@ export function sanitizeTitle(title: string | null | undefined): string | null {
  */
 export function sanitizeBrand(
   brand: string | null | undefined,
-  retailer?: string | null,
+  retailer?: string | null
 ): string | null {
   if (!brand) return null;
   const result = validateBrand(brand, retailer);

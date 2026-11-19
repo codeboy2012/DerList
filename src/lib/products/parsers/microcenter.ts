@@ -1,3 +1,4 @@
+import { htmlToText } from '@/lib/html/text';
 import type { ExtractionResult, RetailerParser } from '../engine/types';
 
 export const microcenterParser: RetailerParser = {
@@ -24,7 +25,7 @@ export const microcenterParser: RetailerParser = {
     const titleMatch =
       html.match(/id=["']productTitle["'][^>]*>([\s\S]*?)<\/h1>/i) ??
       html.match(/<h1[^>]*class=["'][^"']*product-title[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i);
-    if (titleMatch) result.title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
+    if (titleMatch) result.title = htmlToText(titleMatch[1]);
 
     const priceMatch = html.match(/id=["']pricing["'][\s\S]*?\$([0-9,]+\.?\d*)/i);
     if (priceMatch) {
@@ -38,7 +39,7 @@ export const microcenterParser: RetailerParser = {
     if (imgMatch) result.image = imgMatch[1];
 
     const brandMatch = html.match(/Brand:\s*<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>/i);
-    if (brandMatch) result.brand = brandMatch[1].replace(/<[^>]+>/g, '').trim();
+    if (brandMatch) result.brand = htmlToText(brandMatch[1]);
 
     // Stock
     const stockMatch = html.match(

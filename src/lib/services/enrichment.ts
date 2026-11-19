@@ -492,8 +492,16 @@ export class EnrichmentService {
       // Log performance metrics
       const elapsed = Date.now() - startTime;
       if (process.env.NODE_ENV === 'development') {
+        // Structured, JSON-encoded fields cannot inject new log lines or
+        // forge unrelated log entries from an attacker-controlled title.
         console.log(
-          `[Enrichment] ${input.title.slice(0, 40)} | ${elapsed}ms | ${estimatedTokens} max tokens | ${provider.name}`
+          '[Enrichment]',
+          JSON.stringify({
+            title: input.title.slice(0, 40),
+            elapsedMs: elapsed,
+            maxTokens: estimatedTokens,
+            provider: provider.name,
+          })
         );
       }
 

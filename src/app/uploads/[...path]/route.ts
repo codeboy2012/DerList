@@ -18,7 +18,8 @@
  *   browser can still cache within the session.
  */
 
-import { readFile, stat } from 'fs/promises';
+import { constants } from 'fs';
+import { open } from 'fs/promises';
 import { join } from 'path';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -73,11 +74,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pat
     return notFound();
   }
 
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
   try {
-    const fileStat = await stat(resolvedPath.absolutePath);
+    // Open once and use that descriptor for both the metadata check and the
+    // read. Checking a path with stat() and then reopening it allows the file
+    // (or a symlink) to be swapped between the two operations.
+    const flags = constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0);
+    handle = await open(resolvedPath.absolutePath, flags);
+    const fileStat = await handle.stat();
     if (!fileStat.isFile()) return notFound();
 
-    const fileBuffer = await readFile(resolvedPath.absolutePath);
+    const fileBuffer = await handle.readFile();
 
     return new Response(fileBuffer, {
       status: 200,
@@ -98,5 +105,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pat
       });
     }
     return notFound();
+  } finally {
+    await handle?.close().catch(() => undefined);
   }
 }

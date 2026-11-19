@@ -31,6 +31,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { toSafeImageSrc } from '@/lib/security/url';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
@@ -367,6 +368,7 @@ export function ProductEditor({
 
   // Field sources from AI identification
   const fieldSources = aiInfo?.fieldSources ?? {};
+  const safeImagePreview = toSafeImageSrc(image);
 
   // ─── AI Identify ───
 
@@ -629,10 +631,10 @@ export function ProductEditor({
       </div>
 
       {/* Image Preview */}
-      {image && (
+      {safeImagePreview && (
         <div className="relative w-fit">
           <img
-            src={image}
+            src={safeImagePreview}
             alt={title || 'Product'}
             className="border-border h-20 w-20 rounded-lg border object-cover"
           />

@@ -5,15 +5,27 @@
  * Handles coupon filtering, variant prices, and stock status detection.
  */
 
+import { htmlToText } from '@/lib/html/text';
 import type { ExtractionResult, RetailerParser } from '../engine/types';
 
 export const amazonParser: RetailerParser = {
   name: 'Amazon',
   domains: [
-    'amazon.com', 'amazon.co.uk', 'amazon.ca', 'amazon.de',
-    'amazon.fr', 'amazon.it', 'amazon.es', 'amazon.co.jp',
-    'amazon.com.au', 'amazon.in', 'amazon.com.br', 'amazon.nl',
-    'amazon.se', 'amazon.pl', 'amazon.sg',
+    'amazon.com',
+    'amazon.co.uk',
+    'amazon.ca',
+    'amazon.de',
+    'amazon.fr',
+    'amazon.it',
+    'amazon.es',
+    'amazon.co.jp',
+    'amazon.com.au',
+    'amazon.in',
+    'amazon.com.br',
+    'amazon.nl',
+    'amazon.se',
+    'amazon.pl',
+    'amazon.sg',
   ],
   extract(html: string, url: string): ExtractionResult {
     const result: ExtractionResult = {
@@ -77,11 +89,13 @@ export const amazonParser: RetailerParser = {
 function extractAmazonTitle(html: string): string | null {
   // #productTitle is the canonical product title on Amazon
   const match = html.match(/id=["']productTitle["'][^>]*>([\s\S]*?)<\/span>/i);
-  if (match) return match[1].trim();
+  if (match) return htmlToText(match[1]);
 
   // Fallback: h1 with specific classes
-  const h1Match = html.match(/<h1[^>]*class=["'][^"']*a-size-large[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i);
-  if (h1Match) return h1Match[1].trim().replace(/<[^>]+>/g, '');
+  const h1Match = html.match(
+    /<h1[^>]*class=["'][^"']*a-size-large[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i
+  );
+  if (h1Match) return htmlToText(h1Match[1]);
 
   return null;
 }
@@ -163,7 +177,9 @@ function extractAmazonImage(html: string): string | null {
         }
       }
       if (bestUrl) return bestUrl;
-    } catch { /* ignore parse errors */ }
+    } catch {
+      /* ignore parse errors */
+    }
   }
 
   // Fallback: imgBlkFront
@@ -177,15 +193,20 @@ function extractAmazonBrand(html: string): string | null {
   // bylineInfo link
   const bylineMatch = html.match(/id=["']bylineInfo["'][^>]*>([\s\S]*?)<\/a>/i);
   if (bylineMatch) {
-    const text = bylineMatch[1].replace(/<[^>]+>/g, '').trim();
+    const text = htmlToText(bylineMatch[1]);
     // Remove "Visit the X Store" or "Brand: X" prefixes
-    return text.replace(/^(Visit the |Brand:\s*)/i, '').replace(/\s*Store$/i, '').trim() || null;
+    return (
+      text
+        .replace(/^(Visit the |Brand:\s*)/i, '')
+        .replace(/\s*Store$/i, '')
+        .trim() || null
+    );
   }
 
   // Brand row in product details
   const brandRowMatch = html.match(/Brand<\/th>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>/i);
   if (brandRowMatch) {
-    return brandRowMatch[1].replace(/<[^>]+>/g, '').trim() || null;
+    return htmlToText(brandRowMatch[1]) || null;
   }
 
   return null;
@@ -197,11 +218,16 @@ function extractAsin(url: string): string | null {
   return match ? match[1] : null;
 }
 
-function extractAmazonStock(html: string): { inStock: boolean | null; availability: string | null } {
+function extractAmazonStock(html: string): {
+  inStock: boolean | null;
+  availability: string | null;
+} {
   // Check #availability span
-  const availMatch = html.match(/id=["']availability["'][^>]*>[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/i);
+  const availMatch = html.match(
+    /id=["']availability["'][^>]*>[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/i
+  );
   if (availMatch) {
-    const text = availMatch[1].trim().replace(/<[^>]+>/g, '').trim().toLowerCase();
+    const text = htmlToText(availMatch[1]).toLowerCase();
     if (text.includes('in stock')) return { inStock: true, availability: 'In Stock' };
     if (text.includes('currently unavailable') || text.includes('out of stock')) {
       return { inStock: false, availability: 'Out of Stock' };

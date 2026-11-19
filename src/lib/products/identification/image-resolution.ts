@@ -19,7 +19,13 @@
 
 import { getProviderManager } from '@/lib/providers';
 import type { SearchResult } from '@/lib/providers/types';
-import { safeFetch } from '@/lib/security/safe-fetch';
+import { assertSafeUrl, safeFetch } from '@/lib/security/safe-fetch';
+import {
+  getHttpHostname,
+  isGoogleEncryptedThumbnailHost,
+  isUrlOnDomain,
+  normalizeProtocolRelativeUrl,
+} from '@/lib/security/url';
 import { importLog } from './logging';
 import { getKeepaImageCandidates } from './providers/keepa-image-provider';
 
@@ -69,49 +75,15 @@ export interface ImageResolutionResult {
 // SSRF Protection
 // ─────────────────────────────────────────────────────────────────────────────
 
-const BLOCKED_HOSTNAME_PATTERNS = [
-  /^localhost$/i,
-  /^127\.\d+\.\d+\.\d+$/,
-  /^10\.\d+\.\d+\.\d+$/,
-  /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/,
-  /^192\.168\.\d+\.\d+$/,
-  /^0\.0\.0\.0$/,
-  /^::1$/,
-  /^fc[0-9a-f]{2}:/i,
-  /^fd[0-9a-f]{2}:/i,
-  /^fe80:/i,
-  /^169\.254\.\d+\.\d+$/,
-  /\.local$/i,
-  /\.internal$/i,
-  /^metadata\.google\.internal$/i,
-  /^metadata\.google$/i,
-];
-
 /**
  * Validate that a URL is safe to fetch (not internal/private).
+ *
+ * This delegates to the same structural policy used by the actual fetcher so
+ * the two checks cannot drift apart.
  */
 export function isSsrfSafe(url: string): boolean {
   try {
-    const parsed = new URL(url.startsWith('//') ? `https:${url}` : url);
-    const hostname = parsed.hostname.toLowerCase();
-
-    // Must be http or https
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
-
-    // Remove IPv6 brackets for pattern matching
-    const cleanHostname = hostname.replace(/^\[|\]$/g, '');
-
-    // Check blocked patterns
-    for (const pattern of BLOCKED_HOSTNAME_PATTERNS) {
-      if (pattern.test(cleanHostname)) return false;
-    }
-
-    // Block non-standard ports commonly used for internal services
-    const port = parsed.port ? parseInt(parsed.port, 10) : null;
-    if (port && port !== 80 && port !== 443 && (port < 8000 || port > 9999)) {
-      return false;
-    }
-
+    assertSafeUrl(normalizeProtocolRelativeUrl(url));
     return true;
   } catch {
     return false;
@@ -123,7 +95,6 @@ export function isSsrfSafe(url: string): boolean {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const REJECT_PATTERNS: RegExp[] = [
-  /encrypted-tbn\d*\.gstatic\.com/i,
   /\/favicon/i,
   /\/logo\b/i,
   /\/icon\b/i,
@@ -191,8 +162,9 @@ export function validateImageUrl(url: string | null | undefined): boolean {
   }
 
   try {
-    const hostname = new URL(trimmed.startsWith('//') ? `https:${trimmed}` : trimmed).hostname;
-    if (REJECT_DOMAINS.has(hostname)) return false;
+    const hostname = getHttpHostname(trimmed);
+    if (!hostname) return false;
+    if (REJECT_DOMAINS.has(hostname) || isGoogleEncryptedThumbnailHost(hostname)) return false;
   } catch {
     return false;
   }
@@ -333,7 +305,10 @@ function scoreCandidate(candidate: ImageCandidate, input: ImageResolutionInput):
 
   if (isTrustedDomain(candidate.url)) score += 15;
 
-  if (input.retailer?.toLowerCase() === 'amazon' && candidate.url.includes('media-amazon.com')) {
+  if (
+    input.retailer?.toLowerCase() === 'amazon' &&
+    isUrlOnDomain(candidate.url, 'media-amazon.com')
+  ) {
     score += 30;
   }
 

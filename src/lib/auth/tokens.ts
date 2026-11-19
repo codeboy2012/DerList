@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes, scryptSync } from 'crypto';
 import { EmailTokenType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { siteConfig } from '@/lib/site-config';
@@ -9,8 +9,39 @@ export const EMAIL_TOKEN_TTL_MS: Record<EmailTokenType, number> = {
   EMAIL_VERIFICATION: 24 * 60 * 60 * 1000,
 };
 
-/** SHA-256 is sufficient here: tokens are 256 bits of random data. */
+/**
+ * Token digests use scrypt rather than a single fast hash.
+ *
+ * Tokens are 256 bits of random data, so a fast hash would already make
+ * guessing infeasible. The deliberately expensive KDF is defence in depth: it
+ * keeps the stored digest resistant even if a future caller ever issues a
+ * lower-entropy token, and it satisfies the same storage contract as password
+ * hashing without storing the raw credential.
+ *
+ * The salt is derived from the token itself. That keeps lookup deterministic
+ * (the server receives only the raw token) while ensuring identical raw tokens
+ * cannot be compared across databases through a shared rainbow table.
+ */
+const SCRYPT_OPTIONS = { N: 32_768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 } as const;
+
+function tokenSalt(token: string): Buffer {
+  return createHash('sha256')
+    .update('derlist:email-token-salt:v1\0')
+    .update(token)
+    .digest()
+    .subarray(0, 16);
+}
+
 export function hashEmailToken(token: string): string {
+  return scryptSync(token, tokenSalt(token), 32, SCRYPT_OPTIONS).toString('hex');
+}
+
+/**
+ * Digest format used before the scrypt migration. Kept only so reset and
+ * verification links issued immediately before a deployment continue to work.
+ * Any record found this way is upgraded in place; new records never use it.
+ */
+function legacyHashEmailToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
@@ -33,14 +64,43 @@ export async function issueEmailToken(userId: string, type: EmailTokenType): Pro
   return token;
 }
 
+async function findTokenRecord(rawToken: string) {
+  const tokenHash = hashEmailToken(rawToken);
+  const current = await prisma.emailToken.findUnique({
+    where: { tokenHash },
+    select: { id: true, userId: true, type: true, expiresAt: true, usedAt: true },
+  });
+  if (current) return current;
+
+  const legacyHash = legacyHashEmailToken(rawToken);
+  if (legacyHash === tokenHash) return null;
+
+  const legacy = await prisma.emailToken.findUnique({
+    where: { tokenHash: legacyHash },
+    select: { id: true, userId: true, type: true, expiresAt: true, usedAt: true },
+  });
+  if (!legacy) return null;
+
+  // Upgrade the stored digest so the next lookup uses scrypt. If another
+  // request wins the race, the unique constraint simply leaves the existing
+  // upgraded record in place.
+  try {
+    await prisma.emailToken.update({
+      where: { id: legacy.id },
+      data: { tokenHash },
+    });
+  } catch {
+    // A concurrent upgrade already replaced it; continue with the record.
+  }
+
+  return legacy;
+}
+
 /** Look up an unused, unexpired token without consuming it. */
 export async function findEmailToken(rawToken: string, type: EmailTokenType) {
   if (!rawToken) return null;
 
-  const record = await prisma.emailToken.findUnique({
-    where: { tokenHash: hashEmailToken(rawToken) },
-    select: { id: true, userId: true, type: true, expiresAt: true, usedAt: true },
-  });
+  const record = await findTokenRecord(rawToken);
 
   if (!record || record.type !== type || record.usedAt || record.expiresAt <= new Date()) {
     return null;

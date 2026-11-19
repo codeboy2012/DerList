@@ -1,3 +1,4 @@
+import { htmlToText } from '@/lib/html/text';
 import type { ExtractionResult, RetailerParser } from '../engine/types';
 
 export const neweggParser: RetailerParser = {
@@ -23,7 +24,7 @@ export const neweggParser: RetailerParser = {
 
     // Title
     const titleMatch = html.match(/class=["'][^"']*product-title[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i);
-    if (titleMatch) result.title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
+    if (titleMatch) result.title = htmlToText(titleMatch[1]);
 
     // Price — price-current with strong tag or dollar sign
     const priceMatch = html.match(
@@ -47,7 +48,7 @@ export const neweggParser: RetailerParser = {
 
     // Brand
     const brandMatch = html.match(/Brand<\/td>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>/i);
-    if (brandMatch) result.brand = brandMatch[1].replace(/<[^>]+>/g, '').trim();
+    if (brandMatch) result.brand = htmlToText(brandMatch[1]);
 
     // Item number (SKU)
     const itemMatch =

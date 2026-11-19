@@ -5,10 +5,11 @@
  */
 
 import { importProductFromUrl } from '@/lib/products';
+import { isUrlOnDomain, parseHttpUrl } from '@/lib/security/url';
 import type { DetectResult, Importer, ImportResult } from './types';
 
-const NEWEGG_PATTERN = /^https?:\/\/(www\.)?newegg\.com/i;
-const ITEM_PATTERN = /\/p\/([A-Z0-9-]+)/i;
+const NEWEGG_DOMAINS = ['newegg.com', 'newegg.ca'] as const;
+const ITEM_PATTERN = /^\/p\/([A-Z0-9-]+)/i;
 
 export const NeweggImporter: Importer = {
   id: 'newegg',
@@ -16,7 +17,7 @@ export const NeweggImporter: Importer = {
 
   detect(input: string): DetectResult {
     const trimmed = input.trim();
-    if (NEWEGG_PATTERN.test(trimmed)) {
+    if (NEWEGG_DOMAINS.some((domain) => isUrlOnDomain(trimmed, domain))) {
       return { match: true, confidence: 90 };
     }
     return { match: false, confidence: 0 };
@@ -24,7 +25,8 @@ export const NeweggImporter: Importer = {
 
   async extract(input: string): Promise<ImportResult> {
     const url = input.trim();
-    const itemMatch = url.match(ITEM_PATTERN);
+    const parsed = parseHttpUrl(url);
+    const itemMatch = parsed?.pathname.match(ITEM_PATTERN);
     const itemNumber = itemMatch?.[1] ?? undefined;
 
     const result = await importProductFromUrl(url);

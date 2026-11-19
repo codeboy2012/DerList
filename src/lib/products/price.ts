@@ -6,6 +6,8 @@
  * of regex patterns matching review counts, FPS values, or accessory prices.
  */
 
+import { isHostnameForDomain } from '@/lib/security/url';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -96,10 +98,7 @@ function collectJsonLdPriceCandidates(html: string, candidates: PriceCandidate[]
   }
 }
 
-function extractPriceFromJsonLdObject(
-  data: unknown,
-  candidates: PriceCandidate[],
-): void {
+function extractPriceFromJsonLdObject(data: unknown, candidates: PriceCandidate[]): void {
   if (!data || typeof data !== 'object') return;
 
   const obj = data as Record<string, unknown>;
@@ -200,11 +199,26 @@ function collectMicrodataPriceCandidates(html: string, candidates: PriceCandidat
 // 3. Amazon-Specific Price Extraction
 // ─────────────────────────────────────────────────────────────────────────────
 
+const AMAZON_DOMAINS = [
+  'amazon.com',
+  'amazon.co.uk',
+  'amazon.ca',
+  'amazon.de',
+  'amazon.fr',
+  'amazon.es',
+  'amazon.it',
+  'amazon.co.jp',
+  'amazon.com.au',
+  'amazon.in',
+  'amazon.com.br',
+  'amazon.nl',
+  'amazon.se',
+  'amazon.pl',
+  'amazon.sg',
+];
+
 function isAmazonDomain(domain: string | null): boolean {
-  if (!domain) return false;
-  return /amazon\.(com|co\.uk|ca|de|fr|es|it|co\.jp|com\.au|in|com\.br|nl|se|pl|sg)/i.test(
-    domain,
-  );
+  return AMAZON_DOMAINS.some((candidate) => isHostnameForDomain(domain, candidate));
 }
 
 function collectAmazonPriceCandidates(html: string, candidates: PriceCandidate[]): void {
@@ -213,7 +227,7 @@ function collectAmazonPriceCandidates(html: string, candidates: PriceCandidate[]
 
   // High confidence: priceToPay section
   const priceToPayMatch = html.match(
-    /class=["'][^"']*priceToPay[^"']*["'][^>]*>[\s\S]*?<span[^>]*class=["']a-offscreen["'][^>]*>\s*\$([0-9,]+\.?[0-9]*)/i,
+    /class=["'][^"']*priceToPay[^"']*["'][^>]*>[\s\S]*?<span[^>]*class=["']a-offscreen["'][^>]*>\s*\$([0-9,]+\.?[0-9]*)/i
   );
   if (priceToPayMatch) {
     const price = parseFloat(priceToPayMatch[1].replace(/,/g, ''));
@@ -229,7 +243,7 @@ function collectAmazonPriceCandidates(html: string, candidates: PriceCandidate[]
 
   // corePriceDisplay_desktop_feature_div section
   const corePriceDesktopMatch = html.match(
-    /id=["']corePriceDisplay_desktop_feature_div["'][\s\S]*?<span[^>]*class=["']a-offscreen["'][^>]*>\s*\$([0-9,]+\.?[0-9]*)/i,
+    /id=["']corePriceDisplay_desktop_feature_div["'][\s\S]*?<span[^>]*class=["']a-offscreen["'][^>]*>\s*\$([0-9,]+\.?[0-9]*)/i
   );
   if (corePriceDesktopMatch) {
     const price = parseFloat(corePriceDesktopMatch[1].replace(/,/g, ''));
@@ -245,7 +259,7 @@ function collectAmazonPriceCandidates(html: string, candidates: PriceCandidate[]
 
   // corePrice_feature_div section
   const coreFeatureMatch = html.match(
-    /id=["']corePrice_feature_div["'][\s\S]*?<span[^>]*class=["']a-offscreen["'][^>]*>\s*\$([0-9,]+\.?[0-9]*)/i,
+    /id=["']corePrice_feature_div["'][\s\S]*?<span[^>]*class=["']a-offscreen["'][^>]*>\s*\$([0-9,]+\.?[0-9]*)/i
   );
   if (coreFeatureMatch) {
     const price = parseFloat(coreFeatureMatch[1].replace(/,/g, ''));
@@ -261,7 +275,7 @@ function collectAmazonPriceCandidates(html: string, candidates: PriceCandidate[]
 
   // price_inside_buybox section
   const buyboxMatch = html.match(
-    /id=["']price_inside_buybox["'][\s\S]*?<span[^>]*class=["']a-offscreen["'][^>]*>\s*\$([0-9,]+\.?[0-9]*)/i,
+    /id=["']price_inside_buybox["'][\s\S]*?<span[^>]*class=["']a-offscreen["'][^>]*>\s*\$([0-9,]+\.?[0-9]*)/i
   );
   if (buyboxMatch) {
     const price = parseFloat(buyboxMatch[1].replace(/,/g, ''));
@@ -279,12 +293,8 @@ function collectAmazonPriceCandidates(html: string, candidates: PriceCandidate[]
   // Only match if NOT inside customerReviews or similar sections
   const buyBoxSection = extractBuyBoxSection(html);
   if (buyBoxSection) {
-    const wholeMatch = buyBoxSection.match(
-      /class=["']a-price-whole["'][^>]*>([0-9,]+)/i,
-    );
-    const fractionMatch = buyBoxSection.match(
-      /class=["']a-price-fraction["'][^>]*>([0-9]+)/i,
-    );
+    const wholeMatch = buyBoxSection.match(/class=["']a-price-whole["'][^>]*>([0-9,]+)/i);
+    const fractionMatch = buyBoxSection.match(/class=["']a-price-fraction["'][^>]*>([0-9]+)/i);
     if (wholeMatch) {
       const whole = wholeMatch[1].replace(/,/g, '');
       const fraction = fractionMatch ? fractionMatch[1] : '00';
@@ -330,99 +340,124 @@ function extractBuyBoxSection(html: string): string | null {
 function collectRetailerPriceCandidates(
   html: string,
   domain: string | null,
-  candidates: PriceCandidate[],
+  candidates: PriceCandidate[]
 ): void {
   if (!domain) return;
 
-  const lowerDomain = domain.toLowerCase();
-
   // Best Buy
-  if (lowerDomain.includes('bestbuy.com')) {
+  if (isHostnameForDomain(domain, 'bestbuy.com')) {
     const match = html.match(
-      /class=["'][^"']*priceView-hero-price[^"']*["'][^>]*>[\s\S]*?\$([0-9,]+\.?[0-9]*)/i,
+      /class=["'][^"']*priceView-hero-price[^"']*["'][^>]*>[\s\S]*?\$([0-9,]+\.?[0-9]*)/i
     );
     if (match) {
       const price = parseFloat(match[1].replace(/,/g, ''));
       if (!isNaN(price) && price > 0) {
-        candidates.push({ value: price, source: 'bestbuy-hero-price', confidence: 92, currency: 'USD' });
+        candidates.push({
+          value: price,
+          source: 'bestbuy-hero-price',
+          confidence: 92,
+          currency: 'USD',
+        });
       }
     }
   }
 
   // Newegg
-  if (lowerDomain.includes('newegg.com')) {
+  if (isHostnameForDomain(domain, 'newegg.com')) {
     const match = html.match(
-      /class=["'][^"']*price-current[^"']*["'][^>]*>[\s\S]*?\$([0-9,]+\.?[0-9]*)/i,
+      /class=["'][^"']*price-current[^"']*["'][^>]*>[\s\S]*?\$([0-9,]+\.?[0-9]*)/i
     );
     if (match) {
       const price = parseFloat(match[1].replace(/,/g, ''));
       if (!isNaN(price) && price > 0) {
-        candidates.push({ value: price, source: 'newegg-price-current', confidence: 92, currency: 'USD' });
+        candidates.push({
+          value: price,
+          source: 'newegg-price-current',
+          confidence: 92,
+          currency: 'USD',
+        });
       }
     }
   }
 
   // Walmart
-  if (lowerDomain.includes('walmart.com')) {
-    const match = html.match(
-      /itemprop=["']price["'][^>]*content=["']([0-9]+\.?[0-9]*)["']/i,
-    );
+  if (isHostnameForDomain(domain, 'walmart.com')) {
+    const match = html.match(/itemprop=["']price["'][^>]*content=["']([0-9]+\.?[0-9]*)["']/i);
     if (match) {
       const price = parseFloat(match[1]);
       if (!isNaN(price) && price > 0) {
-        candidates.push({ value: price, source: 'walmart-itemprop', confidence: 92, currency: 'USD' });
+        candidates.push({
+          value: price,
+          source: 'walmart-itemprop',
+          confidence: 92,
+          currency: 'USD',
+        });
       }
     }
   }
 
   // Target
-  if (lowerDomain.includes('target.com')) {
-    const match = html.match(
-      /data-test=["']product-price["'][^>]*>\s*\$([0-9,]+\.?[0-9]*)/i,
-    );
+  if (isHostnameForDomain(domain, 'target.com')) {
+    const match = html.match(/data-test=["']product-price["'][^>]*>\s*\$([0-9,]+\.?[0-9]*)/i);
     if (match) {
       const price = parseFloat(match[1].replace(/,/g, ''));
       if (!isNaN(price) && price > 0) {
-        candidates.push({ value: price, source: 'target-product-price', confidence: 91, currency: 'USD' });
+        candidates.push({
+          value: price,
+          source: 'target-product-price',
+          confidence: 91,
+          currency: 'USD',
+        });
       }
     }
   }
 
   // Apple
-  if (lowerDomain.includes('apple.com')) {
+  if (isHostnameForDomain(domain, 'apple.com')) {
     const match = html.match(
-      /class=["'][^"']*(?:rc-prices-currentprice|as-price-currentprice)[^"']*["'][^>]*>\s*\$([0-9,]+\.?[0-9]*)/i,
+      /class=["'][^"']*(?:rc-prices-currentprice|as-price-currentprice)[^"']*["'][^>]*>\s*\$([0-9,]+\.?[0-9]*)/i
     );
     if (match) {
       const price = parseFloat(match[1].replace(/,/g, ''));
       if (!isNaN(price) && price > 0) {
-        candidates.push({ value: price, source: 'apple-current-price', confidence: 91, currency: 'USD' });
+        candidates.push({
+          value: price,
+          source: 'apple-current-price',
+          confidence: 91,
+          currency: 'USD',
+        });
       }
     }
   }
 
   // B&H Photo
-  if (lowerDomain.includes('bhphotovideo.com')) {
-    const match = html.match(
-      /data-selenium=["']pricingPrice["'][^>]*>\s*\$([0-9,]+\.?[0-9]*)/i,
-    );
+  if (isHostnameForDomain(domain, 'bhphotovideo.com')) {
+    const match = html.match(/data-selenium=["']pricingPrice["'][^>]*>\s*\$([0-9,]+\.?[0-9]*)/i);
     if (match) {
       const price = parseFloat(match[1].replace(/,/g, ''));
       if (!isNaN(price) && price > 0) {
-        candidates.push({ value: price, source: 'bh-pricing-price', confidence: 90, currency: 'USD' });
+        candidates.push({
+          value: price,
+          source: 'bh-pricing-price',
+          confidence: 90,
+          currency: 'USD',
+        });
       }
     }
   }
 
   // Micro Center
-  if (lowerDomain.includes('microcenter.com')) {
-    const match = html.match(
-      /id=["']pricing["'][\s\S]*?\$([0-9,]+\.?[0-9]*)/i,
-    );
+  if (isHostnameForDomain(domain, 'microcenter.com')) {
+    const match = html.match(/id=["']pricing["'][\s\S]*?\$([0-9,]+\.?[0-9]*)/i);
     if (match) {
       const price = parseFloat(match[1].replace(/,/g, ''));
       if (!isNaN(price) && price > 0) {
-        candidates.push({ value: price, source: 'microcenter-pricing', confidence: 90, currency: 'USD' });
+        candidates.push({
+          value: price,
+          source: 'microcenter-pricing',
+          confidence: 90,
+          currency: 'USD',
+        });
       }
     }
   }
@@ -447,7 +482,7 @@ function collectOgPriceCandidates(html: string, candidates: PriceCandidate[]): v
       if (!isNaN(price) && price > 0) {
         // Detect currency from companion meta tag
         const currencyMatch = html.match(
-          /property=["'](?:og:price:currency|product:price:currency)["'][^>]*content=["']([A-Z]{3})["']/i,
+          /property=["'](?:og:price:currency|product:price:currency)["'][^>]*content=["']([A-Z]{3})["']/i
         );
         candidates.push({
           value: price,

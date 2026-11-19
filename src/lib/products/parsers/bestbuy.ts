@@ -1,3 +1,4 @@
+import { htmlToText } from '@/lib/html/text';
 import type { ExtractionResult, RetailerParser } from '../engine/types';
 
 export const bestbuyParser: RetailerParser = {
@@ -25,7 +26,7 @@ export const bestbuyParser: RetailerParser = {
     const titleMatch =
       html.match(/<h1[^>]*class=["'][^"']*heading-5[^"']*["'][^>]*>([\s\S]*?)<\/h1>/i) ??
       html.match(/class=["'][^"']*sku-title[^"']*["'][^>]*>[\s\S]*?<h1[^>]*>([\s\S]*?)<\/h1>/i);
-    if (titleMatch) result.title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
+    if (titleMatch) result.title = htmlToText(titleMatch[1]);
 
     // Price — priceView-hero-price or priceView-customer-price
     const priceMatch = html.match(

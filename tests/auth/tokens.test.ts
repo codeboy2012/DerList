@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   buildEmailLink,
@@ -72,6 +73,28 @@ describe.skipIf(!hasDatabase)('email tokens', () => {
 
     await expect(findEmailToken(token, 'EMAIL_VERIFICATION')).resolves.toBeNull();
     await expect(consumeEmailToken(token, 'EMAIL_VERIFICATION')).resolves.toBeNull();
+  });
+
+  it('accepts and upgrades a legacy SHA-256 token record', async () => {
+    const token = randomBytes(32).toString('hex');
+    const legacyHash = createHash('sha256').update(token).digest('hex');
+    await prisma.emailToken.create({
+      data: {
+        userId,
+        type: 'PASSWORD_RESET',
+        tokenHash: legacyHash,
+        expiresAt: new Date(Date.now() + 60_000),
+      },
+    });
+
+    await expect(findEmailToken(token, 'PASSWORD_RESET')).resolves.toMatchObject({ userId });
+
+    const upgraded = await prisma.emailToken.findUnique({ where: { tokenHash: legacyHash } });
+    expect(upgraded).toBeNull();
+    const current = await prisma.emailToken.findUnique({
+      where: { tokenHash: hashEmailToken(token) },
+    });
+    expect(current?.userId).toBe(userId);
   });
 
   it('builds absolute links on the configured site origin', () => {

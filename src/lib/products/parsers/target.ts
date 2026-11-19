@@ -1,3 +1,4 @@
+import { htmlToText } from '@/lib/html/text';
 import type { ExtractionResult, RetailerParser } from '../engine/types';
 
 export const targetParser: RetailerParser = {
@@ -22,7 +23,7 @@ export const targetParser: RetailerParser = {
     };
 
     const titleMatch = html.match(/data-test=["']product-title["'][^>]*>([\s\S]*?)<\/[^>]+>/i);
-    if (titleMatch) result.title = titleMatch[1].replace(/<[^>]+>/g, '').trim();
+    if (titleMatch) result.title = htmlToText(titleMatch[1]);
 
     const priceMatch =
       html.match(/data-test=["']product-price["'][^>]*>\s*\$([0-9,]+\.?\d*)/i) ??

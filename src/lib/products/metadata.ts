@@ -12,6 +12,7 @@
  * Priority: JSON-LD > OpenGraph > Twitter > meta > HTML fallback
  */
 
+import { decodeHtmlEntitiesOnce, htmlToText } from '@/lib/html/text';
 import { extractBestPrice } from './price';
 
 export interface ExtractedMetadata {
@@ -109,14 +110,13 @@ function extractJsonLd(html: string): Record<string, unknown> | null {
 
       // Handle @graph arrays
       if (data['@graph'] && Array.isArray(data['@graph'])) {
-        const product = data['@graph'].find(
-          (item: Record<string, unknown>) => {
-            const type = item['@type'];
-            if (typeof type === 'string') return type === 'Product' || type.includes('Product');
-            if (Array.isArray(type)) return type.some((t: string) => t === 'Product' || t.includes('Product'));
-            return false;
-          },
-        );
+        const product = data['@graph'].find((item: Record<string, unknown>) => {
+          const type = item['@type'];
+          if (typeof type === 'string') return type === 'Product' || type.includes('Product');
+          if (Array.isArray(type))
+            return type.some((t: string) => t === 'Product' || t.includes('Product'));
+          return false;
+        });
         if (product) return product as Record<string, unknown>;
       }
 
@@ -135,7 +135,10 @@ function extractJsonLd(html: string): Record<string, unknown> | null {
       if (typeof type === 'string' && (type === 'Product' || type.includes('Product'))) {
         return data as Record<string, unknown>;
       }
-      if (Array.isArray(type) && type.some((t: string) => t === 'Product' || t.includes('Product'))) {
+      if (
+        Array.isArray(type) &&
+        type.some((t: string) => t === 'Product' || t.includes('Product'))
+      ) {
         return data as Record<string, unknown>;
       }
     } catch {
@@ -152,7 +155,12 @@ function applyJsonLd(result: ExtractedMetadata, data: Record<string, unknown>): 
   result.brand = extractBrand(data) ?? result.brand;
   result.sku = asString(data.sku) ?? result.sku;
   result.mpn = asString(data.mpn) ?? result.mpn;
-  result.gtin = asString(data.gtin13) ?? asString(data.gtin12) ?? asString(data.gtin) ?? asString(data.isbn) ?? result.gtin;
+  result.gtin =
+    asString(data.gtin13) ??
+    asString(data.gtin12) ??
+    asString(data.gtin) ??
+    asString(data.isbn) ??
+    result.gtin;
 
   // Image — handle all formats
   const images = extractJsonLdImages(data);
@@ -261,8 +269,10 @@ function extractOpenGraph(html: string): Record<string, string> {
 
 function applyOpenGraph(result: ExtractedMetadata, og: Record<string, string>): void {
   if (!result.title && og['og:title']) result.title = decodeHtmlEntities(og['og:title']);
-  if (!result.description && og['og:description']) result.description = decodeHtmlEntities(og['og:description']);
-  if (!result.retailer && og['og:site_name']) result.retailer = decodeHtmlEntities(og['og:site_name']);
+  if (!result.description && og['og:description'])
+    result.description = decodeHtmlEntities(og['og:description']);
+  if (!result.retailer && og['og:site_name'])
+    result.retailer = decodeHtmlEntities(og['og:site_name']);
 
   // Image — og:image is very reliable
   if (!result.image && og['og:image']) {
@@ -289,8 +299,10 @@ function applyOpenGraph(result: ExtractedMetadata, og: Record<string, string>): 
 
 function extractTwitterCard(html: string): Record<string, string> {
   const tags: Record<string, string> = {};
-  const regex1 = /<meta[^>]*(?:name|property)=["'](twitter:[^"']+)["'][^>]*content=["']([^"']*)["'][^>]*\/?>/gi;
-  const regex2 = /<meta[^>]*content=["']([^"']*)["'][^>]*(?:name|property)=["'](twitter:[^"']+)["'][^>]*\/?>/gi;
+  const regex1 =
+    /<meta[^>]*(?:name|property)=["'](twitter:[^"']+)["'][^>]*content=["']([^"']*)["'][^>]*\/?>/gi;
+  const regex2 =
+    /<meta[^>]*content=["']([^"']*)["'][^>]*(?:name|property)=["'](twitter:[^"']+)["'][^>]*\/?>/gi;
 
   let match;
   while ((match = regex1.exec(html)) !== null) tags[match[1]] = match[2];
@@ -301,7 +313,8 @@ function extractTwitterCard(html: string): Record<string, string> {
 
 function applyTwitterCard(result: ExtractedMetadata, tw: Record<string, string>): void {
   if (!result.title && tw['twitter:title']) result.title = decodeHtmlEntities(tw['twitter:title']);
-  if (!result.description && tw['twitter:description']) result.description = decodeHtmlEntities(tw['twitter:description']);
+  if (!result.description && tw['twitter:description'])
+    result.description = decodeHtmlEntities(tw['twitter:description']);
   if (!result.image && tw['twitter:image']) {
     const img = tw['twitter:image'];
     if (isValidImageUrl(img)) result.image = img;
@@ -315,20 +328,28 @@ function applyTwitterCard(result: ExtractedMetadata, tw: Record<string, string>)
 function applyProductMeta(result: ExtractedMetadata, html: string): void {
   // product:brand
   if (!result.brand) {
-    result.brand = extractMetaProperty(html, 'product:brand') ?? extractMetaProperty(html, 'og:brand') ?? null;
+    result.brand =
+      extractMetaProperty(html, 'product:brand') ?? extractMetaProperty(html, 'og:brand') ?? null;
   }
   // product:availability
   if (result.inStock == null) {
     const avail = extractMetaProperty(html, 'product:availability');
     if (avail) {
-      result.inStock = avail.toLowerCase().includes('instock') || avail.toLowerCase() === 'in stock';
+      result.inStock =
+        avail.toLowerCase().includes('instock') || avail.toLowerCase() === 'in stock';
     }
   }
 }
 
 function extractMetaProperty(html: string, property: string): string | null {
-  const regex1 = new RegExp(`<meta[^>]*property=["']${property}["'][^>]*content=["']([^"']*)["'][^>]*/?>`, 'i');
-  const regex2 = new RegExp(`<meta[^>]*content=["']([^"']*)["'][^>]*property=["']${property}["'][^>]*/?>`, 'i');
+  const regex1 = new RegExp(
+    `<meta[^>]*property=["']${property}["'][^>]*content=["']([^"']*)["'][^>]*/?>`,
+    'i'
+  );
+  const regex2 = new RegExp(
+    `<meta[^>]*content=["']([^"']*)["'][^>]*property=["']${property}["'][^>]*/?>`,
+    'i'
+  );
   const match = html.match(regex1) ?? html.match(regex2);
   return match ? decodeHtmlEntities(match[1]) : null;
 }
@@ -343,7 +364,9 @@ function extractFallbackImage(html: string): string | null {
   if (metaImage && isValidImageUrl(metaImage)) return metaImage;
 
   // Try link rel="image_src"
-  const linkMatch = html.match(/<link[^>]*rel=["']image_src["'][^>]*href=["']([^"']+)["'][^>]*\/?>/i);
+  const linkMatch = html.match(
+    /<link[^>]*rel=["']image_src["'][^>]*href=["']([^"']+)["'][^>]*\/?>/i
+  );
   if (linkMatch && isValidImageUrl(linkMatch[1])) return linkMatch[1];
 
   // Find large product images in HTML (heuristic: look for img tags with product-related attributes)
@@ -402,17 +425,17 @@ function extractFallbackImage(html: string): string | null {
 
 function extractHtmlTitle(html: string): string | null {
   const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  return match ? decodeHtmlEntities(match[1].trim()) : null;
+  return match ? htmlToText(match[1]) || null : null;
 }
 
 function extractMetaContent(html: string, name: string): string | null {
   const regex = new RegExp(
     `<meta[^>]*name=["']${name}["'][^>]*content=["']([^"']*)["'][^>]*/?>`,
-    'i',
+    'i'
   );
   const regex2 = new RegExp(
     `<meta[^>]*content=["']([^"']*)["'][^>]*name=["']${name}["'][^>]*/?>`,
-    'i',
+    'i'
   );
   const match = html.match(regex) ?? html.match(regex2);
   return match ? decodeHtmlEntities(match[1]) : null;
@@ -428,15 +451,10 @@ function asString(value: unknown): string | null {
 }
 
 function decodeHtmlEntities(str: string): string {
-  return str
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&#x27;/g, "'")
-    .replace(/&#x2F;/g, '/')
-    .replace(/&#(\d+);/g, (_, num) => String.fromCharCode(parseInt(num, 10)));
+  // Exactly one decoding pass: `&amp;lt;` becomes the literal text `&lt;`,
+  // never `<`. Re-decoding here would turn attacker-controlled metadata into
+  // markup that later consumers might trust.
+  return decodeHtmlEntitiesOnce(str);
 }
 
 function isValidImageUrl(url: string): boolean {
