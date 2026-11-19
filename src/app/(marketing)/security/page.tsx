@@ -37,9 +37,9 @@ const practices = [
   },
   {
     icon: Shield,
-    title: 'Invite-Only Access',
+    title: 'Rate-Limited Public Registration',
     description:
-      'No public registration. Accounts are created only through administrator invitations or approved beta access requests. This prevents spam and unauthorized access during beta.',
+      'Anyone can create an account during the Open Beta. Registration requests are rate-limited per IP address and per email, sessions are issued only after validation, and accounts can be disabled by an administrator.',
   },
   {
     icon: Database,

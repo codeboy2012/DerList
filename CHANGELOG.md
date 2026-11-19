@@ -7,6 +7,122 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.14.0] - 2026-11-19
+
+**Open Beta — public registration**
+
+> **Status:** released. This is the Open Beta release announcement.
+
+### Added
+
+#### Public registration
+
+- Registration is open to everyone at `/register`; no invite code, administrator approval,
+  allowlist or waitlist is consulted.
+- **Username registration:** choose a username, an email address and a password. Usernames are
+  3–32 characters, may contain letters, numbers, hyphens and underscores, start and end with a
+  letter or number, and are stored lowercase.
+- **Email registration:** register with an email address and password; a valid username is
+  generated from the address and can be changed later in Settings → Profile.
+- Both methods create the same account shape, establish a session immediately and redirect to
+  `/dashboard?welcome=1`.
+- Case-insensitive, normalised email and username uniqueness at the application and database
+  layers.
+- Duplicate-email and duplicate-username messages that point at the conflicting field.
+- A hidden honeypot field and per-IP/per-email registration limits.
+
+#### OAuth registration
+
+- First-time GitHub and Google sign-in creates an account when the provider returns a verified
+  email address.
+- Returning provider accounts sign in through their existing link.
+- An existing account with the same provider-verified email is linked once and signed in.
+- An unverified or missing provider email never creates or links an account, and a provider
+  account already linked to a different user is rejected.
+- OAuth accounts are created without a usable password. Settings → Account lets the user set one.
+- The registration interface renders only providers whose client ID and secret are configured.
+
+#### Sign-in and recovery
+
+- Sign in with either an email address or a username from the same field.
+- Open Beta badge and public-registration messaging on the login page.
+- Password recovery request and reset pages, with single-use, hashed, one-hour tokens.
+- Email verification page, resend control and verification status in Settings → Account.
+- Both email flows are hidden when SMTP is not configured; the recovery page explains the
+  limitation instead of claiming a message was sent.
+- OAuth-only accounts can set a password without a current password; account deletion requires
+  the typed confirmation instead of a password in that case.
+
+#### First-run experience
+
+- The dashboard shows a first-run onboarding card with three real steps when the account has no
+  collections or products.
+- The card contains no sample products, fake activity or fabricated data.
+- The dashboard and app navigation display the account's username.
+
+### Changed
+
+- The landing page, header, footer, About, Features, Security, Roadmap and changelog pages now
+  describe an Open Beta that anyone can join.
+- The previous “Request Beta Access” links were replaced with working `/register` links.
+- Accepting an administrator invitation now lands in the dashboard instead of the admin area.
+- The seeded owner account normalises `ADMIN_EMAIL` and `ADMIN_USERNAME` to lowercase.
+
+### Security
+
+- Registration is limited to 10 attempts per IP and 5 per email per hour. Password recovery is
+  limited to 5 requests per IP and 3 per identifier per 15 minutes, and verification resends to
+  3 per account per hour.
+- Password and verification tokens are 256-bit random values; only their SHA-256 hashes are
+  stored. Reset tokens expire after one hour, verification tokens after 24 hours, and each token
+  is consumed atomically once.
+- A successful password reset revokes every existing session before issuing a new one.
+- Password reset rejects disabled accounts.
+- Existing protections are unchanged: provider-verified email required for OAuth linking,
+  Argon2id hashing, SHA-256 hashed session tokens, HttpOnly/SameSite cookies, owner-scoped data
+  queries and admin role checks.
+- The email sender never exposes credentials to the client. A malformed or missing password hash
+  now fails closed instead of throwing during sign-in.
+
+### Database
+
+- Additive migration `20261119180000_public_registration` adds the `EmailTokenType` enum and the
+  `email_tokens` table, lowercases existing `users.email` and `users.username` values, and adds
+  CHECK constraints that keep both lowercase.
+- The migration fails closed: if two accounts already share an email address or username
+  case-insensitively, it raises an exception before changing any data.
+- `scripts/preflight-public-registration.sql` is a read-only preflight that reports duplicate
+  identities, rows needing normalisation, and whether the migration objects already exist. It
+  requires `blocking_violations_total = 0`.
+
+### Deployment
+
+- Back up the database, run both `scripts/preflight-wishlist-category-integrity.sql` and
+  `scripts/preflight-public-registration.sql`, then start the new image and let the entrypoint
+  apply migrations.
+- SMTP is optional. Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD` and
+  `SMTP_FROM`, with `NEXT_PUBLIC_APP_URL` set to the public origin, to enable verification and
+  recovery. Otherwise both flows stay hidden.
+- The Docker CI job now also verifies that `/register` and `/forgot-password` render in the
+  production image.
+- Not verified in this release cycle: a live SMTP delivery, real GitHub/Google credentials, a
+  production database preflight/migration, a screen-reader audit, and any production deployment.
+  No production target was identified and no deployment was performed.
+
+### Testing
+
+- 42 new Vitest tests cover public account creation, case-insensitive duplicate rejection,
+  generated usernames, OAuth-only accounts, first-time and returning OAuth callbacks, OAuth route
+  state/failure handling, single-use and expired email tokens, session expiry and revocation,
+  password-reset success/expiry/disabled-account handling, registration and recovery limits, and
+  the optional SMTP configuration and templates.
+- 8 new Playwright tests cover username and email registration, first-run onboarding, sign-in
+  with either identifier, duplicate rejection, inline validation, mobile registration and
+  signed-out dashboard protection.
+- Full Vitest suite: 374 tests across 40 files. Playwright suite: 32 tests across 9 files.
+
+---
+
 ## [0.13.0] - 2026-11-19
 
 **Wishlist and organization**
@@ -282,6 +398,14 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - Cancel running research
 - Retry failed research
 - Undo AI changes
+
+#### Authentication
+
+- Passkeys and WebAuthn.
+- Two-factor authentication.
+- Change email with re-verification.
+- Login history and security notifications.
+- Shared rate limiting for multiple app replicas.
 
 #### Wishlist
 
@@ -695,6 +819,7 @@ It introduces the redesigned wishlist experience, administration panel, database
 | Version    | Release Date | Status             |
 | ---------- | ------------ | ------------------ |
 | Unreleased | —            | In Development     |
+| 0.14.0     | 2026-11-19   | Open Beta          |
 | 0.13.0     | 2026-11-19   | Stable             |
 | 0.12.0     | 2026-11-18   | Stable             |
 | 0.11.5     | 2026-08-13   | Stable             |

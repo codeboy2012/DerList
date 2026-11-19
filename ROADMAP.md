@@ -526,9 +526,11 @@ A place to collect more than just product names and prices.
 - Session management.
 - Account data export.
 - Account deletion flow.
-- Fully verify OAuth workflows.
-- Email verification.
-- Password recovery.
+- Public username/email registration.
+- Sign in with username or email.
+- First-time OAuth registration with a provider-verified email.
+- Email verification (SMTP).
+- Password recovery (SMTP).
 - Change email.
 - Change password.
 - Session/device descriptions.
@@ -813,28 +815,35 @@ archive-state deletion, category/move integrity, complete Copy options, lossless
 in this release. Nested collections, tags, activity history and further dashboard customization
 remain planned.
 
-### v0.14.0 — Importing improvements
+### v0.14.0 — Open Beta and public registration
+
+**Published 2026-11-19.** Public username/email registration, first-time GitHub/Google
+registration, username-or-email sign-in, optional SMTP-backed email verification and password
+recovery, rate-limited authentication endpoints, case-insensitive identity constraints, and
+first-run onboarding without sample data.
+
+### v0.15.0 — Importing improvements
 
 **In development.** Better extraction, import progress, retries, history, duplicate detection, and
 re-identification.
 
-### v0.15.0 — Search and comparison
+### v0.16.0 — Search and comparison
 
 Advanced private search, saved searches, product comparisons, and comparison reports.
 
-### v0.16.0 — AI intelligence
+### v0.17.0 — AI intelligence
 
 Product identification, AI organization, and a useful personal product assistant.
 
-### v0.17.0 — Price intelligence
+### v0.18.0 — Price intelligence
 
 Automatic refresh, price history, charts, retailer comparisons, and target-price monitoring.
 
-### v0.18.0 — Research and notifications
+### v0.19.0 — Research and notifications
 
 Product research workspace, availability monitoring, reminders, and a notification center.
 
-### v0.19.0 — Portability and personalization
+### v0.20.0 — Portability and personalization
 
 More exports, restoration, advanced customization, and dashboard layouts.
 
@@ -862,7 +871,7 @@ ideas. Item counts reflect the checklist bullets in each section of this documen
 | 8   | Availability and research           | Planned                        |    19 |
 | 9   | Notifications                       | Planned                        |    23 |
 | 10  | Research workspace                  | Exploratory                    |    16 |
-| 11  | Accounts and authentication         | Existing foundation            |    22 |
+| 11  | Accounts and authentication         | Existing foundation            |    24 |
 | 12  | Privacy and security                | Strong foundation              |    22 |
 | 13  | Appearance and personalization      | Implemented foundation         |    23 |
 | 14  | Dashboard and navigation            | Existing foundation, expanding |    20 |

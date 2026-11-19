@@ -103,11 +103,13 @@ export default function AboutPage() {
       {/* CTA */}
       <section className="border-border border-t py-20 text-center">
         <AnimatedSection variant="fade-up">
-          <h2 className="text-foreground text-2xl font-bold">Join the Closed Beta</h2>
-          <p className="text-muted-foreground mt-3">Be among the first to experience DerList.</p>
+          <h2 className="text-foreground text-2xl font-bold">Join the Open Beta</h2>
+          <p className="text-muted-foreground mt-3">
+            DerList is open to everyone. Create a free account and start your first collection.
+          </p>
           <Button asChild size="lg" className="glow-sm mt-6">
-            <Link href="/#beta-access">
-              Request Access <ArrowRight className="h-4 w-4" />
+            <Link href="/register">
+              Create free account <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
         </AnimatedSection>

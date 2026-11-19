@@ -4,13 +4,15 @@
 
 DerList is a self-hosted web application for keeping private collections of the products you want. Record current and target prices, condition, availability and notes, import product details, and organize everything your way — without public sharing, a marketplace, subscriptions, ads, or vendor lock-in.
 
-> 🚧 **DerList is currently in active alpha development.**
+> **DerList is now in Open Beta.**
 >
-> Features are being actively developed and may change between releases.
+> Anyone can create an account with a username, an email address, GitHub or Google — no
+> invitation, approval, allowlist or waitlist is involved. Beta software still changes between
+> releases, so keep your own export of anything you cannot afford to lose.
 
-- **Current release:** `0.13.0` — Wishlist and organization
+- **Current release:** `0.14.0` — Open Beta and public registration
 - **Release status:** Published
-- **In development:** `0.14.0` — Importing improvements
+- **In development:** `0.15.0` — Importing improvements
 
 📋 **[View the full Changelog](https://github.com/codeboy2012/DerList/blob/main/CHANGELOG.md)**
 
@@ -145,14 +147,17 @@ implemented yet.
 
 ### 👥 Authentication
 
-- Email/password authentication
-- GitHub OAuth
-- Google OAuth
-- Invite-only registration
-- Admin-controlled invitations
-- Secure session management
-- User roles
-- Admin panel
+- **Public registration** with a username or an email address
+- Sign in with either your email address or your username
+- GitHub OAuth (when configured)
+- Google OAuth (when configured)
+- First-time OAuth registration for provider-verified emails
+- Email verification (when SMTP is configured)
+- Password recovery by email (when SMTP is configured)
+- Case-insensitive, normalised email and username uniqueness
+- Secure, database-backed session management
+- User roles and an admin panel
+- Optional administrator invitations for pre-provisioned accounts
 
 ### 🛠️ Administration
 
@@ -216,6 +221,10 @@ Once the containers are healthy, open:
 
 **[http://localhost:3000](http://localhost:3000)**
 
+Create an account at **[http://localhost:3000/register](http://localhost:3000/register)**. The
+`ADMIN_*` account created by the seed is the instance owner and is not required for normal
+registration.
+
 ### Verify the installation
 
 ```bash
@@ -235,23 +244,63 @@ The app container applies pending Prisma migrations on startup
 image.
 
 Databases created before v0.13.0 must pass the category-integrity preflight
-before the new image starts. The script is read-only:
+before the new image starts. Databases created before v0.14.0 must also pass the
+public-registration identity preflight. Both scripts are read-only:
 
 ```bash
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
   -f scripts/preflight-wishlist-category-integrity.sql
+
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f scripts/preflight-public-registration.sql
 ```
 
-`blocking_violations_total` must be `0`. A nonzero value means at least one
-product references a category in another collection; the migration then aborts
-without modifying or deleting any data. The script header documents every
-check and the expected pre-migration values.
+`blocking_violations_total` must be `0` in both reports. A nonzero value in the
+category preflight means at least one product references a category in another
+collection. A nonzero value in the registration preflight means two accounts
+already share an email address or username case-insensitively. In either case
+the migration aborts without modifying or deleting any data. The script headers
+document every check and the expected pre-migration values.
 
-Deployment order: back up the database, run the preflight, then start the new
+Deployment order: back up the database, run both preflights, then start the new
 image and let the entrypoint apply migrations before the app serves traffic.
-The two v0.13.0 migrations are additive and run in timestamp order:
-`20261119000000_add_item_archive` (archive columns and index) and
-`20261119120000_enforce_wishlist_category_integrity` (composite category key).
+The v0.14.0 migration `20261119180000_public_registration` lowercases existing
+emails and usernames, adds CHECK constraints that keep them lowercase, and adds
+`email_tokens` for verification and reset links. It fails closed rather than
+guessing how to merge duplicate identities.
+
+### Email delivery (optional)
+
+Email verification and password recovery need SMTP. Configure `SMTP_HOST`,
+`SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD` and `SMTP_FROM`, and
+set `NEXT_PUBLIC_APP_URL` to the public origin users visit because emailed links
+are built from it.
+
+When SMTP is not configured, DerList does not offer either flow. The login and
+registration pages still work, and `/forgot-password` explains that recovery is
+unavailable instead of claiming an email was sent. No email credentials are
+included in the repository or the Docker image.
+
+### Account registration and OAuth setup
+
+Registration lives at `/register` and offers two methods:
+
+- **Username** — choose a username, add an email address and password.
+- **Email** — add an email address and password; a username is generated and can be changed in
+  Settings → Profile.
+
+Both methods create the same account. Sign in at `/login` with either the email address or the
+username. OAuth buttons only appear for providers whose client ID and secret are set:
+
+| Provider | Console                                           | Callback URL                                 |
+| -------- | ------------------------------------------------- | -------------------------------------------- |
+| GitHub   | https://github.com/settings/developers            | `{NEXT_PUBLIC_APP_URL}/auth/github/callback` |
+| Google   | https://console.cloud.google.com/apis/credentials | `{NEXT_PUBLIC_APP_URL}/auth/google/callback` |
+
+A first-time OAuth sign-in creates an account only when the provider returns a **verified** email
+address. An unverified provider email never creates or links an account. If the provider account
+is already linked, it signs in normally; an existing account with the same verified email is
+linked once, and an account already linked to a different user is rejected.
 
 ### Runtime configuration
 
@@ -380,7 +429,8 @@ DerList includes multiple security protections for self-hosted deployments.
 - SameSite protection
 - Server-side authorization
 - Zod input validation
-- Invite-only registration
+- Rate-limited public registration and password recovery
+- Optional email verification and password recovery over SMTP
 - Encrypted provider API keys
 - SSRF protection
 - Private network blocking
@@ -470,8 +520,19 @@ Run the unit/service suite with `npm test` (Vitest, database-backed) and the bro
 
 ### Known limitations
 
-- DerList is alpha software; the roadmap in [ROADMAP.md](./ROADMAP.md) records what is
+- DerList is in Open Beta; the roadmap in [ROADMAP.md](./ROADMAP.md) records what is
   implemented and what is not.
+- Registration and password-recovery rate limits are per application process. A multi-replica
+  deployment must put a shared store behind `src/lib/security/rate-limit.ts`. The shipped Docker
+  Compose stack runs one app process.
+- The rate limiter trusts the first `X-Forwarded-For` hop. Expose DerList behind the provided
+  Caddy reverse proxy (or another proxy that sets the header) rather than directly to the
+  internet.
+- Email verification and password recovery require SMTP. The sender is unit-tested with a mocked
+  transport; no live mailbox delivery was verified for this release.
+- A production database preflight and migration were not executed because no production target
+  or credentials were available in the release environment. The scripts are provided for the
+  operator.
 - Automated price monitoring and alerts are not implemented. Price history appears only when data
   exists.
 - Accessibility work is keyboard- and focus-based; no screen-reader audit has been performed.
@@ -490,36 +551,35 @@ concise summary only.
 
 ### Current release
 
-**v0.13.0 — Wishlist and organization** (published 2026-11-19)
+**v0.14.0 — Open Beta and public registration** (published 2026-11-19)
 
-Bulk product actions, product archive/restore, wishlist duplication, and manual collection
-ordering, together with a release-hardening pass that scoped collection metadata to its owner,
-required an explicit archive state for deletion, kept category relations inside their collection
-at both the application and database layers, aligned Copy with full duplication, made account
-export lossless and fixed responsive and dialog-focus issues on mobile. Nested collections, tags,
-activity history and further dashboard improvements remain planned.
+Public registration with a username or email address, first-time GitHub and Google registration,
+sign-in with either identifier, optional email verification and password recovery over SMTP,
+rate-limited authentication endpoints, case-insensitive identity constraints, and first-run
+dashboard onboarding without sample data. Accounts created through OAuth can set a password later.
 
 ### Previous release
 
-**v0.12.0 — Security and reliability**
+**v0.13.0 — Wishlist and organization**
 
-Privacy fixes, authorization, upload security, repository cleanup, and regression tests.
+Bulk product actions, product archive/restore, wishlist duplication, manual collection ordering,
+and the v0.13.0 release-hardening pass.
 
 ### In development
 
-**v0.14.0 — Importing improvements**
+**v0.15.0 — Importing improvements**
 
 Better extraction, import progress, retries, history, duplicate detection and re-identification
-are planned; nothing from that scope is part of v0.13.0.
+are planned; nothing from that scope is part of v0.14.0.
 
 ### Later proposed releases
 
-- **v0.14.0 — Importing improvements**
-- **v0.15.0 — Search and comparison**
-- **v0.16.0 — AI intelligence**
-- **v0.17.0 — Price intelligence**
-- **v0.18.0 — Research and notifications**
-- **v0.19.0 — Portability and personalization**
+- **v0.15.0 — Importing improvements**
+- **v0.16.0 — Search and comparison**
+- **v0.17.0 — AI intelligence**
+- **v0.18.0 — Price intelligence**
+- **v0.19.0 — Research and notifications**
+- **v0.20.0 — Portability and personalization**
 - **v1.0.0 — Complete personal product organizer**
 
 These are proposed groupings, not promises or fixed release dates. Detailed scope for every

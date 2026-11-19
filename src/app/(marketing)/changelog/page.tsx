@@ -10,10 +10,27 @@ export const metadata: Metadata = {
 
 const releases = [
   {
+    version: '0.14.0',
+    date: 'November 2026',
+    badge: 'Open Beta',
+    badgeVariant: 'default' as const,
+    changes: [
+      { type: 'feature', text: 'Public registration with a username or an email address' },
+      { type: 'feature', text: 'First-time GitHub and Google registration' },
+      { type: 'feature', text: 'Sign in with either your email address or your username' },
+      { type: 'feature', text: 'Password recovery and email verification when SMTP is configured' },
+      { type: 'feature', text: 'Account identity card with username and verification status' },
+      { type: 'improvement', text: 'OAuth-only accounts can set a password later' },
+      { type: 'improvement', text: 'Case-insensitive, normalised email and username uniqueness' },
+      { type: 'improvement', text: 'Rate limits on registration, sign-in and password recovery' },
+      { type: 'improvement', text: 'First-run dashboard onboarding without sample data' },
+    ],
+  },
+  {
     version: '0.1.0-beta',
     date: 'July 2026',
-    badge: 'Current',
-    badgeVariant: 'default' as const,
+    badge: 'Previous',
+    badgeVariant: 'secondary' as const,
     changes: [
       { type: 'feature', text: 'Premium UI redesign with glass effects and animations' },
       { type: 'feature', text: 'GitHub & Google OAuth authentication' },

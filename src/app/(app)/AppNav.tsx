@@ -25,7 +25,7 @@ const mainNav = [
 ] as const;
 
 interface AppNavProps {
-  user: { role: string; displayName: string };
+  user: { role: string; displayName: string; username: string };
 }
 
 /**
@@ -112,6 +112,14 @@ export function AppNav({ user }: AppNavProps) {
           {navItems}
         </nav>
         <div className="border-border border-t p-3">
+          <div className="mb-2 flex flex-col px-3">
+            <span className="text-foreground truncate text-[13px] font-medium">
+              {user.displayName}
+            </span>
+            <span className="text-muted-foreground truncate font-mono text-[11px]">
+              @{user.username}
+            </span>
+          </div>
           <form action={logoutAction}>
             <button
               type="submit"
@@ -175,7 +183,14 @@ export function AppNav({ user }: AppNavProps) {
                 <span className="bg-accent/10 text-accent flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium">
                   {user.displayName.charAt(0).toUpperCase()}
                 </span>
-                <span className="text-foreground text-sm font-medium">{user.displayName}</span>
+                <span className="flex min-w-0 flex-col">
+                  <span className="text-foreground truncate text-sm font-medium">
+                    {user.displayName}
+                  </span>
+                  <span className="text-muted-foreground truncate font-mono text-[11px]">
+                    @{user.username}
+                  </span>
+                </span>
               </div>
               <form action={logoutAction}>
                 <button

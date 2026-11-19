@@ -3,9 +3,13 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth';
-import { hashPassword, verifyPassword } from '@/lib/auth/password';
+import { findUserByUsername } from '@/lib/auth/identity';
+import { hashPassword, hasPassword, verifyPassword } from '@/lib/auth/password';
 import { getSessionToken, invalidateOtherUserSessions } from '@/lib/auth/session';
+import { buildEmailLink, issueEmailToken } from '@/lib/auth/tokens';
+import { isEmailConfigured, sendVerificationEmail } from '@/lib/email';
 import { prisma } from '@/lib/prisma';
+import { checkEmailSendLimit } from '@/lib/security/auth-limits';
 import type { ActionState } from '../../(auth)/actions';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -43,26 +47,31 @@ export async function updateProfileAction(
   }
 
   const { displayName, username, avatarUrl } = parsed.data;
+  const normalizedUsername = username.toLowerCase();
 
-  // Check username uniqueness (if changed)
-  if (username !== user.username) {
-    const existing = await prisma.user.findUnique({
-      where: { username: username.toLowerCase() },
-      select: { id: true },
-    });
+  if (normalizedUsername !== user.username) {
+    const existing = await findUserByUsername(normalizedUsername);
     if (existing && existing.id !== user.id) {
       return { success: false, fieldErrors: { username: ['This username is already taken.'] } };
     }
   }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      displayName,
-      username: username.toLowerCase(),
-      avatarUrl: avatarUrl || null,
-    },
-  });
+  try {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        displayName,
+        username: normalizedUsername,
+        avatarUrl: avatarUrl || null,
+      },
+    });
+  } catch (error) {
+    // The unique index is the final guard against a concurrent rename.
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002') {
+      return { success: false, fieldErrors: { username: ['This username is already taken.'] } };
+    }
+    throw error;
+  }
 
   revalidatePath('/settings/profile');
   revalidatePath('/dashboard');
@@ -70,12 +79,12 @@ export async function updateProfileAction(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Change Password
+// Change or set password
 // ─────────────────────────────────────────────────────────────────────────────
 
 const changePasswordSchema = z
   .object({
-    currentPassword: z.string().min(1, 'Current password is required.'),
+    currentPassword: z.string().optional(),
     newPassword: z.string().min(8, 'New password must be at least 8 characters.').max(128),
     confirmPassword: z.string().min(1, 'Please confirm your new password.'),
   })
@@ -90,13 +99,12 @@ export async function changePasswordAction(
 ): Promise<ActionState> {
   const sessionUser = await requireUser();
 
-  const raw = {
-    currentPassword: formData.get('currentPassword'),
+  const parsed = changePasswordSchema.safeParse({
+    currentPassword: formData.get('currentPassword') ?? undefined,
     newPassword: formData.get('newPassword'),
     confirmPassword: formData.get('confirmPassword'),
-  };
+  });
 
-  const parsed = changePasswordSchema.safeParse(raw);
   if (!parsed.success) {
     return { success: false, fieldErrors: parsed.error.flatten().fieldErrors };
   }
@@ -107,9 +115,20 @@ export async function changePasswordAction(
   });
   if (!user) return { success: false, error: 'User not found.' };
 
-  const valid = await verifyPassword(user.passwordHash, parsed.data.currentPassword);
-  if (!valid) {
-    return { success: false, fieldErrors: { currentPassword: ['Incorrect password.'] } };
+  // Accounts created through OAuth have no password yet: allow setting one
+  // without a current password, since the session already proves ownership.
+  if (hasPassword(user.passwordHash)) {
+    if (!parsed.data.currentPassword) {
+      return {
+        success: false,
+        fieldErrors: { currentPassword: ['Current password is required.'] },
+      };
+    }
+
+    const valid = await verifyPassword(user.passwordHash, parsed.data.currentPassword);
+    if (!valid) {
+      return { success: false, fieldErrors: { currentPassword: ['Incorrect password.'] } };
+    }
   }
 
   const newHash = await hashPassword(parsed.data.newPassword);
@@ -122,6 +141,47 @@ export async function changePasswordAction(
   const currentToken = await getSessionToken();
   if (currentToken) {
     await invalidateOtherUserSessions(sessionUser.id, currentToken);
+  }
+
+  revalidatePath('/settings/account');
+  return { success: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Resend email verification
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function resendVerificationAction(): Promise<ActionState> {
+  const user = await requireUser();
+
+  if (user.emailVerified) {
+    return { success: false, error: 'Your email address is already verified.' };
+  }
+
+  if (!isEmailConfigured()) {
+    return {
+      success: false,
+      error: 'Email delivery is not configured on this instance.',
+    };
+  }
+
+  const limit = checkEmailSendLimit(user.id);
+  if (!limit.allowed) {
+    return {
+      success: false,
+      error: 'A verification email was sent recently. Please wait before requesting another.',
+    };
+  }
+
+  try {
+    const token = await issueEmailToken(user.id, 'EMAIL_VERIFICATION');
+    await sendVerificationEmail(user.email, user.username, buildEmailLink('/verify-email', token));
+  } catch (error) {
+    console.error('[verify-email] Could not send the verification email:', error);
+    return {
+      success: false,
+      error: 'The verification email could not be sent. Please try again later.',
+    };
   }
 
   return { success: true };

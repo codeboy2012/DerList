@@ -30,6 +30,8 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: 'standalone',
   poweredByHeader: false,
+  // nodemailer uses Node-only transport loading; keep it out of the bundle.
+  serverExternalPackages: ['nodemailer'],
   allowedDevOrigins: ['derlist.dpdns.org', '192.168.1.191', 'localhost:3000'],
   async headers() {
     return [

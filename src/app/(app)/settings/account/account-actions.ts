@@ -1,7 +1,8 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { requireUser, verifyPassword } from '@/lib/auth';
+import { requireUser } from '@/lib/auth';
+import { hasPassword, verifyPassword } from '@/lib/auth/password';
 import { clearSessionCookie } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
 import { deleteAccountUploads } from '@/lib/uploads/cleanup';
@@ -27,10 +28,6 @@ export async function deleteAccountAction(
     return { success: false, error: 'Type DELETE to confirm account deletion.' };
   }
 
-  if (!password) {
-    return { success: false, error: 'Enter your password to confirm.' };
-  }
-
   const account = await prisma.user.findUnique({
     where: { id: user.id },
     select: { passwordHash: true },
@@ -40,9 +37,16 @@ export async function deleteAccountAction(
     return { success: false, error: 'Account not found.' };
   }
 
-  const passwordValid = await verifyPassword(account.passwordHash, password);
-  if (!passwordValid) {
-    return { success: false, error: 'Incorrect password.' };
+  // OAuth-only accounts have no password. The signed-in session plus the typed
+  // DELETE confirmation is the strongest check available for them.
+  if (hasPassword(account.passwordHash)) {
+    if (!password) {
+      return { success: false, error: 'Enter your password to confirm.' };
+    }
+    const passwordValid = await verifyPassword(account.passwordHash, password);
+    if (!passwordValid) {
+      return { success: false, error: 'Incorrect password.' };
+    }
   }
 
   // Remove the user's uploads from disk first — database rows cascade, but

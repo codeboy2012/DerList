@@ -51,7 +51,7 @@ export default function HomePage() {
               className="border-accent/30 bg-accent/5 text-accent mb-8 gap-2 px-4 py-1.5 text-xs tracking-widest uppercase"
             >
               <span aria-hidden className="bg-accent h-1.5 w-1.5 animate-pulse rounded-full" />
-              Closed Beta
+              Open Beta — everyone can join
             </Badge>
           </AnimatedSection>
 
@@ -66,19 +66,20 @@ export default function HomePage() {
               Private collections, smart product import, target prices and personal notes — all in
               one fast, beautiful,{' '}
               <span className="text-foreground font-medium">completely free</span> platform.
+              Registration is open to everyone.
             </p>
           </AnimatedSection>
 
           <AnimatedSection variant="fade-up" delay={300}>
             <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
               <Button asChild size="lg" className="glow-accent min-w-52 gap-2">
-                <Link href="/login">
-                  Open DerList
+                <Link href="/register">
+                  Create free account
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>
               </Button>
               <Button asChild variant="outline" size="lg" className="min-w-52">
-                <Link href="/features">Explore Features</Link>
+                <Link href="/login">Sign in</Link>
               </Button>
             </div>
           </AnimatedSection>
@@ -195,7 +196,7 @@ export default function HomePage() {
               </h2>
               <p className="text-muted-foreground mt-4 leading-relaxed">
                 Argon2id password hashing, database-backed sessions with SHA-256 token hashing, PKCE
-                OAuth, HttpOnly secure cookies, and invite-only access control.
+                OAuth, HttpOnly secure cookies, and rate-limited public registration.
               </p>
               <Button asChild variant="outline" className="mt-6 gap-2">
                 <Link href="/security">
@@ -427,7 +428,7 @@ const securityHighlights = [
   'Database Sessions',
   'PKCE OAuth',
   'HttpOnly Cookies',
-  'Invite-Only',
+  'Rate-Limited Signup',
   'Self-Hostable',
 ];
 
@@ -465,7 +466,7 @@ const faqs = [
   },
   {
     q: 'Who can use DerList?',
-    a: 'This instance is private. Accounts are created by the instance owner through invitations.',
+    a: 'Everyone. DerList is in Open Beta — create a free account with a username, an email address, GitHub or Google. No invitation or approval is needed.',
   },
   {
     q: 'Can I self-host DerList?',

@@ -19,7 +19,7 @@ const phases = [
     items: [
       'Custom database-backed authentication',
       'GitHub & Google OAuth',
-      'Invite-only beta system',
+      'Public registration (username, email, OAuth)',
       'Private collections (CRUD, archive, categories)',
       'Smart product import (JSON-LD, OG, meta)',
       'Price history data model (worker available)',
@@ -37,12 +37,12 @@ const phases = [
     dot: 'bg-accent',
     iconColor: 'text-accent',
     items: [
+      'Open Beta launch hardening',
+      'Email verification and password recovery (SMTP)',
       'Premium UI redesign',
-      'Command palette (Ctrl+K)',
-      'Toast notification system',
       'User settings & profile',
-      'Marketing website expansion',
       'Mobile navigation improvements',
+      'Marketing website expansion',
     ],
   },
   {

@@ -2,13 +2,11 @@
 
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-
+import type { Prisma } from '@prisma/client';
 import { hashPassword } from '@/lib/auth/password';
 import { createSession, setSessionCookie } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
 import { acceptInvitationSchema } from '@/lib/validations/auth';
-import type { Prisma } from '@prisma/client';
-
 import type { ActionState } from '../../actions';
 
 /**
@@ -19,7 +17,7 @@ import type { ActionState } from '../../actions';
  */
 export async function acceptInvitationAction(
   _prevState: ActionState,
-  formData: FormData,
+  formData: FormData
 ): Promise<ActionState> {
   const raw = {
     token: formData.get('token'),
@@ -137,5 +135,5 @@ export async function acceptInvitationAction(
     data: { lastLoginAt: new Date() },
   });
 
-  redirect('/admin');
+  redirect('/dashboard?welcome=1');
 }

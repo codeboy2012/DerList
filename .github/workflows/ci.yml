@@ -155,6 +155,15 @@ jobs:
           test "$login_code" = "200"
           grep -qi 'sign in\|password' /tmp/login.html
 
+          register_code=$(curl -s -o /tmp/register.html -w '%{http_code}' http://localhost:3000/register)
+          echo "GET /register -> $register_code"
+          test "$register_code" = "200"
+          grep -qi 'create your account' /tmp/register.html
+
+          recovery_code=$(curl -s -o /tmp/recovery.html -w '%{http_code}' http://localhost:3000/forgot-password)
+          echo "GET /forgot-password -> $recovery_code"
+          test "$recovery_code" = "200"
+
       - name: Verify the runtime user and image contents
         run: |
           set -euo pipefail

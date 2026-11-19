@@ -10,7 +10,7 @@ export const siteConfig = {
   name: 'DerList',
   shortName: 'DerList',
   description:
-    'A private, open-source wishlist and personal product organizer. Collections, target prices and notes — no catalogue, no sharing.',
+    'A private, open-source wishlist and personal product organizer. Open Beta — free accounts with username, email, GitHub or Google. No catalogue, no sharing.',
   tagline: 'Free Forever. Open Source. Community Driven.',
   url: process.env.NEXT_PUBLIC_APP_URL ?? 'https://derlist.dpdns.org',
   locale: 'en-US',

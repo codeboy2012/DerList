@@ -14,7 +14,7 @@ const initialState: ActionState = { success: false };
  * Data ownership controls: JSON export and permanent account deletion.
  * Both act only on the signed-in user's own account.
  */
-export function DataPrivacyCard() {
+export function DataPrivacyCard({ hasPassword }: { hasPassword: boolean }) {
   const [state, formAction, pending] = useActionState(deleteAccountAction, initialState);
 
   return (
@@ -65,18 +65,23 @@ export function DataPrivacyCard() {
               )}
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="delete-password" className="text-foreground text-xs font-medium">
-                    Password
-                  </label>
-                  <Input
-                    id="delete-password"
-                    name="password"
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                  />
-                </div>
+                {hasPassword && (
+                  <div className="flex flex-col gap-1.5">
+                    <label
+                      htmlFor="delete-password"
+                      className="text-foreground text-xs font-medium"
+                    >
+                      Password
+                    </label>
+                    <Input
+                      id="delete-password"
+                      name="password"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                    />
+                  </div>
+                )}
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="delete-confirm" className="text-foreground text-xs font-medium">
                     Type DELETE to confirm
@@ -84,6 +89,11 @@ export function DataPrivacyCard() {
                   <Input id="delete-confirm" name="confirmation" placeholder="DELETE" required />
                 </div>
               </div>
+              {!hasPassword && (
+                <p className="text-muted-foreground text-xs">
+                  This account has no password. Typing DELETE is required because you are signed in.
+                </p>
+              )}
 
               <div>
                 <Button

@@ -1,9 +1,8 @@
-import "dotenv/config";
-
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, Role } from "@prisma/client";
-import argon2 from "argon2";
-import { Pool } from "pg";
+import 'dotenv/config';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient, Role } from '@prisma/client';
+import argon2 from 'argon2';
+import { Pool } from 'pg';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -16,14 +15,16 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-  const email = process.env.ADMIN_EMAIL;
+  // Identity is stored in lowercase; the migration adds CHECK constraints that
+  // reject an uppercase email or username.
+  const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.ADMIN_PASSWORD;
-  const username = process.env.ADMIN_USERNAME;
-  const displayName = process.env.ADMIN_DISPLAY_NAME || "Admin";
+  const username = process.env.ADMIN_USERNAME?.trim().toLowerCase();
+  const displayName = process.env.ADMIN_DISPLAY_NAME || 'Admin';
 
   // Skip seeding if required env vars are not set
   if (!email || !password || !username) {
-    console.log("⏭️  Seed skipped: ADMIN_EMAIL, ADMIN_PASSWORD, and ADMIN_USERNAME are required.");
+    console.log('⏭️  Seed skipped: ADMIN_EMAIL, ADMIN_PASSWORD, and ADMIN_USERNAME are required.');
     return;
   }
 
@@ -35,7 +36,7 @@ async function main() {
   });
 
   if (existing) {
-    console.log("✅ Owner account already exists — skipping seed.");
+    console.log('✅ Owner account already exists — skipping seed.');
     return;
   }
 
@@ -57,7 +58,7 @@ async function main() {
 
 main()
   .catch((error) => {
-    console.error("❌ Seed failed:", error);
+    console.error('❌ Seed failed:', error);
     process.exit(1);
   })
   .finally(async () => {

@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Key, Link2, Monitor } from 'lucide-react';
 import { requireUser } from '@/lib/auth';
 import { isGitHubEnabled, isGoogleEnabled } from '@/lib/auth/oauth';
+import { hasPassword } from '@/lib/auth/password';
+import { isEmailConfigured } from '@/lib/email';
 import { formatDate } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
 import { siteConfig } from '@/lib/site-config';
@@ -12,20 +14,30 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { disconnectOAuthAction } from '../actions';
 import { ChangePasswordForm } from './ChangePasswordForm';
 import { DataPrivacyCard } from './DataPrivacyCard';
+import { EmailVerificationCard } from './EmailVerificationCard';
 
 export const metadata: Metadata = {
   title: `Account — ${siteConfig.name}`,
 };
 
 interface AccountPageProps {
-  searchParams: Promise<{ success?: string; error?: string }>;
+  searchParams: Promise<{ success?: string; error?: string; verified?: string }>;
 }
 
 export default async function AccountSettingsPage({ searchParams }: AccountPageProps) {
   const sessionUser = await requireUser();
   const params = await searchParams;
 
-  const [oauthAccounts, sessions] = await Promise.all([
+  const [account, oauthAccounts, sessions] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: sessionUser.id },
+      select: {
+        email: true,
+        username: true,
+        emailVerified: true,
+        passwordHash: true,
+      },
+    }),
     prisma.oAuthAccount.findMany({
       where: { userId: sessionUser.id },
       select: {
@@ -46,13 +58,21 @@ export default async function AccountSettingsPage({ searchParams }: AccountPageP
 
   const githubEnabled = isGitHubEnabled();
   const googleEnabled = isGoogleEnabled();
+  const accountHasPassword = hasPassword(account?.passwordHash);
+
+  if (!account) return null;
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
-      {/* Success/Error messages from OAuth linking */}
+      {/* Success/Error messages from OAuth linking and verification */}
       {params.success === 'provider_linked' && (
         <div className="border-success/30 bg-success/5 text-success rounded-lg border px-4 py-3 text-sm">
           Account linked successfully.
+        </div>
+      )}
+      {params.verified === '1' && (
+        <div className="border-success/30 bg-success/5 text-success rounded-lg border px-4 py-3 text-sm">
+          Email address verified successfully.
         </div>
       )}
       {params.error === 'oauth_already_linked_other' && (
@@ -60,6 +80,13 @@ export default async function AccountSettingsPage({ searchParams }: AccountPageP
           This account is already linked to another user.
         </div>
       )}
+
+      <EmailVerificationCard
+        email={account.email}
+        username={account.username}
+        verified={account.emailVerified}
+        emailConfigured={isEmailConfigured()}
+      />
 
       {/* Connected Accounts */}
       <Card>
@@ -135,7 +162,7 @@ export default async function AccountSettingsPage({ searchParams }: AccountPageP
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ChangePasswordForm />
+          <ChangePasswordForm hasPassword={accountHasPassword} />
         </CardContent>
       </Card>
 
@@ -177,7 +204,7 @@ export default async function AccountSettingsPage({ searchParams }: AccountPageP
         </CardContent>
       </Card>
 
-      <DataPrivacyCard />
+      <DataPrivacyCard hasPassword={accountHasPassword} />
     </div>
   );
 }

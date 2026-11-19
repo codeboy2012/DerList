@@ -80,12 +80,12 @@ const features = [
     color: 'text-amber-400',
     bg: 'bg-amber-500/10',
     description:
-      'Sign in with GitHub or Google, or use email and password. Sessions are database-backed with automatic renewal. Argon2id password hashing.',
+      'Create an account with a username, an email address, GitHub or Google, then sign in with any of them. Sessions are database-backed with automatic renewal and Argon2id password hashing.',
     bullets: [
+      'Username or email signup',
       'GitHub & Google OAuth',
       'Database-backed sessions',
-      'Argon2id hashing',
-      'Invite-only registration',
+      'Open registration',
     ],
   },
   {
@@ -176,13 +176,18 @@ export default function FeaturesPage() {
         <AnimatedSection variant="fade-up">
           <h2 className="text-foreground text-2xl font-bold sm:text-3xl">Ready to try it?</h2>
           <p className="text-muted-foreground mt-3">
-            This instance is private. Sign in with the account you were invited with.
+            DerList is in Open Beta and open to everyone. No invitation or approval is needed.
           </p>
-          <Button asChild size="lg" className="glow-sm mt-6">
-            <Link href="/login">
-              Sign in <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <Button asChild size="lg" className="glow-sm">
+              <Link href="/register">
+                Create free account <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline">
+              <Link href="/login">Sign in</Link>
+            </Button>
+          </div>
         </AnimatedSection>
       </section>
     </div>

@@ -22,8 +22,14 @@ export const metadata: Metadata = {
   title: `Dashboard — ${siteConfig.name}`,
 };
 
-export default async function UserDashboardPage() {
+interface DashboardPageProps {
+  searchParams: Promise<{ welcome?: string; verification?: string }>;
+}
+
+export default async function UserDashboardPage({ searchParams }: DashboardPageProps) {
   const user = await requireUser();
+  const params = await searchParams;
+  const isWelcome = params.welcome === '1';
 
   const [
     totalWishlists,
@@ -127,6 +133,96 @@ export default async function UserDashboardPage() {
     return newP < oldP && newP > 0;
   });
 
+  const isEmpty = totalWishlists === 0 && totalItems === 0;
+
+  if (isEmpty) {
+    return (
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-foreground text-2xl font-bold tracking-tight">
+            Welcome, {user.displayName.split(' ')[0]}
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            Signed in as <span className="text-foreground font-medium">@{user.username}</span>
+          </p>
+        </div>
+
+        {params.verification === 'sent' && (
+          <div
+            role="status"
+            className="border-accent/25 bg-accent/5 text-muted-foreground rounded-xl border px-4 py-3 text-sm"
+          >
+            We sent a verification link to <span className="text-foreground">{user.email}</span>.
+            You can keep using DerList while you confirm it.
+          </div>
+        )}
+
+        <Card className="border-accent/20 bg-accent/[0.03]">
+          <CardContent className="flex flex-col gap-6 p-6 sm:p-8">
+            <div className="flex flex-col gap-2">
+              <Badge variant="accent" className="w-fit">
+                Open Beta
+              </Badge>
+              <h2 className="text-foreground text-xl font-semibold">
+                Your account is ready. Start with one collection.
+              </h2>
+              <p className="text-muted-foreground max-w-xl text-sm leading-relaxed">
+                DerList keeps private lists of the products you want. There is no sample data here —
+                everything you see is created by you.
+              </p>
+            </div>
+
+            <ol className="grid gap-3 sm:grid-cols-3">
+              {[
+                {
+                  step: '1',
+                  title: 'Create a collection',
+                  body: 'Give it a name, an icon and a colour. Collections are private to your account.',
+                },
+                {
+                  step: '2',
+                  title: 'Add a product',
+                  body: 'Paste a product URL to import its details, or add an item manually.',
+                },
+                {
+                  step: '3',
+                  title: 'Make it yours',
+                  body: 'Set a target price, priority and private notes so you know what matters.',
+                },
+              ].map((item) => (
+                <li
+                  key={item.step}
+                  className="border-border bg-card flex flex-col gap-2 rounded-xl border p-4"
+                >
+                  <span className="bg-accent/10 text-accent flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold">
+                    {item.step}
+                  </span>
+                  <span className="text-foreground text-sm font-medium">{item.title}</span>
+                  <span className="text-muted-foreground text-xs leading-relaxed">{item.body}</span>
+                </li>
+              ))}
+            </ol>
+
+            <div className="flex flex-wrap gap-2">
+              <Button asChild className="glow-sm gap-2">
+                <Link href="/wishlists/new">
+                  <Plus className="h-4 w-4" aria-hidden /> Create your first collection
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="gap-2">
+                <Link href="/settings/profile">Review your profile</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <p className="text-muted-foreground text-xs">
+          Need help? The README and GitHub issues cover importing, providers and self-hosting.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-8">
       {/* Greeting */}
@@ -135,7 +231,8 @@ export default async function UserDashboardPage() {
           Hey, {user.displayName.split(' ')[0]}
         </h1>
         <p className="text-muted-foreground text-sm">
-          Here&apos;s what&apos;s happening with your wishlists.
+          Signed in as <span className="text-foreground font-medium">@{user.username}</span>
+          {isWelcome ? ' — welcome to the Open Beta.' : '.'}
         </p>
       </div>
 

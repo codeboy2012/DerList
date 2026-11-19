@@ -3,31 +3,38 @@ import { GithubIcon } from '@/components/ui/brand-icons';
 interface OAuthButtonsProps {
   githubEnabled: boolean;
   googleEnabled: boolean;
+  /** Registration pages explain that a new account is created when needed. */
+  mode?: 'login' | 'register';
 }
 
 /**
- * OAuth sign-in buttons — rendered as links that initiate the OAuth flow.
+ * OAuth buttons — rendered as links that initiate the OAuth flow.
  * Server Component (no client JS needed — just anchor tags).
+ *
+ * Only providers whose credentials are configured are rendered; nothing here
+ * pretends an unconfigured provider is available.
  */
-export function OAuthButtons({ githubEnabled, googleEnabled }: OAuthButtonsProps) {
+export function OAuthButtons({ githubEnabled, googleEnabled, mode = 'login' }: OAuthButtonsProps) {
+  const suffix = mode === 'register' ? ' — create account' : '';
+
   return (
     <div className="flex flex-col gap-3">
       {githubEnabled && (
         <a
           href="/auth/github"
-          className="inline-flex h-10 w-full items-center justify-center gap-3 rounded-lg border border-border bg-card text-sm font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="border-border bg-card text-foreground hover:bg-surface focus-visible:ring-ring focus-visible:ring-offset-background inline-flex h-11 w-full items-center justify-center gap-3 rounded-lg border text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
         >
           <GithubIcon className="h-4 w-4" />
-          Continue with GitHub
+          Continue with GitHub{suffix}
         </a>
       )}
       {googleEnabled && (
         <a
           href="/auth/google"
-          className="inline-flex h-10 w-full items-center justify-center gap-3 rounded-lg border border-border bg-card text-sm font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="border-border bg-card text-foreground hover:bg-surface focus-visible:ring-ring focus-visible:ring-offset-background inline-flex h-11 w-full items-center justify-center gap-3 rounded-lg border text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
         >
           <GoogleIcon className="h-4 w-4" />
-          Continue with Google
+          Continue with Google{suffix}
         </a>
       )}
     </div>

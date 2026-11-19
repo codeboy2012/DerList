@@ -29,8 +29,8 @@ enum Role {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Represents an authenticated DerList user.
-/// Users cannot self-register — accounts are created by administrators
-/// or accepted through the invitation flow.
+/// Accounts are created through public registration (username or email),
+/// first-time OAuth sign-in, an administrator, or an invitation.
 model User {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -78,6 +78,9 @@ model User {
 
   /// OAuth linked accounts (GitHub, Google, etc.).
   oauthAccounts OAuthAccount[]
+
+  /// Single-use password-reset and email-verification tokens.
+  emailTokens EmailToken[]
 
   /// Wishlists owned by this user.
   wishlists Wishlist[]
@@ -857,11 +860,49 @@ model OAuthAccount {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Email Token
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Purpose of a single-use email token.
+enum EmailTokenType {
+  PASSWORD_RESET
+  EMAIL_VERIFICATION
+}
+
+/// A single-use token delivered by email. Only the SHA-256 hash is stored, so a
+/// database leak cannot be used to reset a password or verify an address.
+model EmailToken {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  /// The user the token was issued to.
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  /// What the token authorizes.
+  type EmailTokenType
+
+  /// SHA-256 hash of the raw token from the emailed link.
+  tokenHash String @unique
+
+  /// When the token stops being valid.
+  expiresAt DateTime
+
+  /// When the token was consumed. Null while unused.
+  usedAt DateTime?
+
+  @@index([userId, type])
+  @@index([expiresAt])
+  @@map("email_tokens")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Invitation
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// An invite-only registration token created by an admin.
-/// Recipients use the token to create their account before expiry.
+/// An optional administrator-created invitation token.
+/// Public registration does not require one; self-hosted operators can still
+/// use invitations to pre-provision an account for a specific email.
 model Invitation {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())

@@ -1,8 +1,8 @@
 'use server';
 
-import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { verifyPassword } from '@/lib/auth/password';
+import { findUserByIdentifier } from '@/lib/auth/identity';
+import { hasPassword, verifyPassword } from '@/lib/auth/password';
 import {
   clearSessionCookie,
   createSession,
@@ -12,6 +12,7 @@ import {
 } from '@/lib/auth/session';
 import { prisma } from '@/lib/prisma';
 import { checkRateLimit, resetRateLimit } from '@/lib/security/rate-limit';
+import { getRequestContext } from '@/lib/security/request';
 import { loginSchema } from '@/lib/validations/auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -29,7 +30,7 @@ export type ActionState = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Server Action: Authenticate a user with email and password.
+ * Server Action: Authenticate a user with an email address or username.
  *
  * Security considerations:
  * - Generic error message on failure to prevent user enumeration
@@ -41,9 +42,8 @@ export async function loginAction(
   _prevState: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  // Parse and validate input
   const raw = {
-    email: formData.get('email'),
+    identifier: formData.get('identifier'),
     password: formData.get('password'),
   };
 
@@ -55,17 +55,14 @@ export async function loginAction(
     };
   }
 
-  const { email, password } = parsed.data;
+  const identifier = parsed.data.identifier.trim().toLowerCase();
+  const { password } = parsed.data;
 
   // ── Brute-force protection ──
-  // Limit both per-IP (spraying) and per-IP+email (targeted guessing).
-  const headerStore = await headers();
-  const ipAddress =
-    headerStore.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    headerStore.get('x-real-ip') ??
-    'unknown';
+  // Limit both per-IP (spraying) and per-identifier (targeted guessing).
+  const { ipAddress, userAgent } = await getRequestContext();
   const ipKey = `login:ip:${ipAddress}`;
-  const accountKey = `login:account:${ipAddress}:${email.toLowerCase().trim()}`;
+  const accountKey = `login:account:${ipAddress}:${identifier}`;
 
   if (!checkRateLimit(ipKey, 20, 15 * 60 * 1000).allowed) {
     return { success: false, error: 'Too many login attempts. Try again later.' };
@@ -74,27 +71,18 @@ export async function loginAction(
     return { success: false, error: 'Too many login attempts. Try again later.' };
   }
 
-  // Look up user by email
-  const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase().trim() },
-    select: {
-      id: true,
-      passwordHash: true,
-      disabled: true,
-    },
-  });
+  const user = await findUserByIdentifier(identifier);
 
-  // Generic error to prevent user enumeration
+  // Generic error to prevent user enumeration.
   const invalidCredentialsError: ActionState = {
     success: false,
-    error: 'Invalid email or password.',
+    error: 'Invalid email/username or password.',
   };
 
-  if (!user) {
+  if (!user || !hasPassword(user.passwordHash)) {
     return invalidCredentialsError;
   }
 
-  // Check if account is disabled
   if (user.disabled) {
     return {
       success: false,
@@ -102,35 +90,27 @@ export async function loginAction(
     };
   }
 
-  // Verify password
   const valid = await verifyPassword(user.passwordHash, password);
   if (!valid) {
     return invalidCredentialsError;
   }
 
-  // Get request metadata for audit
-  const userAgent = headerStore.get('user-agent') ?? undefined;
-
   // Successful login clears the targeted counter for this account.
   resetRateLimit(accountKey);
 
-  // Create session
   const token = await createSession({
     userId: user.id,
     ipAddress,
     userAgent,
   });
 
-  // Set cookie
   await setSessionCookie(token);
 
-  // Update last login timestamp
   await prisma.user.update({
     where: { id: user.id },
     data: { lastLoginAt: new Date() },
   });
 
-  // Redirect to dashboard
   redirect('/dashboard');
 }
 

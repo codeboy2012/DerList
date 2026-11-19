@@ -2,12 +2,11 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-
+import { Menu, X } from 'lucide-react';
+import { cn } from '@/utils/cn';
 import { Button } from '@/components/ui/Button';
 import { Container } from '@/components/ui/Container';
 import { Logo } from '@/components/ui/Logo';
-import { cn } from '@/utils/cn';
-import { Menu, X } from 'lucide-react';
 
 const navItems = [
   { label: 'Features', href: '/features' },
@@ -34,23 +33,23 @@ export function Header() {
 
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [mobileOpen]);
 
   return (
     <header
       className={cn(
         'sticky top-0 z-50 w-full transition-all duration-300',
-        scrolled
-          ? 'glass border-b border-glass-border shadow-lg shadow-black/10'
-          : 'bg-transparent',
+        scrolled ? 'glass border-glass-border border-b shadow-lg shadow-black/10' : 'bg-transparent'
       )}
     >
       <Container className="flex h-16 items-center justify-between gap-4">
         {/* Logo */}
         <Link
           href="/"
-          className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="focus-visible:ring-ring rounded-md focus-visible:ring-2 focus-visible:outline-none"
           aria-label="DerList home"
         >
           <Logo size="sm" />
@@ -62,7 +61,7 @@ export function Header() {
             <Link
               key={item.href}
               href={item.href}
-              className="rounded-lg px-3 py-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring rounded-lg px-3 py-2 text-[13px] font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
             >
               {item.label}
             </Link>
@@ -71,11 +70,15 @@ export function Header() {
 
         {/* Right side */}
         <div className="flex items-center gap-3">
+          <span className="border-accent/30 bg-accent/5 text-accent hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium tracking-wide uppercase sm:inline-flex">
+            <span aria-hidden className="bg-accent h-1.5 w-1.5 rounded-full" />
+            Open Beta
+          </span>
           <Button asChild size="sm" variant="outline" className="hidden sm:inline-flex">
             <Link href="/login">Sign In</Link>
           </Button>
-          <Button asChild size="sm" className="hidden sm:inline-flex glow-sm">
-            <Link href="/#beta-access">Beta Access</Link>
+          <Button asChild size="sm" className="glow-sm hidden sm:inline-flex">
+            <Link href="/register">Create Account</Link>
           </Button>
 
           {/* Mobile toggle */}
@@ -84,7 +87,7 @@ export function Header() {
             onClick={() => setMobileOpen((o) => !o)}
             aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={mobileOpen}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring inline-flex h-9 w-9 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none lg:hidden"
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -93,14 +96,14 @@ export function Header() {
 
       {/* Mobile drawer */}
       {mobileOpen && (
-        <div className="absolute inset-x-0 top-full z-50 border-b border-border bg-background/95 backdrop-blur-xl lg:hidden animate-fade-down">
+        <div className="border-border bg-background/95 animate-fade-down absolute inset-x-0 top-full z-50 border-b backdrop-blur-xl lg:hidden">
           <Container className="flex flex-col gap-1 py-4">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
-                className="rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface"
+                className="text-foreground hover:bg-surface rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
               >
                 {item.label}
               </Link>
@@ -108,23 +111,27 @@ export function Header() {
             <Link
               href="/contact"
               onClick={() => setMobileOpen(false)}
-              className="rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface"
+              className="text-foreground hover:bg-surface rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
             >
               Contact
             </Link>
             <Link
               href="/status"
               onClick={() => setMobileOpen(false)}
-              className="rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface"
+              className="text-foreground hover:bg-surface rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
             >
               Status
             </Link>
-            <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
+            <div className="border-border mt-3 flex flex-col gap-2 border-t pt-3">
               <Button asChild variant="outline" size="sm">
-                <Link href="/login" onClick={() => setMobileOpen(false)}>Sign In</Link>
+                <Link href="/login" onClick={() => setMobileOpen(false)}>
+                  Sign In
+                </Link>
               </Button>
               <Button asChild size="sm" className="glow-sm">
-                <Link href="/#beta-access" onClick={() => setMobileOpen(false)}>Request Beta Access</Link>
+                <Link href="/register" onClick={() => setMobileOpen(false)}>
+                  Create Account
+                </Link>
               </Button>
             </div>
           </Container>
