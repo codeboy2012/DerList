@@ -46,7 +46,7 @@ export async function POST(request: Request) {
 
   // Load items
   const items = await prisma.wishlistItem.findMany({
-    where: { id: { in: itemIds }, wishlistId },
+    where: { id: { in: itemIds }, wishlistId, archived: false },
     select: { id: true, title: true, brand: true, category: true, retailer: true },
   });
 

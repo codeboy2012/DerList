@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
       <AppNav user={user} />
 
       {/* Main content area */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
         <header className="glass border-border sticky top-0 z-20 flex h-14 items-center justify-between border-b px-6">
           <div className="flex items-center gap-2 md:hidden">
@@ -40,7 +40,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-5 sm:p-6 lg:p-8">{children}</main>
+        <main className="min-w-0 flex-1 p-5 sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>
   );

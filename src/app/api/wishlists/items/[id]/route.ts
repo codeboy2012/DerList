@@ -11,6 +11,7 @@ import { revalidatePath } from 'next/cache';
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { normalizeCategoryName, resolveCategoryId } from '@/lib/services/wishlist-categories';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types for the editor payload
@@ -131,6 +132,18 @@ async function verifyItemOwnership(itemId: string, userId: string) {
   return item;
 }
 
+function parseMetadataRecord(raw: string | null): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 function parseDecimal(value: string | undefined | null): number | null {
   if (!value || value.trim() === '') return null;
   const n = parseFloat(value);
@@ -202,6 +215,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const item = await verifyItemOwnership(id, user.id);
   if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
+  if (item.archived) {
+    return NextResponse.json(
+      { error: 'Restore this archived product before editing it.' },
+      { status: 409 }
+    );
+  }
+
   let body: EditorPayload;
   try {
     body = await request.json();
@@ -228,7 +248,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (body.dealInfo !== undefined) data.dealInfo = body.dealInfo || null;
   if (body.currency !== undefined) data.currency = body.currency || 'USD';
   if (body.notes !== undefined) data.notes = body.notes || null;
-  if (body.category !== undefined) data.category = body.category || null;
+  // `category` is handled inside the transaction below so the free-text field
+  // and the `wishlistCategoryId` relation are written together.
 
   if (body.priority !== undefined) {
     const p = body.priority.toUpperCase();
@@ -252,14 +273,37 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     data.purchasedAt = body.purchased ? new Date() : null;
   }
 
-  // Save metadata as JSON
-  if (body.metadata !== undefined) {
-    data.metadata = JSON.stringify(body.metadata);
+  // Merge metadata instead of replacing it. The editor submits the fields it
+  // owns; enrichment-owned keys such as `pros`, `cons`, `buyingAdvice` and
+  // `fieldConfidence` are not represented in that form and must survive an
+  // edit. Fields the editor does submit (including empty values and empty
+  // arrays) still overwrite their stored value.
+  if (
+    body.metadata !== undefined &&
+    body.metadata !== null &&
+    typeof body.metadata === 'object' &&
+    !Array.isArray(body.metadata)
+  ) {
+    data.metadata = JSON.stringify({
+      ...parseMetadataRecord(item.metadata),
+      ...body.metadata,
+    });
   }
 
-  const updated = await prisma.wishlistItem.update({
-    where: { id },
-    data,
+  const categoryName = body.category !== undefined ? normalizeCategoryName(body.category) : null;
+
+  const updated = await prisma.$transaction(async (tx) => {
+    if (body.category !== undefined) {
+      data.category = categoryName;
+      // Keep the relation inside this item's collection. An unknown or emptied
+      // category clears the relation instead of leaving a stale one.
+      data.wishlistCategoryId = await resolveCategoryId(tx, item.wishlistId, categoryName);
+    }
+
+    return tx.wishlistItem.update({
+      where: { id },
+      data,
+    });
   });
 
   revalidatePath(`/wishlists/${item.wishlistId}`);
@@ -285,6 +329,15 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const { id } = await params;
   const item = await verifyItemOwnership(id, user.id);
   if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  // Archived products are permanently deleted only through the archive flow,
+  // which requires an explicit confirmation.
+  if (item.archived) {
+    return NextResponse.json(
+      { error: 'Delete archived products from the archive view.' },
+      { status: 409 }
+    );
+  }
 
   await prisma.wishlistItem.delete({ where: { id } });
 

@@ -2,29 +2,76 @@
  * POST /api/wishlists/copy
  *
  * Copy an entire wishlist (items, categories, metadata) into the current user's account.
- * Does NOT require ownership of the source wishlist (supports future public copy).
- * Uses a database transaction for atomicity.
+ *
+ * This shares its behaviour with `duplicateWishlistAction`: every item field is
+ * preserved, categories are remapped to the new collection, and archived
+ * products stay behind in the source. Collections are private, so the source
+ * lookup is owner-scoped before any copy work begins.
  */
 
 import { NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+interface CopyBody {
+  sourceWishlistId?: string;
+  name?: string;
+  copyItems?: boolean;
+  copyCategories?: boolean;
+  copyNotes?: boolean;
+  copyPriorities?: boolean;
+  copyTags?: boolean;
+  copyMetadata?: boolean;
+  copyPurchasedStatus?: boolean;
+}
+
+/** Tag-like keys that live inside the item metadata blob. */
+const TAG_KEYS = ['tags', 'aiTags', 'customLabels'] as const;
+
+function parseMetadataObject(raw: string | null): Record<string, unknown> | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Build the copied metadata blob.
+ *
+ * `copyMetadata` controls specs, sellers, AI data and the rest of the blob.
+ * `copyTags` independently controls the tag-like keys, so turning tags off
+ * never drops the specifications and turning metadata off can still keep tags.
+ */
+function copyItemMetadata(
+  raw: string | null,
+  copyMetadata: boolean,
+  copyTags: boolean
+): string | null {
+  if (!raw) return null;
+
+  const parsed = parseMetadataObject(raw);
+  if (!parsed) return copyMetadata ? raw : null;
+  if (copyMetadata && copyTags) return raw;
+
+  const next: Record<string, unknown> = copyMetadata ? { ...parsed } : {};
+  for (const key of TAG_KEYS) {
+    if (copyTags && key in parsed) next[key] = parsed[key];
+    if (!copyTags) delete next[key];
+  }
+
+  return Object.keys(next).length > 0 ? JSON.stringify(next) : null;
+}
+
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let body: {
-    sourceWishlistId?: string;
-    name?: string;
-    copyItems?: boolean;
-    copyCategories?: boolean;
-    copyNotes?: boolean;
-    copyPriorities?: boolean;
-    copyTags?: boolean;
-    copyMetadata?: boolean;
-    copyPurchasedStatus?: boolean;
-  };
+  let body: CopyBody;
 
   try {
     body = await request.json();
@@ -37,11 +84,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'sourceWishlistId is required' }, { status: 400 });
   }
 
-  // Load source wishlist with items and categories
-  const source = await prisma.wishlist.findUnique({
-    where: { id: sourceWishlistId },
+  // Load the source only when it belongs to the caller. A foreign id is
+  // reported exactly like a missing row so it cannot be probed.
+  const source = await prisma.wishlist.findFirst({
+    where: { id: sourceWishlistId, ownerId: user.id },
     include: {
-      items: { orderBy: { position: 'asc' } },
+      // Archived products stay in the source collection; a copy represents the
+      // normal view of the collection.
+      items: { where: { archived: false }, orderBy: { position: 'asc' } },
       categories: { orderBy: { sortOrder: 'asc' } },
     },
   });
@@ -50,13 +100,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Source wishlist not found' }, { status: 404 });
   }
 
-  // Authorization: collections are private — only the owner may copy one.
-  // A foreign id is reported exactly like a missing row so it cannot be probed.
-  if (source.ownerId !== user.id) {
-    return NextResponse.json({ error: 'Source wishlist not found' }, { status: 404 });
-  }
-
-  // Options (all default to true)
+  // Options (all default to true, purchased status is opt-in)
   const opts = {
     copyItems: body.copyItems !== false,
     copyCategories: body.copyCategories !== false,
@@ -64,16 +108,14 @@ export async function POST(request: Request) {
     copyPriorities: body.copyPriorities !== false,
     copyTags: body.copyTags !== false,
     copyMetadata: body.copyMetadata !== false,
-    copyPurchasedStatus: body.copyPurchasedStatus === true, // opt-in
+    copyPurchasedStatus: body.copyPurchasedStatus === true,
   };
 
-  const newTitle = body.name?.trim() || `${source.title} (Copy)`;
+  const newTitle = body.name?.trim().slice(0, 200) || `${source.title} (Copy)`;
   const slug = await generateUniqueSlug(user.id, newTitle);
 
   try {
-    // Run everything in a transaction
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Create the new wishlist
       const newWishlist = await tx.wishlist.create({
         data: {
           ownerId: user.id,
@@ -87,56 +129,63 @@ export async function POST(request: Request) {
         },
       });
 
-      // 2. Copy categories (build a map of old ID → new ID for item assignment)
+      // Copy categories first and keep a map of source id → new id, so items
+      // can be relinked to the copy's own category records.
       const categoryMap = new Map<string, string>();
-      if (opts.copyCategories && source.categories.length > 0) {
-        for (const cat of source.categories) {
-          const newCat = await tx.wishlistCategory.create({
+      if (opts.copyCategories) {
+        for (const category of source.categories) {
+          const newCategory = await tx.wishlistCategory.create({
             data: {
               wishlistId: newWishlist.id,
-              name: cat.name,
-              description: cat.description,
-              externalLink: cat.externalLink,
-              externalLinkLabel: cat.externalLinkLabel,
-              notes: opts.copyNotes ? cat.notes : null,
-              sortOrder: cat.sortOrder,
-              icon: cat.icon,
+              name: category.name,
+              description: category.description,
+              externalLink: category.externalLink,
+              externalLinkLabel: category.externalLinkLabel,
+              notes: opts.copyNotes ? category.notes : null,
+              sortOrder: category.sortOrder,
+              icon: category.icon,
             },
           });
-          categoryMap.set(cat.id, newCat.id);
+          categoryMap.set(category.id, newCategory.id);
         }
       }
 
-      // 3. Copy items
-      if (opts.copyItems && source.items.length > 0) {
-        const itemsData = source.items.map((item) => ({
-          wishlistId: newWishlist.id,
-          title: item.title,
-          description: item.description,
-          url: item.url,
-          image: item.image,
-          brand: item.brand,
-          retailer: item.retailer,
-          currentPrice: item.currentPrice,
-          currency: item.currency,
-          originalPrice: item.originalPrice,
-          dealInfo: item.dealInfo,
-          priority: opts.copyPriorities ? item.priority : 'MEDIUM',
-          starPriority: opts.copyPriorities ? item.starPriority : 1,
-          quantity: item.quantity,
-          purchased: opts.copyPurchasedStatus ? item.purchased : false,
-          purchasedAt: opts.copyPurchasedStatus ? item.purchasedAt : null,
-          notes: opts.copyNotes ? item.notes : null,
-          category: item.category,
-          position: item.position,
-          productId: item.productId,
-          wishlistCategoryId: item.wishlistCategoryId
-            ? categoryMap.get(item.wishlistCategoryId) || null
-            : null,
-          metadata: opts.copyMetadata ? item.metadata : null,
-        }));
-
-        await tx.wishlistItem.createMany({ data: itemsData });
+      if (opts.copyItems) {
+        // createMany keeps the copy fast while still creating independent item
+        // and category rows; only the shared Product record may be referenced.
+        await tx.wishlistItem.createMany({
+          data: source.items.map((item) => ({
+            wishlistId: newWishlist.id,
+            title: item.title,
+            description: item.description,
+            url: item.url,
+            image: item.image,
+            brand: item.brand,
+            model: item.model,
+            condition: item.condition,
+            retailer: item.retailer,
+            currentPrice: item.currentPrice,
+            targetPrice: item.targetPrice,
+            originalPrice: item.originalPrice,
+            dealInfo: item.dealInfo,
+            currency: item.currency,
+            priority: opts.copyPriorities ? item.priority : 'MEDIUM',
+            starPriority: opts.copyPriorities ? item.starPriority : 1,
+            quantity: item.quantity,
+            availability: item.availability,
+            purchased: opts.copyPurchasedStatus ? item.purchased : false,
+            purchasedAt: opts.copyPurchasedStatus ? item.purchasedAt : null,
+            notes: opts.copyNotes ? item.notes : null,
+            category: item.category,
+            position: item.position,
+            productId: item.productId,
+            wishlistCategoryId:
+              opts.copyCategories && item.wishlistCategoryId
+                ? (categoryMap.get(item.wishlistCategoryId) ?? null)
+                : null,
+            metadata: copyItemMetadata(item.metadata, opts.copyMetadata, opts.copyTags),
+          })),
+        });
       }
 
       return newWishlist;
@@ -150,9 +199,10 @@ export async function POST(request: Request) {
         slug: result.slug,
       },
     });
-  } catch (error) {
+  } catch {
+    // Do not forward database errors (or their details) to the browser.
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : 'Copy failed' },
+      { success: false, error: 'Could not copy this collection. Try again.' },
       { status: 500 }
     );
   }

@@ -87,8 +87,11 @@ export function CopyWishlistButton({
 
           {/* Name */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium">Wishlist Name</label>
+            <label htmlFor="copy-wishlist-name" className="mb-1.5 block text-sm font-medium">
+              Wishlist Name
+            </label>
             <Input
+              id="copy-wishlist-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="My Wishlist (Copy)"

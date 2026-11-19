@@ -5,8 +5,10 @@ import { requireUser } from '@/lib/auth';
 import { formatDate } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
 import { siteConfig } from '@/lib/site-config';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
+import { WishlistCardActions } from './WishlistCardActions';
 
 export const metadata: Metadata = {
   title: `Wishlists — ${siteConfig.name}`,
@@ -47,9 +49,26 @@ export default async function WishlistsPage({ searchParams }: PageProps) {
       visibility: true,
       archived: true,
       updatedAt: true,
-      _count: { select: { items: true } },
+      _count: { select: { items: { where: { archived: false } } } },
     },
   });
+
+  // Archived products are counted separately so a card never presents hidden
+  // products as part of the collection's active contents.
+  const archivedCounts =
+    wishlists.length > 0
+      ? await prisma.wishlistItem.groupBy({
+          by: ['wishlistId'],
+          where: {
+            wishlistId: { in: wishlists.map((wishlist) => wishlist.id) },
+            archived: true,
+          },
+          _count: { _all: true },
+        })
+      : [];
+  const archivedByWishlist = new Map(
+    archivedCounts.map((count) => [count.wishlistId, count._count._all])
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -138,43 +157,67 @@ export default async function WishlistsPage({ searchParams }: PageProps) {
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {wishlists.map((wl) => (
-            <Link
-              key={wl.id}
-              href={`/wishlists/${wl.id}`}
-              className="group border-border bg-card hover:border-border/60 focus-visible:ring-ring rounded-xl border p-5 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10 focus-visible:ring-2 focus-visible:outline-none"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <span
-                    className="bg-surface flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg"
-                    style={
-                      wl.color ? { backgroundColor: `${wl.color}20`, color: wl.color } : undefined
-                    }
+          {wishlists.map((wl, index) => {
+            const archivedItems = archivedByWishlist.get(wl.id) ?? 0;
+            return (
+              <div
+                key={wl.id}
+                className="group border-border bg-card hover:border-border/60 min-w-0 rounded-xl border p-5 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <Link
+                    href={`/wishlists/${wl.id}`}
+                    className="focus-visible:ring-ring flex min-w-0 flex-1 items-center gap-3 rounded-lg focus-visible:ring-2 focus-visible:outline-none"
                   >
-                    {wl.icon || '📋'}
-                  </span>
-                  <div className="flex flex-col overflow-hidden">
-                    <span className="text-foreground group-hover:text-accent truncate font-medium transition-colors">
-                      {wl.title}
+                    <span
+                      className="bg-surface flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-lg"
+                      style={
+                        wl.color ? { backgroundColor: `${wl.color}20`, color: wl.color } : undefined
+                      }
+                    >
+                      {wl.icon || '📋'}
                     </span>
-                    {wl.description && (
-                      <span className="text-muted-foreground truncate text-xs">
-                        {wl.description}
+                    <div className="flex min-w-0 flex-col overflow-hidden">
+                      <span className="text-foreground group-hover:text-accent flex items-center gap-2 truncate font-medium transition-colors">
+                        <span className="truncate">{wl.title}</span>
+                        {wl.archived && <Badge variant="warning">Archived</Badge>}
                       </span>
-                    )}
-                  </div>
+                      {wl.description ? (
+                        <span className="text-muted-foreground truncate text-xs">
+                          {wl.description}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/60 truncate text-xs italic">
+                          No description
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                  <WishlistCardActions
+                    wishlistId={wl.id}
+                    title={wl.title}
+                    archived={wl.archived}
+                    canMoveUp={index > 0}
+                    canMoveDown={index < wishlists.length - 1}
+                  />
+                </div>
+
+                <div className="text-muted-foreground mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                  <span className="flex items-center gap-1">
+                    <Package className="h-3 w-3" aria-hidden />
+                    {wl._count.items} items
+                  </span>
+                  {archivedItems > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Archive className="h-3 w-3" aria-hidden />
+                      {archivedItems} archived
+                    </span>
+                  )}
+                  <span>Updated {formatDate(wl.updatedAt)}</span>
                 </div>
               </div>
-              <div className="text-muted-foreground mt-4 flex items-center gap-4 text-xs">
-                <span className="flex items-center gap-1">
-                  <Package className="h-3 w-3" aria-hidden />
-                  {wl._count.items} items
-                </span>
-                <span>Updated {formatDate(wl.updatedAt)}</span>
-              </div>
-            </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

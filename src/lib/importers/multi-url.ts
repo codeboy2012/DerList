@@ -16,6 +16,8 @@ import { detectBestImporter } from './registry';
 import type { DetectResult, Importer, ImportResult } from './types';
 
 const URL_PATTERN = /https?:\/\/[^\s]+/gi;
+/** Punctuation left at the edges of a line once its URLs are stripped. */
+const URL_SEPARATOR_EDGES = /^[\s,;:|·•\-–—]+|[\s,;:|·•\-–—]+$/g;
 const MULTI_URL_MIN = 2;
 
 export const MultiUrlImporter: Importer = {
@@ -34,7 +36,9 @@ export const MultiUrlImporter: Importer = {
     // Higher confidence when we have multiple distinct URLs
     const uniqueUrls = new Set(urls.map((u) => u.toLowerCase()));
     if (uniqueUrls.size >= MULTI_URL_MIN) {
-      return { match: true, confidence: 85 };
+      // Must outrank the specialized single-URL importers (Amazon, Best Buy, etc.)
+      // when the input contains more than one URL.
+      return { match: true, confidence: 95 };
     }
 
     return { match: false, confidence: 0 };
@@ -58,9 +62,7 @@ export const MultiUrlImporter: Importer = {
 
     for (let i = 0; i < uniqueUrls.length; i += CONCURRENCY) {
       const batch = uniqueUrls.slice(i, i + CONCURRENCY);
-      const results = await Promise.allSettled(
-        batch.map((url) => importSingleUrl(url))
-      );
+      const results = await Promise.allSettled(batch.map((url) => importSingleUrl(url)));
 
       for (const result of results) {
         if (result.status === 'fulfilled' && result.value) {
@@ -69,20 +71,26 @@ export const MultiUrlImporter: Importer = {
       }
     }
 
-    // Also extract non-URL lines as product names
+    // Also extract the remaining text on each line as a product name. Strip
+    // every URL from the line first, so a line that is nothing but URLs — one
+    // URL, or several separated by spaces — is never added again as a product
+    // name. Removing the URLs also keeps the URL text out of mixed lines.
     const lines = trimmed.split('\n');
     for (const line of lines) {
-      const cleaned = line.trim();
-      if (cleaned && !URL_PATTERN.test(cleaned) && cleaned.length >= 3) {
+      const name = line
+        .replace(URL_PATTERN, ' ')
+        .replace(URL_SEPARATOR_EDGES, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (name.length >= 3) {
         drafts.push({
-          title: cleaned,
+          title: name,
           source: 'manual',
           confidence: 40,
         });
       }
     }
-    // Reset global regex lastIndex
-    URL_PATTERN.lastIndex = 0;
 
     return {
       drafts,

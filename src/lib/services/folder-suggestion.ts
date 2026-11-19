@@ -125,6 +125,19 @@ export class FolderSuggestionService {
     });
     if (!wishlist) throw new Error('Wishlist not found');
 
+    // Archived products are read-only. Resolve the active, owned items before
+    // creating a category so an archived selection cannot leave an empty folder
+    // behind or change archived metadata.
+    const activeItems = await prisma.wishlistItem.findMany({
+      where: {
+        id: { in: input.itemIds },
+        wishlistId: input.wishlistId,
+        archived: false,
+      },
+      select: { id: true },
+    });
+    if (activeItems.length === 0) return;
+
     if (input.useExistingFolderId) {
       // Use existing category — just update items
       const existing = await prisma.wishlistCategory.findFirst({
@@ -132,7 +145,11 @@ export class FolderSuggestionService {
       });
       if (existing) {
         await prisma.wishlistItem.updateMany({
-          where: { id: { in: input.itemIds }, wishlistId: input.wishlistId },
+          where: {
+            id: { in: input.itemIds },
+            wishlistId: input.wishlistId,
+            archived: false,
+          },
           data: { category: existing.name, wishlistCategoryId: existing.id },
         });
         return;
@@ -154,9 +171,13 @@ export class FolderSuggestionService {
         },
       }));
 
-    // Assign all items to the folder
+    // Assign all active items to the folder
     await prisma.wishlistItem.updateMany({
-      where: { id: { in: input.itemIds }, wishlistId: input.wishlistId },
+      where: {
+        id: { in: activeItems.map((item) => item.id) },
+        wishlistId: input.wishlistId,
+        archived: false,
+      },
       data: { category: input.folderName, wishlistCategoryId: category.id },
     });
 
@@ -164,10 +185,16 @@ export class FolderSuggestionService {
     if (input.subfolders && input.subfolders.length > 0) {
       for (const sub of input.subfolders) {
         if (sub.itemIds.length === 0) continue;
-        // Update the category field on items to reflect subfolder
+        // Update the category field on items to reflect subfolder. The
+        // composite label has no matching category record, so the relation is
+        // cleared rather than left pointing at the parent folder.
         await prisma.wishlistItem.updateMany({
-          where: { id: { in: sub.itemIds }, wishlistId: input.wishlistId },
-          data: { category: `${input.folderName} > ${sub.name}` },
+          where: {
+            id: { in: sub.itemIds },
+            wishlistId: input.wishlistId,
+            archived: false,
+          },
+          data: { category: `${input.folderName} > ${sub.name}`, wishlistCategoryId: null },
         });
       }
     }
@@ -181,7 +208,7 @@ export class FolderSuggestionService {
       select: { id: true, name: true },
     });
     const itemCategories = await prisma.wishlistItem.findMany({
-      where: { wishlistId, category: { not: null } },
+      where: { wishlistId, category: { not: null }, archived: false },
       select: { category: true },
       distinct: ['category'],
     });

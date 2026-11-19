@@ -35,10 +35,13 @@ export async function POST(request: Request) {
   let body: {
     wishlistId?: string;
     title?: string;
+    description?: string;
     url?: string;
     brand?: string;
     image?: string;
     price?: number;
+    originalPrice?: number;
+    currency?: string;
     retailer?: string;
     category?: string;
     skipEnrichment?: boolean;
@@ -71,8 +74,11 @@ export async function POST(request: Request) {
   let price: number | null = body.price ?? null;
   let brand = body.brand || null;
   let retailer = body.retailer || null;
-  let description: string | null = null;
+  let description: string | null = body.description?.trim() || null;
   let url = body.url || null;
+  const currency = /^[A-Za-z]{3}$/.test(body.currency?.trim() ?? '')
+    ? body.currency!.trim().toUpperCase()
+    : 'USD';
 
   // If URL provided, try quick metadata extraction (fast — no AI)
   if (url && !title) {
@@ -85,7 +91,7 @@ export async function POST(request: Request) {
       image = image || meta.image;
       price = price ?? meta.price;
       brand = brand || meta.brand;
-      description = meta.description;
+      description = description || meta.description;
       if (!retailer) {
         // Detect retailer from domain
         const retailerMap: Record<string, string> = {
@@ -167,7 +173,8 @@ export async function POST(request: Request) {
         brand,
         retailer,
         currentPrice: price,
-        currency: 'USD',
+        originalPrice: body.originalPrice ?? null,
+        currency,
         category: body.category || null,
         position,
         // Mark as enrichment pending in metadata
@@ -223,7 +230,9 @@ export async function POST(request: Request) {
             mpn: result.mpn,
             tags: result.tags?.join(', '),
             searchKeywords: result.searchKeywords?.join(', '),
-            specifications: result.specifications?.map((s) => ({
+            // `specs` is the canonical metadata key. Readers still accept the
+            // legacy `specifications` key for rows written before this change.
+            specs: result.specifications?.map((s) => ({
               id: String(Date.now() + Math.random()),
               key: s.key,
               value: s.value,

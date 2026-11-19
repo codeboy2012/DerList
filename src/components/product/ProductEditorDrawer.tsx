@@ -25,6 +25,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { readSpecEntries } from '@/lib/products/specs';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
@@ -254,7 +255,8 @@ function mergeMetadata(base: ProductEditorData, meta: Record<string, unknown>): 
     aiTags: (meta.aiTags as string) || base.aiTags,
     aiSuggestedCategory: (meta.aiSuggestedCategory as string) || base.aiSuggestedCategory,
     aiSuggestedName: (meta.aiSuggestedName as string) || base.aiSuggestedName,
-    specs: (meta.specs as SpecField[]) || base.specs,
+    // `specs` is canonical; legacy imported rows used `specifications`.
+    specs: readSpecEntries(meta) as SpecField[],
     importedFrom: (meta.importedFrom as string) || base.importedFrom,
     lastSynced: (meta.lastSynced as string) || base.lastSynced,
     provider: (meta.provider as string) || base.provider,

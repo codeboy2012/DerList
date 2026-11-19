@@ -1,15 +1,12 @@
 import type { Metadata } from 'next';
-
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-
+import { ArrowLeft } from 'lucide-react';
+import { getCurrentUser, requireUser } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { wishlistMetadataTitle } from '@/lib/wishlists/metadata';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { requireUser } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { siteConfig } from '@/lib/site-config';
-import { ArrowLeft } from 'lucide-react';
-
 import { EditWishlistForm } from './EditWishlistForm';
 
 interface PageProps {
@@ -18,12 +15,11 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const wishlist = await prisma.wishlist.findUnique({
-    where: { id },
-    select: { title: true },
-  });
+  // Owner-scoped: a foreign or missing collection gets generic metadata so its
+  // title never appears in another account's document title.
+  const user = await getCurrentUser();
   return {
-    title: wishlist ? `Edit ${wishlist.title} — ${siteConfig.name}` : `Edit Wishlist — ${siteConfig.name}`,
+    title: await wishlistMetadataTitle(id, user?.id ?? null, 'edit'),
   };
 }
 
@@ -57,7 +53,7 @@ export default async function EditWishlistPage({ params }: PageProps) {
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <h1 className="text-xl font-semibold text-foreground">Edit Wishlist</h1>
+        <h1 className="text-foreground text-xl font-semibold">Edit Wishlist</h1>
       </div>
 
       <Card className="max-w-2xl">

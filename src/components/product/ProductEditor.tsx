@@ -111,8 +111,8 @@ function FieldSourceBadge({ source }: { source?: string }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide',
-        config.className,
+        'inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-medium tracking-wide uppercase',
+        config.className
       )}
       title={config.label}
     >
@@ -203,7 +203,8 @@ function ImportStatusBanner({ aiInfo }: { aiInfo: AIIdentificationInfo }) {
               AI identification isn&apos;t configured
             </p>
             <p className="text-muted-foreground mt-0.5 text-xs">
-              DerList can&apos;t automatically identify this product yet. Please enter the product details manually below.
+              DerList can&apos;t automatically identify this product yet. Please enter the product
+              details manually below.
             </p>
           </div>
         </div>
@@ -235,9 +236,7 @@ function ImportStatusBanner({ aiInfo }: { aiInfo: AIIdentificationInfo }) {
           <AlertCircle className="text-danger mt-0.5 h-4 w-4 shrink-0" />
           <div>
             <p className="text-danger text-sm font-medium">Identity conflict detected</p>
-            {message && (
-              <p className="text-muted-foreground mt-0.5 text-xs">{message}</p>
-            )}
+            {message && <p className="text-muted-foreground mt-0.5 text-xs">{message}</p>}
           </div>
         </div>
       );
@@ -251,7 +250,8 @@ function ImportStatusBanner({ aiInfo }: { aiInfo: AIIdentificationInfo }) {
               Couldn&apos;t reliably identify this product
             </p>
             <p className="text-muted-foreground mt-0.5 text-xs">
-              {message || 'The connected AI couldn\'t verify enough information from this URL. Please enter the product details manually.'}
+              {message ||
+                "The connected AI couldn't verify enough information from this URL. Please enter the product details manually."}
             </p>
           </div>
         </div>
@@ -284,7 +284,7 @@ function AIActivityTimeline({ activity }: { activity: AIIdentificationInfo['acti
 
   return (
     <div className="border-border rounded-lg border p-3">
-      <h4 className="text-muted-foreground mb-2 text-xs font-medium uppercase tracking-wide">
+      <h4 className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
         AI Activity
       </h4>
       <div className="space-y-1.5">
@@ -296,17 +296,17 @@ function AIActivityTimeline({ activity }: { activity: AIIdentificationInfo['acti
             {item.status === 'in_progress' && (
               <Loader2 className="text-accent h-3 w-3 shrink-0 animate-spin" />
             )}
-            {item.status === 'failed' && (
-              <AlertCircle className="text-danger h-3 w-3 shrink-0" />
-            )}
+            {item.status === 'failed' && <AlertCircle className="text-danger h-3 w-3 shrink-0" />}
             {item.status === 'skipped' && (
               <span className="text-muted-foreground h-3 w-3 shrink-0 text-center">—</span>
             )}
-            <span className={cn(
-              'text-foreground',
-              item.status === 'failed' && 'text-danger',
-              item.status === 'skipped' && 'text-muted-foreground line-through',
-            )}>
+            <span
+              className={cn(
+                'text-foreground',
+                item.status === 'failed' && 'text-danger',
+                item.status === 'skipped' && 'text-muted-foreground line-through'
+              )}
+            >
               {item.message}
             </span>
           </div>
@@ -353,13 +353,12 @@ export function ProductEditor({
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiStatus, setAiStatus] = useState<'idle' | 'loading' | 'done' | 'error' | 'no_ai'>(
-    aiInfo?.importStatus === 'no_ai_configured' ? 'no_ai' :
-    aiInfo?.identified ? 'done' : 'idle'
+    aiInfo?.importStatus === 'no_ai_configured' ? 'no_ai' : aiInfo?.identified ? 'done' : 'idle'
   );
   const [aiMessage, setAiMessage] = useState(
     aiInfo?.identified
       ? `AI identified — ${aiInfo.confidence ?? 0}% confidence`
-      : aiInfo?.message ?? ''
+      : (aiInfo?.message ?? '')
   );
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -400,7 +399,9 @@ export function ProductEditor({
 
       if (!data.success || !data.candidates?.length) {
         setAiStatus('error');
-        setAiMessage(data.error || "Couldn't reliably identify this product. Please enter details manually.");
+        setAiMessage(
+          data.error || "Couldn't reliably identify this product. Please enter details manually."
+        );
         return;
       }
 
@@ -472,10 +473,7 @@ export function ProductEditor({
     if (itemId) formData.set('itemId', itemId);
 
     try {
-      const endpoint =
-        mode === 'edit'
-          ? '/api/wishlists/add-item'
-          : '/api/wishlists/add-item';
+      const endpoint = mode === 'edit' ? '/api/wishlists/add-item' : '/api/wishlists/add-item';
 
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -647,7 +645,7 @@ export function ProductEditor({
             <X className="h-3 w-3" />
           </button>
           {fieldSources.image && (
-            <div className="absolute -bottom-1 -right-1">
+            <div className="absolute -right-1 -bottom-1">
               <FieldSourceBadge source={fieldSources.image} />
             </div>
           )}
@@ -761,8 +759,8 @@ export function ProductEditor({
           <Input
             id="pe-asin"
             value={asin}
-            readOnly={!!draft?.asin}
-            className={draft?.asin ? 'bg-muted' : ''}
+            readOnly
+            className={asin ? 'bg-muted' : ''}
             placeholder="Amazon ASIN"
           />
         </div>

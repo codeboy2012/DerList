@@ -3,10 +3,14 @@ node_modules
 .git
 .gitignore
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 *.md
 LICENSE*
 .husky
 .vscode
 .kiro
+tests
+test-results
+playwright-report
+.tmp-node

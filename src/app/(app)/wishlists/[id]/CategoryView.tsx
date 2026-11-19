@@ -1,3 +1,5 @@
+'use client';
+
 import { ExternalLink, FolderOpen } from 'lucide-react';
 import { ItemRow } from './ItemRow';
 
@@ -39,6 +41,9 @@ interface CategoryViewProps {
   items: CategoryItem[];
   wishlistId: string;
   categoryMeta?: CategoryMeta[];
+  /** Bulk selection state, forwarded to each row. */
+  selectedIds?: string[];
+  onSelectChange?: (itemId: string, selected: boolean) => void;
 }
 
 /**
@@ -50,6 +55,8 @@ export function CategoryView({
   wishlistId,
   categoryMeta = [],
   collections,
+  selectedIds = [],
+  onSelectChange,
 }: CategoryViewProps) {
   // Group items by category
   const groups = new Map<string, CategoryItem[]>();
@@ -93,6 +100,8 @@ export function CategoryView({
             total={total}
             wishlistId={wishlistId}
             collections={collections}
+            selectedIds={selectedIds}
+            onSelectChange={onSelectChange}
           />
         );
       })}
@@ -105,6 +114,8 @@ export function CategoryView({
           total={uncategorized.reduce((sum, item) => sum + (Number(item.currentPrice) || 0), 0)}
           wishlistId={wishlistId}
           collections={collections}
+          selectedIds={selectedIds}
+          onSelectChange={onSelectChange}
         />
       )}
     </div>
@@ -118,6 +129,8 @@ function CategorySection({
   total,
   wishlistId,
   collections,
+  selectedIds = [],
+  onSelectChange,
 }: {
   name: string;
   meta?: CategoryMeta;
@@ -125,6 +138,8 @@ function CategorySection({
   total: number;
   wishlistId: string;
   collections?: Array<{ id: string; title: string }>;
+  selectedIds?: string[];
+  onSelectChange?: (itemId: string, selected: boolean) => void;
 }) {
   return (
     <section className="flex flex-col gap-2.5">
@@ -163,7 +178,15 @@ function CategorySection({
       {/* Items */}
       <div className="flex flex-col gap-2">
         {items.map((item) => (
-          <ItemRow key={item.id} item={item} wishlistId={wishlistId} collections={collections} />
+          <ItemRow
+            key={item.id}
+            item={item}
+            wishlistId={wishlistId}
+            collections={collections}
+            selectable
+            selected={selectedIds.includes(item.id)}
+            onSelectChange={(checked) => onSelectChange?.(item.id, checked)}
+          />
         ))}
       </div>
 

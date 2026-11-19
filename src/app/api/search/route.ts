@@ -30,7 +30,8 @@ export async function GET(request: Request) {
     }),
     prisma.product.findMany({
       where: {
-        wishlistItems: { some: { wishlist: { ownerId: user.id } } },
+        // Archived products are hidden from ordinary search.
+        wishlistItems: { some: { wishlist: { ownerId: user.id }, archived: false } },
         title: { contains: query, mode: 'insensitive' },
       },
       take: 5,

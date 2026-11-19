@@ -15,6 +15,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getProviderManager } from '@/lib/providers';
 import type { Message } from '@/lib/providers/types';
+import { resolveCategoryId } from '@/lib/services/wishlist-categories';
 
 interface OrganizerChange {
   index: number;
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
   // Verify ownership and load items
   const wishlist = await prisma.wishlist.findFirst({
     where: { id: wishlistId, ownerId: user.id },
-    include: { items: { orderBy: { position: 'asc' } } },
+    include: { items: { where: { archived: false }, orderBy: { position: 'asc' } } },
   });
   if (!wishlist) return NextResponse.json({ error: 'Wishlist not found' }, { status: 404 });
 
@@ -64,70 +65,78 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No changes to apply' }, { status: 400 });
     }
 
-    let applied = 0;
-    for (const change of changes) {
-      const idx = change.index;
-      if (typeof idx !== 'number' || idx < 0 || idx >= wishlist.items.length) continue;
-      const item = wishlist.items[idx];
+    // Every applied change is written in one transaction, and each update is
+    // scoped to this collection plus `archived: false`. A categorize change
+    // also maintains the `wishlistCategoryId` relation.
+    const applied = await prisma.$transaction(async (tx) => {
+      let count = 0;
+      for (const change of changes) {
+        const idx = change.index;
+        if (typeof idx !== 'number' || idx < 0 || idx >= wishlist.items.length) continue;
+        const item = wishlist.items[idx];
+        const where = { id: item.id, wishlistId: wishlist.id, archived: false };
 
-      try {
         switch (change.action) {
           case 'rename':
             if (change.newTitle) {
-              await prisma.wishlistItem.update({
-                where: { id: item.id },
-                data: { title: String(change.newTitle).trim() },
+              const result = await tx.wishlistItem.updateMany({
+                where,
+                data: { title: String(change.newTitle).trim().slice(0, 200) },
               });
-              applied++;
+              count += result.count;
             }
             break;
-          case 'categorize':
+          case 'categorize': {
             if (change.category) {
-              await prisma.wishlistItem.update({
-                where: { id: item.id },
-                data: { category: String(change.category) },
+              const categoryName = String(change.category).trim().slice(0, 100);
+              const result = await tx.wishlistItem.updateMany({
+                where,
+                data: {
+                  category: categoryName,
+                  wishlistCategoryId: await resolveCategoryId(tx, wishlist.id, categoryName),
+                },
               });
-              applied++;
+              count += result.count;
             }
             break;
+          }
           case 'brand':
             if (change.brand) {
-              await prisma.wishlistItem.update({
-                where: { id: item.id },
-                data: { brand: String(change.brand) },
+              const result = await tx.wishlistItem.updateMany({
+                where,
+                data: { brand: String(change.brand).slice(0, 100) },
               });
-              applied++;
+              count += result.count;
             }
             break;
           case 'duplicate':
             if (typeof change.duplicateOf === 'number') {
-              await prisma.wishlistItem.update({
-                where: { id: item.id },
+              const result = await tx.wishlistItem.updateMany({
+                where,
                 data: {
                   notes:
                     `[Duplicate of: ${wishlist.items[change.duplicateOf]?.title || `item #${change.duplicateOf + 1}`}] ${item.notes || ''}`.trim(),
                 },
               });
-              applied++;
+              count += result.count;
             }
             break;
           case 'priority':
             if (change.priority) {
               const validPriorities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
               if (validPriorities.includes(change.priority)) {
-                await prisma.wishlistItem.update({
-                  where: { id: item.id },
+                const result = await tx.wishlistItem.updateMany({
+                  where,
                   data: { priority: change.priority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' },
                 });
-                applied++;
+                count += result.count;
               }
             }
             break;
         }
-      } catch {
-        // Skip individual failures
       }
-    }
+      return count;
+    });
 
     revalidatePath(`/wishlists/${wishlistId}`);
     revalidatePath('/dashboard');

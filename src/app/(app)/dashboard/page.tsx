@@ -34,9 +34,21 @@ export default async function UserDashboardPage() {
     recentImports,
     priceDrops,
   ] = await Promise.all([
-    prisma.wishlist.count({ where: { ownerId: user.id } }),
-    prisma.wishlistItem.count({ where: { wishlist: { ownerId: user.id } } }),
-    prisma.wishlistItem.count({ where: { wishlist: { ownerId: user.id }, purchased: true } }),
+    // Archived collections are hidden from the active collection list, so they
+    // are excluded from the counter too — the label says "Active Wishlists".
+    prisma.wishlist.count({ where: { ownerId: user.id, archived: false } }),
+    // Archived collections are excluded from the active dashboard as well as
+    // archived products, so the totals agree with the collection list.
+    prisma.wishlistItem.count({
+      where: { wishlist: { ownerId: user.id, archived: false }, archived: false },
+    }),
+    prisma.wishlistItem.count({
+      where: {
+        wishlist: { ownerId: user.id, archived: false },
+        purchased: true,
+        archived: false,
+      },
+    }),
     prisma.wishlist.findMany({
       where: { ownerId: user.id, archived: false },
       orderBy: { updatedAt: 'desc' },
@@ -47,11 +59,13 @@ export default async function UserDashboardPage() {
         icon: true,
         visibility: true,
         updatedAt: true,
-        _count: { select: { items: true } },
+        // Only active products are counted; archived ones are reported
+        // separately on the collection card.
+        _count: { select: { items: { where: { archived: false } } } },
       },
     }),
     prisma.wishlistItem.findMany({
-      where: { wishlist: { ownerId: user.id } },
+      where: { wishlist: { ownerId: user.id, archived: false }, archived: false },
       orderBy: { createdAt: 'desc' },
       take: 5,
       select: {
@@ -66,7 +80,11 @@ export default async function UserDashboardPage() {
     }),
     // Recently imported products (by this user)
     prisma.wishlistItem.findMany({
-      where: { wishlist: { ownerId: user.id }, productId: { not: null } },
+      where: {
+        wishlist: { ownerId: user.id, archived: false },
+        productId: { not: null },
+        archived: false,
+      },
       orderBy: { createdAt: 'desc' },
       take: 4,
       select: {
@@ -84,7 +102,11 @@ export default async function UserDashboardPage() {
     prisma.productChange.findMany({
       where: {
         changeType: 'PRICE',
-        product: { wishlistItems: { some: { wishlist: { ownerId: user.id } } } },
+        product: {
+          wishlistItems: {
+            some: { wishlist: { ownerId: user.id, archived: false }, archived: false },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 4,
@@ -119,7 +141,11 @@ export default async function UserDashboardPage() {
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Wishlists" value={totalWishlists} icon={<List className="h-4 w-4" />} />
+        <StatCard
+          label="Active Wishlists"
+          value={totalWishlists}
+          icon={<List className="h-4 w-4" />}
+        />
         <StatCard label="Total Items" value={totalItems} icon={<Package className="h-4 w-4" />} />
         <StatCard
           label="Purchased"
@@ -214,7 +240,7 @@ export default async function UserDashboardPage() {
       {/* Main grid */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Recent wishlists */}
-        <Card>
+        <Card className="min-w-0">
           <CardHeader className="flex-row items-center justify-between pb-3">
             <CardTitle className="text-sm font-medium">Recent Wishlists</CardTitle>
             <Button asChild size="sm" variant="ghost" className="text-xs">
@@ -257,7 +283,7 @@ export default async function UserDashboardPage() {
         </Card>
 
         {/* Recent items */}
-        <Card>
+        <Card className="min-w-0">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Recent Items</CardTitle>
           </CardHeader>
@@ -305,7 +331,7 @@ export default async function UserDashboardPage() {
 
         {/* Recently imported */}
         {recentImports.length > 0 && (
-          <Card className="lg:col-span-2">
+          <Card className="min-w-0 lg:col-span-2">
             <CardHeader className="flex-row items-center justify-between pb-3">
               <CardTitle className="flex items-center gap-2 text-sm font-medium">
                 <Link2 className="text-accent h-4 w-4" /> Recently Imported

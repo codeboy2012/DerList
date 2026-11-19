@@ -135,9 +135,10 @@ async function applyEnrichmentToItem(
   enrichmentService: EnrichmentService,
   priceLocked?: boolean
 ) {
-  // Verify ownership
+  // Verify ownership. Archived products are read-only, so enrichment must not
+  // silently change their fields or metadata.
   const item = await prisma.wishlistItem.findFirst({
-    where: { id: itemId },
+    where: { id: itemId, archived: false },
     include: { wishlist: { select: { ownerId: true } } },
   });
   if (!item || item.wishlist.ownerId !== userId) return;

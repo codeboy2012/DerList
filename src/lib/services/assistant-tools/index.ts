@@ -13,6 +13,7 @@
 import { generateOperationId, wishlistEvents } from '@/lib/events/wishlist-events';
 import { prisma } from '@/lib/prisma';
 import { WishlistRepository } from '@/lib/repositories';
+import { resolveCategoryId } from '@/lib/services/wishlist-categories';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -75,7 +76,7 @@ export const TOOL_DEFINITIONS = [
   '',
   '6. update_wishlist_item — Edit item. Args: {"itemId": "id", "changes": {"notes": "...", "category": "...", "starPriority": 3}}',
   '',
-  '7. clear_wishlist — Remove ALL items. Args: {}. Only when explicitly requested.',
+  '7. clear_wishlist — Remove all active items; archived items are kept. Args: {}. Only when explicitly requested.',
   '',
   'RULES:',
   '- For bulk ops use add_multiple/remove_multiple (ONE call, not many singles).',
@@ -180,7 +181,7 @@ async function executeGetWishlist(userId: string): Promise<ToolResult> {
       where: { ownerId: userId, archived: false },
       include: {
         items: {
-          where: { purchased: false },
+          where: { purchased: false, archived: false },
           orderBy: { position: 'asc' },
           take: 100,
           select: {
@@ -196,7 +197,7 @@ async function executeGetWishlist(userId: string): Promise<ToolResult> {
             starPriority: true,
           },
         },
-        _count: { select: { items: true } },
+        _count: { select: { items: { where: { archived: false } } } },
       },
     });
 
@@ -257,6 +258,7 @@ async function executeAddToWishlist(
         wishlistId: wishlist.id,
         title: { equals: title.trim(), mode: 'insensitive' },
         purchased: false,
+        archived: false,
       },
       select: { id: true, title: true },
     });
@@ -376,7 +378,7 @@ async function executeAddMultipleToWishlist(
 
     // Get existing titles for dedup
     const existingItems = await prisma.wishlistItem.findMany({
-      where: { wishlistId: wishlist.id, purchased: false },
+      where: { wishlistId: wishlist.id, purchased: false, archived: false },
       select: { id: true, title: true },
     });
     const existingLower = new Map(existingItems.map((i) => [i.title.toLowerCase(), i]));
@@ -524,7 +526,12 @@ async function executeRemoveMultipleFromWishlist(
     if (args.lastImport === true) {
       // Find items with importBatch metadata, get the most recent batch
       const allItems = await prisma.wishlistItem.findMany({
-        where: { wishlistId: wishlist.id, purchased: false, metadata: { not: null } },
+        where: {
+          wishlistId: wishlist.id,
+          purchased: false,
+          archived: false,
+          metadata: { not: null },
+        },
         select: { id: true, title: true, metadata: true },
         orderBy: { createdAt: 'desc' },
       });
@@ -573,7 +580,12 @@ async function executeRemoveMultipleFromWishlist(
 
       // Verify all items belong to this user
       const items = await prisma.wishlistItem.findMany({
-        where: { id: { in: ids }, wishlist: { ownerId: userId }, purchased: false },
+        where: {
+          id: { in: ids },
+          wishlist: { ownerId: userId },
+          purchased: false,
+          archived: false,
+        },
         select: { id: true, title: true },
       });
 
@@ -681,6 +693,17 @@ async function executeRemoveFromWishlist(
       };
     }
 
+    // Archived products are read-only, including permanent removal. They must
+    // be restored first and deleted through the archive confirmation flow.
+    if (item.archived) {
+      return {
+        success: false,
+        tool: 'remove_from_wishlist',
+        error: 'Archived products must be restored before removal.',
+        activity: 'Archived item cannot be removed',
+      };
+    }
+
     await WishlistRepository.deleteItem(itemId);
 
     wishlistEvents.emit({
@@ -737,7 +760,21 @@ async function executeUpdateWishlistItem(
       };
     }
 
-    const safeChanges: Record<string, unknown> = {};
+    if (item.archived) {
+      return {
+        success: false,
+        tool: 'update_wishlist_item',
+        error: 'Archived products must be restored before editing.',
+        activity: 'Archived item is read-only',
+      };
+    }
+
+    const safeChanges: {
+      notes?: string;
+      category?: string | null;
+      wishlistCategoryId?: string | null;
+      starPriority?: number;
+    } = {};
     if (typeof changes.notes === 'string') safeChanges.notes = changes.notes;
     if (typeof changes.category === 'string') safeChanges.category = changes.category;
     if (
@@ -756,7 +793,21 @@ async function executeUpdateWishlistItem(
       };
     }
 
-    await WishlistRepository.updateItem(itemId, safeChanges);
+    // Keep the category relation in step with the category text. The relation
+    // is resolved inside the item's own collection, never a foreign one.
+    await prisma.$transaction(async (tx) => {
+      if (typeof changes.category === 'string') {
+        safeChanges.wishlistCategoryId = await resolveCategoryId(
+          tx,
+          item.wishlistId,
+          changes.category
+        );
+      }
+      await tx.wishlistItem.updateMany({
+        where: { id: itemId, wishlistId: item.wishlistId },
+        data: safeChanges,
+      });
+    });
     return {
       success: true,
       tool: 'update_wishlist_item',
@@ -802,6 +853,15 @@ async function executeReorderWishlistItem(
       };
     }
 
+    if (item.archived) {
+      return {
+        success: false,
+        tool: 'reorder_wishlist_item',
+        error: 'Archived products must be restored before reordering.',
+        activity: 'Archived item is read-only',
+      };
+    }
+
     await WishlistRepository.updateItem(itemId, { position: newPosition });
     return {
       success: true,
@@ -834,14 +894,19 @@ async function executeClearWishlist(userId: string): Promise<ToolResult> {
       };
     }
 
+    // Clearing removes active products only. Archived products stay in the
+    // archive until they are explicitly deleted there with confirmation.
     const result = await prisma.wishlistItem.deleteMany({
-      where: { wishlistId: { in: wishlists.map((w) => w.id) } },
+      where: { wishlistId: { in: wishlists.map((w) => w.id) }, archived: false },
     });
     return {
       success: true,
       tool: 'clear_wishlist',
-      data: { removed: result.count },
-      activity: `Cleared (${result.count} items removed)`,
+      data: { removed: result.count, archivedPreserved: true },
+      activity:
+        result.count > 0
+          ? `Cleared (${result.count} active items removed; archived items kept)`
+          : 'No active items to clear (archived items kept)',
     };
   } catch (err) {
     return {

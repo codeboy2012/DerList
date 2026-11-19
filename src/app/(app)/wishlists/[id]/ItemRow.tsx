@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import {
+  Archive,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -14,40 +15,48 @@ import {
   Target,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { WishlistPriority } from '@/components/ui/WishlistPriority';
 import { ProductEditorDrawer } from '@/components/product/ProductEditorDrawer';
 import { ProductPrice } from '@/components/product/ProductPrice';
+import { archiveItemAction } from './bulk-actions';
 import { togglePurchasedAction } from './item-actions';
 import { ItemDetailsDialog } from './ItemDetailsDialog';
 import { updateStarPriorityAction } from './priority-action';
 
+export interface WishlistItemData {
+  id: string;
+  title: string;
+  description: string | null;
+  url: string | null;
+  image: string | null;
+  brand: string | null;
+  model: string | null;
+  condition: string | null;
+  availability: string | null;
+  retailer: string | null;
+  currentPrice: string | null;
+  targetPrice: string | null;
+  originalPrice: string | null;
+  dealInfo: string | null;
+  currency: string;
+  priority: string;
+  starPriority: number;
+  quantity: number;
+  purchased: boolean;
+  notes: string | null;
+  category: string | null;
+}
+
 interface ItemRowProps {
-  item: {
-    id: string;
-    title: string;
-    description: string | null;
-    url: string | null;
-    image: string | null;
-    brand: string | null;
-    model: string | null;
-    condition: string | null;
-    availability: string | null;
-    retailer: string | null;
-    currentPrice: string | null;
-    targetPrice: string | null;
-    originalPrice?: string | null;
-    dealInfo?: string | null;
-    currency: string;
-    priority: string;
-    starPriority: number;
-    quantity: number;
-    purchased: boolean;
-    notes: string | null;
-    category?: string | null;
-  };
+  item: WishlistItemData;
   wishlistId: string;
   /** Other collections owned by the user, for moving this item. */
   collections?: Array<{ id: string; title: string }>;
+  /** Show a selection checkbox for bulk actions. */
+  selectable?: boolean;
+  selected?: boolean;
+  onSelectChange?: (selected: boolean) => void;
 }
 
 // Retailer badge colors
@@ -74,7 +83,14 @@ function getRetailerStyle(retailer: string | null): string {
   return retailerStyles[key] ?? 'bg-surface text-muted-foreground border-border';
 }
 
-export function ItemRow({ item, wishlistId, collections = [] }: ItemRowProps) {
+export function ItemRow({
+  item,
+  wishlistId,
+  collections = [],
+  selectable = false,
+  selected = false,
+  onSelectChange,
+}: ItemRowProps) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -103,6 +119,18 @@ export function ItemRow({ item, wishlistId, collections = [] }: ItemRowProps) {
         }`}
       >
         <div className="flex gap-0">
+          {/* Selection */}
+          {selectable && (
+            <div className="flex items-start pt-4 pl-3 sm:pt-5">
+              <Checkbox
+                checked={selected}
+                onChange={(event) => onSelectChange?.(event.target.checked)}
+                aria-label={`Select ${item.title}`}
+                className="shrink-0"
+              />
+            </div>
+          )}
+
           {/* Image section */}
           <div className="relative w-24 shrink-0 sm:w-36">
             {item.image ? (
@@ -161,7 +189,13 @@ export function ItemRow({ item, wishlistId, collections = [] }: ItemRowProps) {
                       {item.condition}
                     </span>
                   )}
-                  <InlineStarPriority item={item} wishlistId={wishlistId} />
+                  {/* Re-key on the stored priority so a bulk change refreshes the
+                      row's local optimistic value. */}
+                  <InlineStarPriority
+                    key={`${item.id}:${item.starPriority}`}
+                    item={item}
+                    wishlistId={wishlistId}
+                  />
                   {item.quantity > 1 && (
                     <span className="bg-surface text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium">
                       ×{item.quantity}
@@ -278,6 +312,20 @@ export function ItemRow({ item, wishlistId, collections = [] }: ItemRowProps) {
               >
                 <Pencil className="h-3 w-3" /> Edit
               </Button>
+
+              {/* Archive — reversible, so no confirmation is required */}
+              <form action={archiveItemAction} className="ml-auto">
+                <input type="hidden" name="itemId" value={item.id} />
+                <input type="hidden" name="wishlistId" value={wishlistId} />
+                <Button
+                  type="submit"
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground h-7 gap-1.5 rounded-lg text-[11px]"
+                >
+                  <Archive className="h-3 w-3" /> Archive
+                </Button>
+              </form>
             </div>
           </div>
         </div>

@@ -19,7 +19,13 @@ export async function updateStarPriorityAction(formData: FormData): Promise<void
   // The item must belong to the submitted collection and that collection must
   // belong to the caller; a valid wishlistId alone must not authorise an item.
   const { count } = await prisma.wishlistItem.updateMany({
-    where: { id: itemId, wishlistId, wishlist: { ownerId: user.id } },
+    where: {
+      id: itemId,
+      wishlistId,
+      wishlist: { ownerId: user.id },
+      // Archived products are read-only until restored.
+      archived: false,
+    },
     data: { starPriority: priority },
   });
   if (count === 0) return;

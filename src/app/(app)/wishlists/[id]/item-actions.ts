@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { resolveCategoryId } from '@/lib/services/wishlist-categories';
 import { createItemSchema } from '@/lib/validations/wishlist';
 import { isItemCondition } from '@/lib/wishlist/conditions';
 import type { ActionState } from '../../../(auth)/actions';
@@ -49,8 +50,16 @@ async function findOwnedItem(itemId: string, wishlistId: string, userId: string)
   if (!itemId || !wishlistId) return null;
   return prisma.wishlistItem.findFirst({
     where: ownedItemWhere(itemId, wishlistId, userId),
-    select: { id: true, purchased: true },
+    select: { id: true, purchased: true, archived: true },
   });
+}
+
+/** Archived products are read-only until they are restored. */
+function archivedEditError() {
+  return {
+    success: false as const,
+    error: 'Restore this archived product before editing it.',
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -152,9 +161,11 @@ export async function updateItemAction(
     return { success: false, error: 'Item not found.' };
   }
 
-  if (!(await findOwnedItem(itemId, wishlistId, user.id))) {
+  const existing = await findOwnedItem(itemId, wishlistId, user.id);
+  if (!existing) {
     return { success: false, error: 'Item not found.' };
   }
+  if (existing.archived) return archivedEditError();
 
   const raw = {
     title: formData.get('title'),
@@ -218,8 +229,10 @@ export async function deleteItemAction(formData: FormData): Promise<void> {
   if (!(await verifyOwnership(wishlistId, user.id))) return;
 
   // Scoped delete: the item must be in *this* collection, owned by the caller.
+  // Archived products use the archive's confirmation flow instead, so an
+  // active-view delete can never silently remove one.
   await prisma.wishlistItem.deleteMany({
-    where: ownedItemWhere(itemId, wishlistId, user.id),
+    where: { ...ownedItemWhere(itemId, wishlistId, user.id), archived: false },
   });
 
   revalidatePath(`/wishlists/${wishlistId}`);
@@ -238,7 +251,7 @@ export async function togglePurchasedAction(formData: FormData): Promise<void> {
   if (!(await verifyOwnership(wishlistId, user.id))) return;
 
   const item = await findOwnedItem(itemId, wishlistId, user.id);
-  if (!item) return;
+  if (!item || item.archived) return;
 
   await prisma.wishlistItem.updateMany({
     where: ownedItemWhere(itemId, wishlistId, user.id),
@@ -268,9 +281,11 @@ export async function quickEditItemAction(
     return { success: false, error: 'Item not found.' };
   }
 
-  if (!(await findOwnedItem(itemId, wishlistId, user.id))) {
+  const existing = await findOwnedItem(itemId, wishlistId, user.id);
+  if (!existing) {
     return { success: false, error: 'Item not found.' };
   }
+  if (existing.archived) return archivedEditError();
 
   const title = (formData.get('title') as string)?.trim();
   const notes = formData.get('notes') as string | null;
@@ -290,16 +305,22 @@ export async function quickEditItemAction(
   const safeStarPriority =
     starPriority && starPriority >= 1 && starPriority <= 4 ? starPriority : undefined;
 
-  const updated = await prisma.wishlistItem.updateMany({
-    where: ownedItemWhere(itemId, wishlistId, user.id),
-    data: {
-      title,
-      notes: notes || null,
-      priority: safePriority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
-      quantity: safeQuantity,
-      category,
-      ...(safeStarPriority !== undefined && { starPriority: safeStarPriority }),
-    },
+  // The free-text category and its relation are updated together so the two
+  // can never disagree (or point at a category from another collection).
+  const updated = await prisma.$transaction(async (tx) => {
+    const wishlistCategoryId = await resolveCategoryId(tx, wishlistId, category);
+    return tx.wishlistItem.updateMany({
+      where: ownedItemWhere(itemId, wishlistId, user.id),
+      data: {
+        title,
+        notes: notes || null,
+        priority: safePriority as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
+        quantity: safeQuantity,
+        category,
+        wishlistCategoryId,
+        ...(safeStarPriority !== undefined && { starPriority: safeStarPriority }),
+      },
+    });
   });
 
   if (updated.count === 0) {
@@ -351,12 +372,13 @@ export async function updateItemDetailsAction(
 
   const item = await prisma.wishlistItem.findUnique({
     where: { id: itemId },
-    select: { id: true, wishlistId: true },
+    select: { id: true, wishlistId: true, archived: true },
   });
 
   if (!item || item.wishlistId !== wishlistId) {
     return { success: false, error: 'Item not found.' };
   }
+  if (item.archived) return archivedEditError();
 
   const title = String(formData.get('title') ?? '').trim();
   if (!title) {
@@ -381,44 +403,61 @@ export async function updateItemDetailsAction(
     .toUpperCase();
   const currency = /^[A-Z]{3}$/.test(currencyRaw) ? currencyRaw : 'USD';
 
-  // Optional move to another collection owned by the same user.
+  // Optional move to another active collection owned by the same user.
+  // Archived collections are rejected here as well as in the UI: their
+  // contents are hidden from normal views.
   const targetCollectionId = String(formData.get('collectionId') ?? '').trim();
   let moveTo: string | null = null;
   if (targetCollectionId && targetCollectionId !== wishlistId) {
-    if (!(await verifyOwnership(targetCollectionId, user.id))) {
-      return { success: false, error: 'Collection not found.' };
-    }
-    moveTo = targetCollectionId;
-  }
-
-  let position: number | undefined;
-  if (moveTo) {
-    const lastItem = await prisma.wishlistItem.findFirst({
-      where: { wishlistId: moveTo },
-      orderBy: { position: 'desc' },
-      select: { position: true },
+    const target = await prisma.wishlist.findFirst({
+      where: { id: targetCollectionId, ownerId: user.id, archived: false },
+      select: { id: true },
     });
-    position = (lastItem?.position ?? -1) + 1;
+    if (!target) {
+      return { success: false, error: 'Collection not found or archived.' };
+    }
+    moveTo = target.id;
   }
 
-  const updated = await prisma.wishlistItem.updateMany({
-    where: ownedItemWhere(itemId, wishlistId, user.id),
-    data: {
-      title: title.slice(0, 200),
-      description: optionalText(formData.get('description'), 1000),
-      brand: optionalText(formData.get('brand'), 100),
-      model: optionalText(formData.get('model'), 100),
-      category: optionalText(formData.get('category'), 100),
-      condition,
-      availability: optionalText(formData.get('availability'), 200),
-      currentPrice: optionalNumber(formData.get('currentPrice')),
-      targetPrice: optionalNumber(formData.get('targetPrice')),
-      currency,
-      quantity,
-      priority,
-      notes: optionalText(formData.get('notes'), 2000),
-      ...(moveTo ? { wishlistId: moveTo, position } : {}),
-    },
+  const categoryName = optionalText(formData.get('category'), 100);
+  const destinationId = moveTo ?? wishlistId;
+
+  const updated = await prisma.$transaction(async (tx) => {
+    let position: number | undefined;
+    if (moveTo) {
+      const lastItem = await tx.wishlistItem.findFirst({
+        where: { wishlistId: moveTo },
+        orderBy: { position: 'desc' },
+        select: { position: true },
+      });
+      position = (lastItem?.position ?? -1) + 1;
+    }
+
+    // A category record belongs to its collection, so the relation is resolved
+    // against the destination (or kept in the current collection on a normal
+    // edit) rather than copied across from the source.
+    const wishlistCategoryId = await resolveCategoryId(tx, destinationId, categoryName);
+
+    return tx.wishlistItem.updateMany({
+      where: ownedItemWhere(itemId, wishlistId, user.id),
+      data: {
+        title: title.slice(0, 200),
+        description: optionalText(formData.get('description'), 1000),
+        brand: optionalText(formData.get('brand'), 100),
+        model: optionalText(formData.get('model'), 100),
+        category: categoryName,
+        wishlistCategoryId,
+        condition,
+        availability: optionalText(formData.get('availability'), 200),
+        currentPrice: optionalNumber(formData.get('currentPrice')),
+        targetPrice: optionalNumber(formData.get('targetPrice')),
+        currency,
+        quantity,
+        priority,
+        notes: optionalText(formData.get('notes'), 2000),
+        ...(moveTo ? { wishlistId: moveTo, position } : {}),
+      },
+    });
   });
 
   if (updated.count === 0) {

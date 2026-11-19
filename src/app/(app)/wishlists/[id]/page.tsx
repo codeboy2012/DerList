@@ -4,7 +4,6 @@ import { notFound } from 'next/navigation';
 import {
   Archive,
   ArrowLeft,
-  CheckCircle2,
   Info,
   LayoutGrid,
   List,
@@ -13,24 +12,23 @@ import {
   Plus,
   Search,
 } from 'lucide-react';
-import { requireUser } from '@/lib/auth';
+import { getCurrentUser, requireUser } from '@/lib/auth';
 import { formatDate } from '@/lib/format';
 import { prisma } from '@/lib/prisma';
-import { siteConfig } from '@/lib/site-config';
+import { wishlistMetadataTitle } from '@/lib/wishlists/metadata';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { toggleArchiveAction } from '../actions';
 import { AddItemPanel } from './AddItemPanel';
 import { AIOrganizer } from './AIOrganizer';
-import { CategoryView } from './CategoryView';
 import { CopyToClipboard } from './CopyToClipboard';
 import { CopyWishlistButton } from './CopyWishlistButton';
 import { DeleteWishlistButton } from './DeleteWishlistButton';
-import { ItemRow } from './ItemRow';
 import { RatingExplainer } from './RatingExplainer';
 import { TopMostWanted } from './TopMostWanted';
 import { TopPicksManager } from './TopPicksManager';
+import { WishlistItemsPanel } from './WishlistItemsPanel';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -45,12 +43,11 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const wishlist = await prisma.wishlist.findUnique({
-    where: { id },
-    select: { title: true },
-  });
+  // The body renders "Page not found" for a foreign collection, so the title
+  // must not reveal one either. The lookup is scoped to the signed-in owner.
+  const user = await getCurrentUser();
   return {
-    title: wishlist ? `${wishlist.title} — ${siteConfig.name}` : `Wishlist — ${siteConfig.name}`,
+    title: await wishlistMetadataTitle(id, user?.id ?? null, 'detail'),
   };
 }
 
@@ -64,9 +61,10 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
   const view = sp.view ?? 'list'; // 'list' or 'category'
   const query = (sp.q ?? '').trim();
 
-  // Collections (wishlists) this user can move items into.
+  // Collections this user can move items into. Archived collections are not a
+  // valid destination: moving into one would hide the item from normal views.
   const collections = await prisma.wishlist.findMany({
-    where: { ownerId: user.id },
+    where: { ownerId: user.id, archived: false },
     orderBy: [{ sortOrder: 'asc' }, { updatedAt: 'desc' }],
     select: { id: true, title: true },
   });
@@ -74,7 +72,10 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
   const wishlist = await prisma.wishlist.findUnique({
     where: { id },
     include: {
-      items: { orderBy: [{ purchased: 'asc' }, { position: 'asc' }, { createdAt: 'desc' }] },
+      items: {
+        where: { archived: false },
+        orderBy: [{ purchased: 'asc' }, { position: 'asc' }, { createdAt: 'desc' }],
+      },
       categories: { orderBy: { sortOrder: 'asc' } },
       owner: { select: { username: true } },
     },
@@ -83,6 +84,10 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
   if (!wishlist || wishlist.ownerId !== user.id) {
     notFound();
   }
+
+  const archivedCount = await prisma.wishlistItem.count({
+    where: { wishlistId: id, archived: true },
+  });
 
   // ── Serialize items for Client Components ──
   // Prisma Decimal and Date objects cannot cross the Server → Client boundary.
@@ -140,7 +145,6 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
   const filteredItems = statusFiltered.filter(matchesQuery);
 
   const unpurchased = filteredItems.filter((i) => !i.purchased);
-  const purchased = filteredItems.filter((i) => i.purchased);
 
   // Determine if any items have categories (for showing category view toggle)
   const hasCategories = serializedItems.some((i) => i.category);
@@ -184,7 +188,9 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
         <div className="flex flex-wrap items-center gap-2">
           {wishlist.archived && <Badge variant="warning">Archived</Badge>}
           <span className="text-muted-foreground text-xs">
-            {serializedItems.length} items · Updated {formatDate(wishlist.updatedAt)}
+            {serializedItems.length} items
+            {archivedCount > 0 ? ` · ${archivedCount} archived` : ''} · Updated{' '}
+            {formatDate(wishlist.updatedAt)}
           </span>
           <div className="ml-auto flex w-full flex-wrap gap-2 sm:w-auto">
             <AIOrganizer wishlistId={id} itemCount={serializedItems.length} />
@@ -206,6 +212,12 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
               <Link href={`/wishlists/${id}/edit`}>
                 <Pencil className="h-3.5 w-3.5" aria-hidden />
                 Edit
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="ghost">
+              <Link href={`/wishlists/${id}/archive`}>
+                <Archive className="h-3.5 w-3.5" aria-hidden />
+                Archived{archivedCount > 0 ? ` (${archivedCount})` : ''}
               </Link>
             </Button>
             <form action={toggleArchiveAction}>
@@ -386,7 +398,17 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
         </Button>
       </div>
 
-      {showAddForm && <AddItemPanel wishlistId={id} />}
+      {showAddForm && (
+        <AddItemPanel
+          wishlistId={id}
+          wishlistTitle={wishlist.title}
+          categories={wishlist.categories.map((category) => category.name)}
+          existingItems={serializedItems.map((item) => ({
+            title: item.title,
+            url: item.url,
+          }))}
+        />
+      )}
 
       {/* ─── Items ─── */}
       {serializedItems.length === 0 ? (
@@ -394,17 +416,31 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
           <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
             <Package className="text-muted-foreground/40 h-10 w-10" />
             <div className="flex flex-col gap-1">
-              <p className="text-foreground text-sm font-medium">No items yet</p>
+              <p className="text-foreground text-sm font-medium">
+                {archivedCount > 0 ? 'No active items' : 'No items yet'}
+              </p>
               <p className="text-muted-foreground text-xs">
-                Add items to this wishlist to start tracking things you want.
+                {archivedCount > 0
+                  ? `${archivedCount} archived ${archivedCount === 1 ? 'product is' : 'products are'} hidden from this view. Restore them from the archive whenever you need them.`
+                  : 'Add items to this wishlist to start tracking things you want.'}
               </p>
             </div>
-            <Button asChild size="sm">
-              <Link href={`/wishlists/${id}?add=true`}>
-                <Plus className="h-3.5 w-3.5" aria-hidden />
-                Add First Item
-              </Link>
-            </Button>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button asChild size="sm">
+                <Link href={`/wishlists/${id}?add=true`}>
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                  Add First Item
+                </Link>
+              </Button>
+              {archivedCount > 0 && (
+                <Button asChild size="sm" variant="secondary">
+                  <Link href={`/wishlists/${id}/archive`}>
+                    <Archive className="h-3.5 w-3.5" aria-hidden />
+                    View archived ({archivedCount})
+                  </Link>
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       ) : filteredItems.length === 0 ? (
@@ -413,75 +449,31 @@ export default async function WishlistDetailPage({ params, searchParams }: PageP
             <Search className="text-muted-foreground/40 h-8 w-8" aria-hidden />
             <p className="text-foreground text-sm font-medium">No matches</p>
             <p className="text-muted-foreground text-xs">
-              Nothing in this collection matches “{query}”.
+              {query
+                ? `Nothing in this collection matches “${query}”.`
+                : 'Nothing matches the current filter.'}
             </p>
             <Button asChild size="sm" variant="ghost">
               <Link href={`/wishlists/${id}`}>Clear search</Link>
             </Button>
           </CardContent>
         </Card>
-      ) : view === 'category' && hasCategories ? (
-        /* Category-grouped view */
-        <div className="flex flex-col gap-6">
-          <CategoryView
-            items={unpurchased}
-            wishlistId={id}
-            collections={collections}
-            categoryMeta={wishlist.categories.map((c) => ({
-              name: c.name,
-              description: c.description,
-              externalLink: c.externalLink,
-              externalLinkLabel: c.externalLinkLabel,
-              icon: c.icon,
-              notes: c.notes,
-            }))}
-          />
-
-          {/* Purchased (always flat list) */}
-          {purchased.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h2 className="text-muted-foreground flex items-center gap-2 text-sm font-medium">
-                <CheckCircle2 className="text-success h-4 w-4" aria-hidden />
-                Purchased ({purchased.length})
-              </h2>
-              <div className="flex flex-col gap-2 opacity-70">
-                {purchased.map((item) => (
-                  <ItemRow key={item.id} item={item} wishlistId={id} collections={collections} />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
       ) : (
-        /* Standard list view */
-        <div className="flex flex-col gap-4">
-          {/* Unpurchased */}
-          {unpurchased.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h2 className="text-foreground text-sm font-medium">Items ({unpurchased.length})</h2>
-              <div className="flex flex-col gap-2">
-                {unpurchased.map((item) => (
-                  <ItemRow key={item.id} item={item} wishlistId={id} collections={collections} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Purchased */}
-          {purchased.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h2 className="text-muted-foreground flex items-center gap-2 text-sm font-medium">
-                <CheckCircle2 className="text-success h-4 w-4" aria-hidden />
-                Purchased ({purchased.length})
-              </h2>
-              <div className="flex flex-col gap-2 opacity-70">
-                {purchased.map((item) => (
-                  <ItemRow key={item.id} item={item} wishlistId={id} collections={collections} />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        <WishlistItemsPanel
+          wishlistId={id}
+          items={filteredItems}
+          allItemIds={serializedItems.map((item) => item.id)}
+          collections={collections}
+          view={view}
+          categoryMeta={wishlist.categories.map((category) => ({
+            name: category.name,
+            description: category.description,
+            externalLink: category.externalLink,
+            externalLinkLabel: category.externalLinkLabel,
+            icon: category.icon,
+            notes: category.notes,
+          }))}
+        />
       )}
 
       {/* ─── Delete zone ─── */}

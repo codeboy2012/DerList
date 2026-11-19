@@ -88,7 +88,7 @@ export const WishlistRepository = {
   async listByUser(userId: string): Promise<WishlistWithCounts[]> {
     return prisma.wishlist.findMany({
       where: { ownerId: userId, archived: false },
-      include: { _count: { select: { items: true } } },
+      include: { _count: { select: { items: { where: { archived: false } } } } },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
     });
   },
@@ -110,6 +110,7 @@ export const WishlistRepository = {
       where: { id, ownerId: userId },
       include: {
         items: {
+          where: { archived: false },
           include: { product: true, wishlistCategory: true },
           orderBy: [{ position: 'asc' }, { createdAt: 'desc' }],
         },

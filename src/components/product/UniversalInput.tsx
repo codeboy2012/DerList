@@ -1,67 +1,41 @@
 'use client';
 
 /**
- * UniversalInput — The single input field for adding products.
+ * UniversalInput — shared URL/text import workflow.
  *
- * Users paste anything: URLs, product names, shopping lists, PCPartPicker builds.
- * The backend decides what to do. The user never chooses between modes.
- *
- * Flow:
- * 1. User types/pastes into the input
- * 2. On submit, calls /api/products/identify
- * 3. Shows identification progress and confidence
- * 4. If single result → opens ProductEditor with prefilled draft
- * 5. If batch result → shows batch preview with per-item status
- *
- * Key improvement: Shows clear feedback about identification quality.
- * Never silently accepts garbage data — alerts the user when confidence is low.
+ * The backend still owns importer detection. This component only constrains the
+ * input for the active tab (URL vs text), calls the existing identify endpoint,
+ * and hands results to the shared review step. ProductEditor remains the single
+ * item review path; ImportBatchReview is used for multi-product results.
  */
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import {
-  AlertCircle,
-  AlertTriangle,
-  CheckCircle2,
-  HelpCircle,
-  ListPlus,
-  Loader2,
-  Package,
-  Plus,
-  Search,
-  ShieldCheck,
-  XCircle,
-} from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Loader2, Plus, Search } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
-import { ProductEditor, type ProductEditorDraft } from './ProductEditor';
+import {
+  ImportBatchReview,
+  type ExistingImportItem,
+  type ImportReviewDraft,
+  type ImportReviewStatus,
+} from './ImportBatchReview';
+import { ProductEditor, type AIIdentificationInfo, type ProductEditorDraft } from './ProductEditor';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface ImportDraft {
-  title: string;
-  description?: string;
-  url?: string;
-  image?: string;
-  brand?: string;
-  retailer?: string;
-  currentPrice?: number;
-  originalPrice?: number;
-  currency?: string;
-  dealInfo?: string;
-  category?: string;
+interface ImportDraft extends ImportReviewDraft {
   sku?: string;
-  confidence: number;
+  asin?: string;
+  upc?: string;
+  mpn?: string;
 }
 
-interface ItemStatus {
-  index: number;
-  status: 'identified' | 'needs-review' | 'failed';
-  confidence: number;
-  source: string;
-  message: string;
+interface ItemStatus extends ImportReviewStatus {
   providersAttempted?: string[];
+  fieldSources?: Record<string, unknown>;
 }
 
 interface ImportResponse {
@@ -91,93 +65,170 @@ type InputState =
     }
   | { phase: 'error'; message: string };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Confidence Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-function getConfidenceLevel(confidence: number): 'high' | 'medium' | 'low' {
-  if (confidence >= 75) return 'high';
-  if (confidence >= 50) return 'medium';
-  return 'low';
+interface UniversalInputProps {
+  wishlistId: string;
+  wishlistTitle?: string;
+  categories?: string[];
+  existingItems?: ExistingImportItem[];
+  className?: string;
+  /** Constrains and describes this tab's input without changing importer logic. */
+  mode?: 'any' | 'url' | 'text';
+  placeholder?: string;
+  helperText?: string;
+  submitLabel?: string;
+  maxLength?: number;
 }
 
-function getConfidenceColor(confidence: number): string {
-  const level = getConfidenceLevel(confidence);
-  switch (level) {
-    case 'high':
-      return 'text-success';
-    case 'medium':
-      return 'text-warning';
-    case 'low':
-      return 'text-danger';
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function validateInput(mode: UniversalInputProps['mode'], value: string): string | null {
+  if (mode !== 'url') return null;
+
+  const candidates = value
+    .split(/[\n,]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  if (candidates.length === 0) {
+    return 'Paste at least one product URL.';
   }
+
+  const invalid = candidates.find((entry) => !/^https?:\/\//i.test(entry));
+  if (invalid) {
+    return 'Every product URL must start with http:// or https://.';
+  }
+
+  return null;
 }
 
-function getStatusIcon(status: ItemStatus['status'], confidence: number) {
-  switch (status) {
-    case 'identified':
-      return confidence >= 75 ? (
-        <CheckCircle2 className="text-success h-4 w-4" />
-      ) : (
-        <ShieldCheck className="text-warning h-4 w-4" />
-      );
-    case 'needs-review':
-      return <AlertTriangle className="text-warning h-4 w-4" />;
-    case 'failed':
-      return <XCircle className="text-danger h-4 w-4" />;
-  }
+function toAIInfo(status?: ItemStatus): AIIdentificationInfo | undefined {
+  if (!status) return undefined;
+
+  const importStatus =
+    status.status === 'no-ai-configured'
+      ? 'no_ai_configured'
+      : status.status === 'needs-review'
+        ? 'needs_review'
+        : status.status === 'conflict'
+          ? 'conflict'
+          : status.status === 'failed'
+            ? 'failed'
+            : 'ready';
+
+  const fieldSources = status.fieldSources
+    ? (Object.fromEntries(
+        Object.entries(status.fieldSources).filter(
+          (entry): entry is [string, string] => typeof entry[1] === 'string'
+        )
+      ) as Record<string, string>)
+    : undefined;
+
+  return {
+    importStatus,
+    confidence: status.confidence,
+    fieldSources,
+    identified: status.status === 'identified',
+    message: status.message,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface UniversalInputProps {
-  wishlistId: string;
-  className?: string;
-}
-
-export function UniversalInput({ wishlistId, className }: UniversalInputProps) {
+export function UniversalInput({
+  wishlistId,
+  wishlistTitle = 'this wishlist',
+  categories = [],
+  existingItems = [],
+  className,
+  mode = 'any',
+  placeholder,
+  helperText,
+  submitLabel,
+  maxLength = 2000,
+}: UniversalInputProps) {
   const [input, setInput] = useState('');
   const [state, setState] = useState<InputState>({ phase: 'input' });
+  const [inputError, setInputError] = useState<string | null>(null);
+  const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const resolvedPlaceholder =
+    placeholder ??
+    (mode === 'url'
+      ? 'Paste a product URL — or several URLs, one per line'
+      : mode === 'text'
+        ? 'Paste a shopping list, product listing, or copied product details…'
+        : 'Paste a URL, product name, shopping list, or PCPartPicker build…');
+
+  const resolvedHelper =
+    helperText ??
+    (mode === 'url'
+      ? 'Amazon, Best Buy, Newegg, PCPartPicker, and other product pages are supported.'
+      : mode === 'text'
+        ? 'Each non-empty line can become a product. Prices in the text are preserved when detected.'
+        : 'URLs, product names, shopping lists, and PCPartPicker builds are detected automatically.');
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     const trimmed = input.trim();
     if (!trimmed || trimmed.length < 2) return;
 
-    // Show contextual loading message
+    const validationError = validateInput(mode, trimmed);
+    if (validationError) {
+      setInputError(validationError);
+      return;
+    }
+
+    setInputError(null);
     const isUrl = /^https?:\/\//i.test(trimmed);
-    const loadingMsg = isUrl ? 'Identifying product...' : 'Processing...';
+    const loadingMsg =
+      mode === 'url'
+        ? 'Reading product URL...'
+        : mode === 'text'
+          ? 'Detecting products...'
+          : isUrl
+            ? 'Identifying product...'
+            : 'Processing...';
     setState({ phase: 'loading', message: loadingMsg });
 
     try {
-      const res = await fetch('/api/products/identify', {
+      const response = await fetch('/api/products/identify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input: trimmed }),
       });
 
-      const data: ImportResponse = await res.json();
+      const data = (await response.json()) as ImportResponse;
 
-      if (!data.success || !data.drafts?.length) {
-        // No results from pipeline — open ProductEditor for manual entry
+      // Partial results are still reviewable: a batch can contain failed or
+      // no-AI items even when the overall response reports success=false.
+      if (!response.ok || !data.drafts?.length) {
+        const fallbackIsUrl = /^https?:\/\//i.test(trimmed);
         setState({
           phase: 'single',
-          draft: { title: trimmed },
+          draft: {
+            title: fallbackIsUrl ? '' : trimmed,
+            url: fallbackIsUrl ? trimmed : undefined,
+          },
           status: {
             index: 0,
             status: 'failed',
             confidence: 0,
             source: 'manual',
-            message: data.error || 'Could not identify product. Please enter details manually.',
+            message:
+              data.error ||
+              (fallbackIsUrl
+                ? 'Could not identify this product. Enter the details manually below.'
+                : 'Could not identify a product. Enter the details manually below.'),
           },
         });
         return;
       }
 
       if (data.isBatch && data.drafts.length > 1) {
-        // Multiple items (shopping list, PCPartPicker build)
         setState({
           phase: 'batch',
           drafts: data.drafts,
@@ -185,80 +236,48 @@ export function UniversalInput({ wishlistId, className }: UniversalInputProps) {
           batchMeta: data.batchMeta,
           statuses: data.itemStatuses,
         });
-      } else {
-        // Single item — open ProductEditor
-        const draft = data.drafts[0];
-        const status = data.itemStatuses?.[0];
-
-        setState({
-          phase: 'single',
-          draft: {
-            title: draft.title,
-            description: draft.description,
-            url: draft.url,
-            image: draft.image,
-            brand: draft.brand,
-            retailer: draft.retailer,
-            currentPrice: draft.currentPrice,
-            originalPrice: draft.originalPrice,
-            currency: draft.currency,
-            dealInfo: draft.dealInfo,
-            category: draft.category,
-            sku: draft.sku,
-          },
-          status,
-        });
+        return;
       }
+
+      const draft = data.drafts[0];
+      setState({
+        phase: 'single',
+        draft: {
+          title: draft.title,
+          description: draft.description,
+          url: draft.url,
+          image: draft.image,
+          brand: draft.brand,
+          retailer: draft.retailer,
+          currentPrice: draft.currentPrice,
+          originalPrice: draft.originalPrice,
+          currency: draft.currency,
+          dealInfo: draft.dealInfo,
+          category: draft.category,
+          sku: draft.sku,
+          asin: draft.asin,
+          upc: draft.upc,
+          mpn: draft.mpn,
+        },
+        status: data.itemStatuses?.[0],
+      });
     } catch {
       setState({ phase: 'error', message: 'Failed to process input. Please try again.' });
     }
   };
 
+  const handleBack = () => {
+    setInputError(null);
+    setState({ phase: 'input' });
+  };
+
   const handleReset = () => {
     setState({ phase: 'input' });
     setInput('');
+    setInputError(null);
   };
 
-  const handleBatchAdd = async () => {
-    if (state.phase !== 'batch') return;
-
-    setState({ phase: 'loading', message: `Adding ${state.drafts.length} items...` });
-
-    try {
-      // Fast import: creates items instantly, enrichment runs in background
-      const promises = state.drafts.map((draft) =>
-        fetch('/api/wishlists/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            wishlistId,
-            title: draft.title,
-            url: draft.url,
-            image: draft.image,
-            brand: draft.brand,
-            retailer: draft.retailer,
-            price: draft.currentPrice,
-            category: draft.category,
-          }),
-        })
-      );
-
-      // Run up to 3 at a time for speed without overloading
-      for (let i = 0; i < promises.length; i += 3) {
-        await Promise.allSettled(promises.slice(i, i + 3));
-      }
-
-      // Reset and reload
-      handleReset();
-      window.location.reload();
-    } catch {
-      setState({ phase: 'error', message: 'Failed to add items. Please try again.' });
-    }
-  };
-
-  // ─── Render by Phase ───
-
-  // Loading
+  // ─── Loading ───
   if (state.phase === 'loading') {
     return (
       <div className={cn('flex flex-col items-center justify-center gap-2 py-8', className)}>
@@ -267,13 +286,13 @@ export function UniversalInput({ wishlistId, className }: UniversalInputProps) {
           <span className="text-foreground text-sm font-medium">{state.message}</span>
         </div>
         <p className="text-muted-foreground text-xs">
-          Checking multiple sources for product data...
+          Checking product sources and verifying what can be identified…
         </p>
       </div>
     );
   }
 
-  // Error
+  // ─── Error ───
   if (state.phase === 'error') {
     return (
       <div className={cn('space-y-3', className)}>
@@ -281,25 +300,22 @@ export function UniversalInput({ wishlistId, className }: UniversalInputProps) {
           <AlertCircle className="h-4 w-4 shrink-0" />
           {state.message}
         </div>
-        <Button variant="ghost" size="sm" onClick={handleReset}>
+        <Button variant="ghost" size="sm" onClick={handleBack}>
           Try Again
         </Button>
       </div>
     );
   }
 
-  // Single item → ProductEditor with identification status
+  // ─── Single item review ───
   if (state.phase === 'single') {
     return (
       <div className={cn('space-y-3', className)}>
-        {/* Identification Status Banner */}
         {state.status && <IdentificationBanner status={state.status} />}
 
-        <div className="flex items-center justify-between">
-          <h3 className="text-muted-foreground text-sm font-medium">
-            Review &amp; add to wishlist
-          </h3>
-          <Button variant="ghost" size="sm" onClick={handleReset}>
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-muted-foreground text-sm font-medium">Review &amp; add</h3>
+          <Button variant="ghost" size="sm" onClick={handleBack}>
             ← Back
           </Button>
         </div>
@@ -307,159 +323,74 @@ export function UniversalInput({ wishlistId, className }: UniversalInputProps) {
           draft={state.draft}
           wishlistId={wishlistId}
           mode="create"
-          onSave={handleReset}
-          onCancel={handleReset}
+          aiInfo={toAIInfo(state.status)}
+          onSave={() => {
+            handleReset();
+            router.refresh();
+          }}
+          onCancel={handleBack}
         />
       </div>
     );
   }
 
-  // Batch → Preview list with per-item status
+  // ─── Batch review ───
   if (state.phase === 'batch') {
-    const statuses = state.statuses ?? [];
-    const identified = statuses.filter((s) => s.status === 'identified').length;
-    const needsReview = statuses.filter((s) => s.status === 'needs-review').length;
-    const failed = statuses.filter((s) => s.status === 'failed').length;
-
     return (
-      <div className={cn('space-y-4', className)}>
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-medium">{state.batchName}</h3>
-            {state.batchMeta?.description && (
-              <p className="text-muted-foreground text-xs">{state.batchMeta.description}</p>
-            )}
-          </div>
-          <Button variant="ghost" size="sm" onClick={handleReset}>
-            ← Back
-          </Button>
-        </div>
-
-        {/* Batch summary */}
-        {statuses.length > 0 && (
-          <div className="border-border bg-surface/50 flex items-center gap-4 rounded-lg border px-4 py-2 text-xs">
-            {identified > 0 && (
-              <span className="text-success flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3" /> {identified} identified
-              </span>
-            )}
-            {needsReview > 0 && (
-              <span className="text-warning flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3" /> {needsReview} need review
-              </span>
-            )}
-            {failed > 0 && (
-              <span className="text-danger flex items-center gap-1">
-                <XCircle className="h-3 w-3" /> {failed} failed
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className="border-border max-h-80 overflow-y-auto rounded-lg border">
-          {state.drafts.map((draft, i) => {
-            const itemStatus = statuses.find((s) => s.index === i);
-            return (
-              <div
-                key={i}
-                className="border-border flex items-center gap-3 border-b p-3 last:border-0"
-              >
-                {/* Status indicator */}
-                <div className="shrink-0">
-                  {itemStatus ? (
-                    getStatusIcon(itemStatus.status, itemStatus.confidence)
-                  ) : (
-                    <HelpCircle className="text-muted-foreground h-4 w-4" />
-                  )}
-                </div>
-
-                {/* Product image */}
-                {draft.image ? (
-                  <img
-                    src={draft.image}
-                    alt={draft.title}
-                    className="h-10 w-10 shrink-0 rounded border object-cover"
-                  />
-                ) : (
-                  <div className="bg-surface flex h-10 w-10 shrink-0 items-center justify-center rounded border">
-                    <Package className="text-muted-foreground h-4 w-4" />
-                  </div>
-                )}
-
-                {/* Product info */}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{draft.title}</p>
-                  <div className="text-muted-foreground flex items-center gap-2 text-xs">
-                    {draft.category && <span>{draft.category}</span>}
-                    {draft.retailer && <span>· {draft.retailer}</span>}
-                    {itemStatus && (
-                      <span className={cn('ml-auto', getConfidenceColor(itemStatus.confidence))}>
-                        {itemStatus.confidence}%
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Price */}
-                {draft.currentPrice != null ? (
-                  <span className="shrink-0 text-sm font-medium">
-                    ${draft.currentPrice.toFixed(2)}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground shrink-0 text-xs">No price</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {state.batchMeta?.notes && (
-          <pre className="bg-surface text-muted-foreground rounded-lg p-3 text-xs whitespace-pre-wrap">
-            {state.batchMeta.notes}
-          </pre>
-        )}
-
-        <div className="flex gap-2">
-          <Button size="sm" className="gap-2" onClick={handleBatchAdd}>
-            <ListPlus className="h-4 w-4" />
-            Add All {state.drafts.length} Items
-          </Button>
-          <Button variant="ghost" size="sm" onClick={handleReset}>
-            Cancel
-          </Button>
-        </div>
-      </div>
+      <ImportBatchReview
+        key={state.drafts.map((draft) => draft.url || draft.title).join('|')}
+        drafts={state.drafts}
+        statuses={state.statuses}
+        wishlistId={wishlistId}
+        wishlistTitle={wishlistTitle}
+        categories={categories}
+        existingItems={existingItems}
+        onBack={handleBack}
+        onDone={handleReset}
+      />
     );
   }
 
-  // Default: Input phase
+  // ─── Input ───
   return (
     <form onSubmit={handleSubmit} className={cn('space-y-3', className)}>
       <Textarea
         value={input}
-        onChange={(e) => setInput(e.target.value)}
-        placeholder="Paste anything... URL, product name, shopping list, PCPartPicker build"
-        rows={3}
+        onChange={(event) => {
+          setInput(event.target.value);
+          if (inputError) setInputError(null);
+        }}
+        placeholder={resolvedPlaceholder}
+        rows={mode === 'text' ? 6 : 3}
+        maxLength={maxLength}
         className="resize-none"
-        onKeyDown={(e) => {
-          // Submit on Cmd/Ctrl+Enter
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-            handleSubmit(e);
+        aria-label={mode === 'url' ? 'Product URLs' : 'Products to import'}
+        aria-invalid={inputError ? true : undefined}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+            handleSubmit(event);
           }
         }}
       />
-      <div className="flex items-center justify-between">
-        <p className="text-muted-foreground text-xs">
-          URLs, product names, shopping lists, PCPartPicker builds — paste anything
-        </p>
+
+      {inputError ? (
+        <p className="text-danger text-xs">{inputError}</p>
+      ) : (
+        <p className="text-muted-foreground text-xs">{resolvedHelper}</p>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-muted-foreground text-[11px]">
+          {input.length}/{maxLength} characters
+        </span>
         <Button
           type="submit"
           size="sm"
           disabled={!input.trim() || input.trim().length < 2}
           className="gap-2"
         >
-          <Plus className="h-4 w-4" />
-          Add
+          {mode === 'url' ? <Search className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+          {submitLabel ?? (mode === 'url' ? 'Find product' : 'Detect products')}
         </Button>
       </div>
     </form>
@@ -467,33 +398,25 @@ export function UniversalInput({ wishlistId, className }: UniversalInputProps) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sub-components
+// Identification status
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Shows the identification result status above the ProductEditor.
- * Communicates confidence level and data source to the user.
- */
 function IdentificationBanner({ status }: { status: ItemStatus }) {
   if (status.status === 'identified' && status.confidence >= 75) {
-    // High confidence — subtle success indicator
     return (
       <div className="border-success/20 bg-success/5 flex items-center gap-3 rounded-lg border px-4 py-2.5">
         <CheckCircle2 className="text-success h-4 w-4 shrink-0" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">{status.message}</p>
-          {status.providersAttempted && status.providersAttempted.length > 0 && (
-            <p className="text-muted-foreground text-xs">
-              Source: {status.source} · Confidence: {status.confidence}%
-            </p>
-          )}
+          <p className="text-muted-foreground text-xs">
+            Source: {status.source} · Confidence: {status.confidence}%
+          </p>
         </div>
       </div>
     );
   }
 
-  if (status.status === 'needs-review' || (status.status === 'identified' && status.confidence < 75)) {
-    // Medium confidence — show warning
+  if (status.status === 'identified' || status.status === 'needs-review') {
     return (
       <div className="border-warning/20 bg-warning/5 flex items-center gap-3 rounded-lg border px-4 py-2.5">
         <AlertTriangle className="text-warning h-4 w-4 shrink-0" />
@@ -501,14 +424,13 @@ function IdentificationBanner({ status }: { status: ItemStatus }) {
           <p className="text-sm font-medium">{status.message}</p>
           <p className="text-muted-foreground text-xs">
             Please verify the product details below are correct.
-            {status.confidence > 0 && ` Confidence: ${status.confidence}%`}
+            {status.confidence > 0 && ` Confidence: ${status.confidence}%.`}
           </p>
         </div>
       </div>
     );
   }
 
-  // Failed — clear error with manual entry guidance
   return (
     <div className="border-danger/20 bg-danger/5 flex items-center gap-3 rounded-lg border px-4 py-2.5">
       <Search className="text-danger h-4 w-4 shrink-0" />

@@ -1159,6 +1159,13 @@ model WishlistItem {
   /// When the item was marked as purchased.
   purchasedAt DateTime?
 
+  /// Whether this item is archived. Archived items stay in the account but are
+  /// hidden from normal collection views, statistics and global search.
+  archived Boolean @default(false)
+
+  /// When the item was archived. Cleared when the item is restored.
+  archivedAt DateTime?
+
   /// Personal notes about this item.
   notes String?
 
@@ -1178,7 +1185,12 @@ model WishlistItem {
   productId String?
 
   /// Link to a category record (optional, for category-level metadata).
-  wishlistCategory   WishlistCategory? @relation(fields: [wishlistCategoryId], references: [id], onDelete: SetNull)
+  /// The relation is composite so the database guarantees the category lives
+  /// in this item's own collection. `NoAction` is used because a partial
+  /// `SET NULL` (only the category column) is not expressible in Prisma; no
+  /// code path deletes an individual category today, and deleting a wishlist
+  /// still cascades through both child tables.
+  wishlistCategory   WishlistCategory? @relation(fields: [wishlistCategoryId, wishlistId], references: [id, wishlistId], onDelete: NoAction, onUpdate: NoAction)
   wishlistCategoryId String?
 
   // ── Extended editor data ──
@@ -1190,6 +1202,7 @@ model WishlistItem {
   @@index([wishlistId])
   @@index([wishlistId, position])
   @@index([wishlistId, category])
+  @@index([wishlistId, archived])
   @@index([purchased])
   @@index([productId])
   @@map("wishlist_items")
@@ -1236,6 +1249,9 @@ model WishlistCategory {
   /// Items assigned to this category.
   items WishlistItem[]
 
+  /// Enables the composite item→category foreign key that keeps category
+  /// relations inside the same collection.
+  @@unique([id, wishlistId])
   @@unique([wishlistId, name])
   @@index([wishlistId])
   @@index([wishlistId, sortOrder])

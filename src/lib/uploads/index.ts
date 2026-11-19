@@ -31,16 +31,18 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR ?? join(process.cwd(), 'uploads');
 
 class LocalStorage implements StorageBackend {
   async save(buffer: Buffer, filename: string, directory: string): Promise<string> {
-    const dir = join(UPLOAD_DIR, directory);
+    // Runtime upload paths are data, not build inputs. Opting out of tracing
+    // keeps the whole repository (including `.env`) out of the server bundle.
+    const dir = join(/* turbopackIgnore: true */ UPLOAD_DIR, directory);
     await mkdir(dir, { recursive: true });
-    const path = join(dir, filename);
+    const path = join(/* turbopackIgnore: true */ dir, filename);
     await writeFile(path, buffer);
     return `${directory}/${filename}`;
   }
 
   async delete(storagePath: string): Promise<void> {
     try {
-      const fullPath = join(UPLOAD_DIR, storagePath);
+      const fullPath = join(/* turbopackIgnore: true */ UPLOAD_DIR, storagePath);
       await unlink(fullPath);
     } catch {
       // File may already be deleted

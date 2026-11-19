@@ -70,6 +70,11 @@ export function Modal({
       dialog.showModal();
     } else if (!open && dialog.open) {
       dialog.close();
+      // `HTMLDialogElement.close()` does not reliably return focus to the
+      // trigger, and this component stays mounted after closing. Restore it
+      // explicitly here rather than waiting for unmount.
+      previouslyFocused.current?.focus?.();
+      previouslyFocused.current = null;
     }
   }, [open]);
 

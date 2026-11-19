@@ -37,7 +37,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // Only title products the caller actually tracks. An unscoped lookup here
   // would leak product titles from other accounts through the page title.
   const product = await prisma.product.findFirst({
-    where: { id, wishlistItems: { some: { wishlist: { ownerId: user.id } } } },
+    where: {
+      id,
+      wishlistItems: { some: { wishlist: { ownerId: user.id }, archived: false } },
+    },
     select: { title: true },
   });
   return {
@@ -53,7 +56,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
     where: { id },
     include: {
       wishlistItems: {
-        where: { wishlist: { ownerId: user.id } },
+        where: { wishlist: { ownerId: user.id }, archived: false },
         select: {
           id: true,
           starPriority: true,

@@ -8,8 +8,9 @@ DerList is a self-hosted web application for keeping private collections of the 
 >
 > Features are being actively developed and may change between releases.
 
-**Current version:** `0.11.5`  
-**Latest stable release:** `0.11.0`
+- **Current release:** `0.13.0` — Wishlist and organization
+- **Release status:** Published
+- **In development:** `0.14.0` — Importing improvements
 
 📋 **[View the full Changelog](https://github.com/codeboy2012/DerList/blob/main/CHANGELOG.md)**
 
@@ -21,7 +22,10 @@ DerList is a self-hosted web application for keeping private collections of the 
 
 - Unlimited private collections
 - Create, rename, duplicate, archive, and delete collections
+- Manual collection ordering
 - Categories/folders within a collection
+- Bulk select, move, categorize, prioritize, archive, and delete products
+- Product archive with read-only details, restore, and permanent deletion
 - Priority levels and star ratings
 - Quantity tracking
 - Current price and per-item target price
@@ -224,6 +228,43 @@ docker compose ps
 docker compose logs -f app
 ```
 
+### Upgrading an existing installation
+
+The app container applies pending Prisma migrations on startup
+(`prisma migrate deploy`), so back up the database before replacing a running
+image.
+
+Databases created before v0.13.0 must pass the category-integrity preflight
+before the new image starts. The script is read-only:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+  -f scripts/preflight-wishlist-category-integrity.sql
+```
+
+`blocking_violations_total` must be `0`. A nonzero value means at least one
+product references a category in another collection; the migration then aborts
+without modifying or deleting any data. The script header documents every
+check and the expected pre-migration values.
+
+Deployment order: back up the database, run the preflight, then start the new
+image and let the entrypoint apply migrations before the app serves traffic.
+The two v0.13.0 migrations are additive and run in timestamp order:
+`20261119000000_add_item_archive` (archive columns and index) and
+`20261119120000_enforce_wishlist_category_integrity` (composite category key).
+
+### Runtime configuration
+
+Environment variables are read from the container environment at runtime. The
+image does not contain `.env` files: `.dockerignore` keeps them out of the
+build context and `npm run build` removes Next.js's intentional `.env` and
+`.env.production` copies from `.next/standalone`. This also applies when the
+standalone output is deployed without Docker.
+
+Uploads are written under `UPLOAD_DIR` (default `process.cwd()/uploads`, which
+is `/app/uploads` in the image). `docker-compose.yml` mounts that path as the
+`uploads` volume, and PostgreSQL data as the `pgdata` volume.
+
 ### Background worker
 
 Background refreshes and price history are processed by the `worker` service.
@@ -404,7 +445,10 @@ npm run dev
 
 # 🧪 Testing
 
-DerList includes automated tests for core functionality.
+DerList includes automated tests for core functionality. Database-backed Vitest tests cover the
+service and authorization layer, and a Playwright suite covers critical browser workflows
+(`npm run test:e2e`). Install the browser once with `npx playwright install chromium` before the
+first browser-test run.
 
 Current test coverage includes:
 
@@ -420,56 +464,69 @@ Current test coverage includes:
 - Product identification
 - Import behavior
 
-Run the test suite with the project's configured test command.
+Run the unit/service suite with `npm test` (Vitest, database-backed) and the browser suite with
+`npm run test:e2e` (Playwright). Both need a reachable PostgreSQL database configured through
+`DATABASE_URL`.
+
+### Known limitations
+
+- DerList is alpha software; the roadmap in [ROADMAP.md](./ROADMAP.md) records what is
+  implemented and what is not.
+- Automated price monitoring and alerts are not implemented. Price history appears only when data
+  exists.
+- Accessibility work is keyboard- and focus-based; no screen-reader audit has been performed.
+- The Docker image and compose stack are verified in CI (build, runtime, health, persistence,
+  non-root user, image contents). Runtime verification on the operator's own host is still
+  recommended before exposing an instance publicly.
+- Browsers and screen readers vary; the Playwright suite runs Chromium on Linux.
 
 ---
 
 # 🗺️ Roadmap
 
-DerList is being developed through a long-term release roadmap.
+DerList follows a long-term, private-first release roadmap. The canonical feature inventory,
+release scope, and status details live in **[ROADMAP.md](./ROADMAP.md)**. This section is a
+concise summary only.
 
-### Current
+### Current release
 
-**v0.11.x — Product Importer & AI Research**
+**v0.13.0 — Wishlist and organization** (published 2026-11-19)
 
-Focused on improving product identification, AI research, validation, image handling, and importer reliability.
+Bulk product actions, product archive/restore, wishlist duplication, and manual collection
+ordering, together with a release-hardening pass that scoped collection metadata to its owner,
+required an explicit archive state for deletion, kept category relations inside their collection
+at both the application and database layers, aligned Copy with full duplication, made account
+export lossless and fixed responsive and dialog-focus issues on mobile. Nested collections, tags,
+activity history and further dashboard improvements remain planned.
 
-### Upcoming
+### Previous release
 
-**v0.12.0 — AI Intelligence Improvements**
+**v0.12.0 — Security and reliability**
 
-- Better AI product research
-- Better product identity verification
-- Improved AI prompts
-- Structured AI JSON output
-- Better source tracking
-- Improved research accuracy
-- Better handling of incorrect search results
-- Improved manual fallback
+Privacy fixes, authorization, upload security, repository cleanup, and regression tests.
 
-### Long-Term
+### In development
 
-The roadmap continues through the `1.x` releases, with major milestones including:
+**v0.14.0 — Importing improvements**
 
-- Product intelligence
-- Advanced pricing
-- Wishlist intelligence
-- Universal importing
-- AI Shopping Assistant
-- Browser extension
-- Notifications
-- Offline/PWA
-- Mobile applications
-- Advanced AI
-- Automation
-- Production readiness
+Better extraction, import progress, retries, history, duplicate detection and re-identification
+are planned; nothing from that scope is part of v0.13.0.
 
-There is no public sharing, marketplace or PC builder in the current application; those are not
-committed roadmap items.
+### Later proposed releases
 
-The current major roadmap target is **v1.20.0**.
+- **v0.14.0 — Importing improvements**
+- **v0.15.0 — Search and comparison**
+- **v0.16.0 — AI intelligence**
+- **v0.17.0 — Price intelligence**
+- **v0.18.0 — Research and notifications**
+- **v0.19.0 — Portability and personalization**
+- **v1.0.0 — Complete personal product organizer**
 
-DerList will continue beyond v1.20 with additional features and platform improvements.
+These are proposed groupings, not promises or fixed release dates. Detailed scope for every
+release is maintained in **[ROADMAP.md](./ROADMAP.md)**.
+
+There is no public sharing, marketplace, or PC builder in the current application; those are
+not committed roadmap items.
 
 📋 **[View the complete DerList Changelog](https://github.com/codeboy2012/DerList/blob/main/CHANGELOG.md)**
 
@@ -517,6 +574,7 @@ Built by [CodeBoy2012](https://github.com/codeboy2012) and contributors.
 
 ## 📚 Documentation
 
+- **[Master feature inventory & roadmap](./ROADMAP.md)**
 - **[Changelog](https://github.com/codeboy2012/DerList/blob/main/CHANGELOG.md)**
 - **[GitHub Repository](https://github.com/codeboy2012/DerList)**
 - **[Issues](https://github.com/codeboy2012/DerList/issues)**

@@ -52,7 +52,19 @@ export function Dropdown({
   const [activeIndex, setActiveIndex] = useState<number>(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // Space activates a focused button on keyup. Restoring focus to the trigger
+  // during the Space keydown would therefore re-open the menu it just closed,
+  // so the restore waits for that keyup instead.
+  const restoreFocusOnKeyUp = useRef(false);
   const menuId = useId();
+  // Disabled states change while the menu is open (for example when a pending
+  // action finishes). If the stored index is gone or still disabled, resolve
+  // the roving target to the first enabled item during render so Enter/Space
+  // keep working without needing a synchronising effect.
+  const activeItem = items[activeIndex];
+  const effectiveIndex =
+    activeItem && !activeItem.disabled ? activeIndex : items.findIndex((item) => !item.disabled);
 
   // Close on outside click
   useEffect(() => {
@@ -66,10 +78,49 @@ export function Dropdown({
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [open]);
 
+  // Restore focus after a Space-activated menu item has closed the menu.
+  useEffect(() => {
+    const handleKeyUp = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== ' ' || !restoreFocusOnKeyUp.current) return;
+      restoreFocusOnKeyUp.current = false;
+      e.preventDefault();
+      triggerRef.current?.focus();
+    };
+    document.addEventListener('keyup', handleKeyUp);
+    return () => document.removeEventListener('keyup', handleKeyUp);
+  }, []);
+
+  // Open on the first selectable item. The first item is often disabled (for
+  // example "Move up" on the first collection), and a disabled button cannot
+  // receive focus.
   const openMenu = useCallback(() => {
-    setActiveIndex(items.length > 0 ? 0 : -1);
+    setActiveIndex(items.findIndex((item) => !item.disabled));
     setOpen(true);
-  }, [items.length]);
+  }, [items]);
+
+  const moveActive = useCallback(
+    (delta: 1 | -1) => {
+      setActiveIndex((current) => {
+        if (items.length === 0) return -1;
+        // Start from a valid entry even if the stored index is stale.
+        let next = items[current] && !items[current].disabled ? current : delta === 1 ? -1 : 0;
+        for (let step = 0; step < items.length; step += 1) {
+          next = (next + delta + items.length) % items.length;
+          const candidate = items[next];
+          if (candidate && !candidate.disabled) return next;
+        }
+        return current;
+      });
+    },
+    [items]
+  );
+
+  // Move focus into the menu itself once it opens. Focusing the menu container
+  // (rather than a child) keeps keyboard handling reliable even when the first
+  // item is disabled.
+  useEffect(() => {
+    if (open) menuRef.current?.focus();
+  }, [open]);
 
   const toggleMenu = useCallback(() => {
     if (open) {
@@ -82,12 +133,18 @@ export function Dropdown({
 
   const handleTriggerKey = useCallback(
     (e: KeyboardEvent<HTMLButtonElement>) => {
+      if (e.key === 'Escape' && open) {
+        e.preventDefault();
+        setOpen(false);
+        return;
+      }
       if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        openMenu();
+        if (open) menuRef.current?.focus();
+        else openMenu();
       }
     },
-    [openMenu]
+    [open, openMenu]
   );
 
   const handleMenuKey = useCallback(
@@ -100,27 +157,31 @@ export function Dropdown({
       if (items.length === 0) return;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setActiveIndex((i) => (i + 1) % items.length);
+        moveActive(1);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setActiveIndex((i) => (i - 1 + items.length) % items.length);
+        moveActive(-1);
       } else if (e.key === 'Home') {
         e.preventDefault();
-        setActiveIndex(0);
+        setActiveIndex(items.findIndex((item) => !item.disabled));
       } else if (e.key === 'End') {
         e.preventDefault();
-        setActiveIndex(items.length - 1);
+        setActiveIndex(items.map((item) => !item.disabled).lastIndexOf(true));
       } else if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        const item = items[activeIndex];
+        const item = items[effectiveIndex];
         if (item && !item.disabled) {
           onSelect?.(item.value);
           setOpen(false);
-          triggerRef.current?.focus();
+          if (e.key === ' ') {
+            restoreFocusOnKeyUp.current = true;
+          } else {
+            triggerRef.current?.focus();
+          }
         }
       }
     },
-    [activeIndex, items, onSelect]
+    [effectiveIndex, items, moveActive, onSelect]
   );
 
   return (
@@ -145,12 +206,7 @@ export function Dropdown({
 
       {open && (
         <div
-          ref={(el) => {
-            if (el && activeIndex >= 0) {
-              const child = el.children.item(activeIndex) as HTMLElement | null;
-              child?.focus();
-            }
-          }}
+          ref={menuRef}
           id={menuId}
           role="menu"
           tabIndex={-1}
@@ -162,7 +218,7 @@ export function Dropdown({
           )}
         >
           {items.map((item, idx) => {
-            const isActive = idx === activeIndex;
+            const isActive = idx === effectiveIndex;
             return (
               <button
                 key={item.value}

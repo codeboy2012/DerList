@@ -22,7 +22,7 @@ export async function GET() {
     orderBy: { sortOrder: 'asc' },
     include: {
       items: {
-        where: { purchased: false },
+        where: { purchased: false, archived: false },
         orderBy: { position: 'asc' },
         select: {
           id: true,

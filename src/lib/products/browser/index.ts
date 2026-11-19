@@ -50,8 +50,8 @@ export async function renderWithBrowser(
   }
 
   try {
-    // Dynamic import to avoid bundling Playwright when not installed
-    // @ts-expect-error — optional dependency, only used when playwright is installed
+    // Dynamic import to avoid bundling Playwright when not installed. The
+    // dependency is optional at runtime; the catch below handles its absence.
     const { chromium } = await import('playwright');
 
     const browser = await chromium.launch({
