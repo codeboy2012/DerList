@@ -37,15 +37,6 @@ export function hashEmailToken(token: string): string {
 }
 
 /**
- * Digest format used before the scrypt migration. Kept only so reset and
- * verification links issued immediately before a deployment continue to work.
- * Any record found this way is upgraded in place; new records never use it.
- */
-function legacyHashEmailToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
-}
-
-/**
  * Issue a new single-use token, invalidating any unused token of the same type
  * for that user. Returns the raw token — the only time it exists in memory.
  */
@@ -65,35 +56,10 @@ export async function issueEmailToken(userId: string, type: EmailTokenType): Pro
 }
 
 async function findTokenRecord(rawToken: string) {
-  const tokenHash = hashEmailToken(rawToken);
-  const current = await prisma.emailToken.findUnique({
-    where: { tokenHash },
+  return prisma.emailToken.findUnique({
+    where: { tokenHash: hashEmailToken(rawToken) },
     select: { id: true, userId: true, type: true, expiresAt: true, usedAt: true },
   });
-  if (current) return current;
-
-  const legacyHash = legacyHashEmailToken(rawToken);
-  if (legacyHash === tokenHash) return null;
-
-  const legacy = await prisma.emailToken.findUnique({
-    where: { tokenHash: legacyHash },
-    select: { id: true, userId: true, type: true, expiresAt: true, usedAt: true },
-  });
-  if (!legacy) return null;
-
-  // Upgrade the stored digest so the next lookup uses scrypt. If another
-  // request wins the race, the unique constraint simply leaves the existing
-  // upgraded record in place.
-  try {
-    await prisma.emailToken.update({
-      where: { id: legacy.id },
-      data: { tokenHash },
-    });
-  } catch {
-    // A concurrent upgrade already replaced it; continue with the record.
-  }
-
-  return legacy;
 }
 
 /** Look up an unused, unexpired token without consuming it. */

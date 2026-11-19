@@ -182,7 +182,13 @@ async function runLiveTest() {
       console.log('  - Are providers enabled?');
     }
   } catch (error) {
-    console.error('FATAL ERROR:', error);
+    console.error(
+      'FATAL ERROR:',
+      JSON.stringify({
+        name: error instanceof Error ? error.name : 'Error',
+        message: error instanceof Error ? error.message : String(error),
+      })
+    );
   }
 }
 

@@ -264,7 +264,17 @@ export async function POST(request: Request) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('Product identify error:', error);
+    console.error(
+      'Product identify error:',
+      JSON.stringify({
+        name: error instanceof Error ? error.name : 'Error',
+        message: error instanceof Error ? error.message : String(error),
+        code:
+          error && typeof error === 'object' && 'code' in error
+            ? String((error as { code?: unknown }).code)
+            : undefined,
+      })
+    );
 
     // Emit failure event
     emitIdentificationEvent(user.id, operationId, {

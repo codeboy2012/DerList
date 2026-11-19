@@ -882,8 +882,7 @@ model EmailToken {
   /// What the token authorizes.
   type EmailTokenType
 
-  /// Salted scrypt digest of the raw token from the emailed link. Legacy
-  /// SHA-256 records are accepted and upgraded on first use.
+  /// Salted scrypt digest of the raw token from the emailed link.
   tokenHash String @unique
 
   /// When the token stops being valid.

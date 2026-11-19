@@ -368,7 +368,13 @@ export function ProductEditor({
 
   // Field sources from AI identification
   const fieldSources = aiInfo?.fieldSources ?? {};
-  const safeImagePreview = toSafeImageSrc(image);
+  const safeImagePreview =
+    image.startsWith('https://') ||
+    image.startsWith('http://') ||
+    image.startsWith('//') ||
+    image.startsWith('/uploads/')
+      ? toSafeImageSrc(image)
+      : null;
 
   // ─── AI Identify ───
 
