@@ -10,8 +10,9 @@ DerList is a self-hosted web application for keeping private collections of the 
 > invitation, approval, allowlist or waitlist is involved. Beta software still changes between
 > releases, so keep your own export of anything you cannot afford to lose.
 
-- **Current release:** `0.14.0` — Open Beta and public registration
+- **Current release:** `0.14.1` — Container images and automated quality gate
 - **Release status:** Published
+- **Container image:** `ghcr.io/codeboy2012/derlist`
 - **In development:** `0.15.0` — Importing improvements
 
 📋 **[View the full Changelog](https://github.com/codeboy2012/DerList/blob/main/CHANGELOG.md)**
@@ -195,53 +196,173 @@ The interface supports:
 
 ## Docker
 
-```bash
-git clone https://github.com/codeboy2012/DerList.git
-cd DerList
+DerList is published as a multi-platform container image to the GitHub Container Registry.
 
-cp .env.example .env
+### Pull the published image
+
+```bash
+docker pull ghcr.io/codeboy2012/derlist:latest
 ```
 
-Edit `.env` and configure at minimum:
+| Tag          | Meaning                                                            |
+| ------------ | ------------------------------------------------------------------ |
+| `latest`     | Newest non-prerelease release. Never moved by a main-branch build. |
+| `vX.Y.Z`     | Exact release version. Immutable once published.                   |
+| `X.Y`        | Release minor line.                                                |
+| `X`          | Release major line.                                                |
+| `main`       | Latest build from a successful `main` run. Not a release.          |
+| `<full-SHA>` | Exact commit that produced the image.                              |
+
+Supported platforms are **`linux/amd64`** and **`linux/arm64`**. Pre-release tags such as
+`v0.15.0-beta.1` never update `latest`, `X.Y` or `X`.
+
+Pin a release for a reproducible deployment instead of tracking `latest`:
+
+```bash
+DERLIST_IMAGE=ghcr.io/codeboy2012/derlist:v0.14.1 \
+  docker compose -f docker-compose.ghcr.yml pull
+```
+
+### Run the published image with Compose
+
+The [`docker-compose.ghcr.yml`](./docker-compose.ghcr.yml) example runs the published image,
+PostgreSQL, the background worker, persistent database and upload volumes, healthchecks, restart
+policies, and an optional Caddy HTTPS profile.
+
+```bash
+cp .env.example .env
+# Edit .env before starting. POSTGRES_PASSWORD is required and has no default.
+docker compose -f docker-compose.ghcr.yml up -d
+```
+
+For production, set at minimum:
 
 ```env
 POSTGRES_PASSWORD=your-secure-password
+NEXT_PUBLIC_APP_URL=https://your-domain.example
+
+# Optional instance owner. Normal public registration does not need this.
 ADMIN_EMAIL=admin@example.com
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=your-secure-password
+
+# Required only if you store third-party provider credentials.
+PROVIDER_ENCRYPTION_KEY=replace-with-a-generated-key
 ```
 
-Then start DerList:
+Generate the encryption key with `npm run generate-encryption-key`. Keep `.env` untracked; the
+repository and Compose files contain no credentials. The app port is bound to
+`127.0.0.1:${APP_PORT:-3000}` in the GHCR Compose example so it is not exposed directly to the
+internet. Use the Caddy profile or another trusted reverse proxy for public access.
+
+Once the containers are healthy, open **[http://localhost:3000](http://localhost:3000)** or your
+configured public URL. Create an account at **`/register`**. The optional `ADMIN_*` seed account is
+the instance owner and is not required for normal registration.
+
+### Build from source
 
 ```bash
-docker compose up -d
+git clone https://github.com/codeboy2012/DerList.git
+cd DerList
+cp .env.example .env
+# Edit .env and configure at minimum POSTGRES_PASSWORD.
+docker compose up -d --build
 ```
 
-Once the containers are healthy, open:
-
-**[http://localhost:3000](http://localhost:3000)**
-
-Create an account at **[http://localhost:3000/register](http://localhost:3000/register)**. The
-`ADMIN_*` account created by the seed is the instance owner and is not required for normal
-registration.
+The source-build Compose file (`docker-compose.yml`) builds the same production image locally and
+is intended for development of the image itself. Published releases should use
+`docker-compose.ghcr.yml`.
 
 ### Verify the installation
 
 ```bash
-docker compose ps
+docker compose -f docker-compose.ghcr.yml ps
+curl -fsS http://localhost:3000/api/health
 ```
 
 ### View logs
 
 ```bash
-docker compose logs -f app
+docker compose -f docker-compose.ghcr.yml logs -f app worker
 ```
+
+Use `docker inspect --format '{{.State.Health.Status}}' <container>` to check a service health
+status. The worker intentionally has no HTTP healthcheck because it does not serve HTTP; its
+liveness is its running state and its structured `worker.started` log line.
+
+### Back up and restore
+
+Back up the database and uploads before any upgrade, migration or image change. Keep the backup
+outside the Docker volumes.
+
+```bash
+# Database (custom format, restorable with pg_restore)
+docker compose -f docker-compose.ghcr.yml exec -T db \
+  sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
+  > "derlist-$(date +%Y%m%d-%H%M%S).dump"
+
+# Uploaded files
+docker compose -f docker-compose.ghcr.yml exec -T app \
+  tar czf - -C /app/uploads . > "derlist-uploads-$(date +%Y%m%d-%H%M%S).tgz"
+```
+
+Restore into a stopped stack and verify the result before serving traffic:
+
+```bash
+# Stop writers first.
+docker compose -f docker-compose.ghcr.yml stop app worker
+
+# Restore the database.
+docker compose -f docker-compose.ghcr.yml exec -T db \
+  sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' \
+  < derlist-YYYYMMDD-HHMMSS.dump
+
+# Restore uploads.
+docker compose -f docker-compose.ghcr.yml exec -T app \
+  tar xzf - -C /app/uploads < derlist-uploads-YYYYMMDD-HHMMSS.tgz
+
+docker compose -f docker-compose.ghcr.yml up -d
+```
+
+Test a restore on a disposable copy before relying on it. Backups are only useful if they have
+been restored successfully at least once.
+
+### Reverse proxy and HTTPS
+
+The GHCR Compose example binds the app to loopback. The optional Caddy profile terminates TLS and
+proxies to `app:3000`:
+
+```bash
+DOMAIN=derlist.example.com \
+  docker compose -f docker-compose.ghcr.yml --profile with-caddy up -d
+```
+
+Point the domain's DNS at the host, allow inbound ports 80 and 443, and set
+`NEXT_PUBLIC_APP_URL=https://derlist.example.com`. Caddy obtains and renews certificates
+automatically. If you use another reverse proxy, proxy to `127.0.0.1:3000` (or the app service on
+the Compose network), set `X-Forwarded-For`/`X-Real-IP`, and do not expose the app port directly.
+The registration rate limiter trusts the first forwarded hop, so direct internet access to the app
+port would make IP-based limits bypassable.
 
 ### Upgrading an existing installation
 
-The app container applies pending Prisma migrations on startup
-(`prisma migrate deploy`), so back up the database before replacing a running
-image.
+**Changing the image does not make a production database safe to migrate.** The app container
+applies pending Prisma migrations on startup (`prisma migrate deploy`), so back up the database
+and uploads, identify the actual production database, and run the preflights below before
+replacing a running image.
+
+```bash
+# 1. Back up first (see "Back up and restore").
+# 2. Pull the intended release, not latest, for a controlled upgrade.
+DERLIST_IMAGE=ghcr.io/codeboy2012/derlist:v0.14.1 \
+  docker compose -f docker-compose.ghcr.yml pull
+# 3. Start it; the entrypoint applies migrations before serving traffic.
+DERLIST_IMAGE=ghcr.io/codeboy2012/derlist:v0.14.1 \
+  docker compose -f docker-compose.ghcr.yml up -d
+```
+
+Pin the previous version to roll back the application image. If a migration already ran, restore
+the database backup as well; image rollback alone does not reverse a schema migration.
 
 Databases created before v0.13.0 must pass the category-integrity preflight
 before the new image starts. Databases created before v0.14.0 must also pass the
@@ -551,14 +672,21 @@ concise summary only.
 
 ### Current release
 
-**v0.14.0 — Open Beta and public registration** (published 2026-11-19)
+**v0.14.1 — Container images and automated quality gate** (published 2026-11-19)
+
+Multi-platform images at `ghcr.io/codeboy2012/derlist` with immutable release tags, digest-first
+verification, SBOM and provenance, plus a CI gate covering E2E, security, CodeQL, dependency
+review, and real Docker Compose runtime verification. The application behaviour is the v0.14.0
+Open Beta release.
+
+### Previous release
+
+**v0.14.0 — Open Beta and public registration**
 
 Public registration with a username or email address, first-time GitHub and Google registration,
 sign-in with either identifier, optional email verification and password recovery over SMTP,
 rate-limited authentication endpoints, case-insensitive identity constraints, and first-run
 dashboard onboarding without sample data. Accounts created through OAuth can set a password later.
-
-### Previous release
 
 **v0.13.0 — Wishlist and organization**
 
@@ -570,7 +698,7 @@ and the v0.13.0 release-hardening pass.
 **v0.15.0 — Importing improvements**
 
 Better extraction, import progress, retries, history, duplicate detection and re-identification
-are planned; nothing from that scope is part of v0.14.0.
+are planned; nothing from that scope is part of v0.14.1.
 
 ### Later proposed releases
 

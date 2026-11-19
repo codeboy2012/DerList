@@ -1,0 +1,127 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DerList — published GHCR image example
+#
+# Usage:
+#   cp .env.example .env      # fill in POSTGRES_PASSWORD and other values
+#   docker compose -f docker-compose.ghcr.yml up -d
+#
+# Pin a release instead of tracking latest:
+#   DERLIST_IMAGE=ghcr.io/codeboy2012/derlist:v0.14.1 docker compose -f docker-compose.ghcr.yml up -d
+#
+# Add the optional HTTPS reverse proxy with:
+#   DOMAIN=derlist.example.com docker compose -f docker-compose.ghcr.yml --profile with-caddy up -d
+#
+# No credentials belong in this file. They are read from .env, which must stay
+# untracked.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-derlist}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-derlist}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-derlist} -d ${POSTGRES_DB:-derlist}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - derlist
+
+  app:
+    image: ${DERLIST_IMAGE:-ghcr.io/codeboy2012/derlist:latest}
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: 'postgresql://${POSTGRES_USER:-derlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-derlist}'
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NODE_ENV: production
+      WORKER_POLL_INTERVAL_MS: ${WORKER_POLL_INTERVAL_MS:-5000}
+      WORKER_SCHEDULE_INTERVAL_MS: ${WORKER_SCHEDULE_INTERVAL_MS:-900000}
+      WORKER_BATCH_SIZE: ${WORKER_BATCH_SIZE:-10}
+    volumes:
+      - uploads:/app/uploads
+    ports:
+      # Loopback only by default. Publish through Caddy or another trusted
+      # reverse proxy for internet access.
+      - '127.0.0.1:${APP_PORT:-3000}:3000'
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:3000/api/health']
+      interval: 30s
+      timeout: 5s
+      start_period: 45s
+      retries: 3
+    networks:
+      - derlist
+
+  worker:
+    image: ${DERLIST_IMAGE:-ghcr.io/codeboy2012/derlist:latest}
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    depends_on:
+      db:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    entrypoint: ['node_modules/.bin/tsx', 'scripts/worker.ts']
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: 'postgresql://${POSTGRES_USER:-derlist}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-derlist}'
+      NODE_ENV: production
+      WORKER_POLL_INTERVAL_MS: ${WORKER_POLL_INTERVAL_MS:-5000}
+      WORKER_SCHEDULE_INTERVAL_MS: ${WORKER_SCHEDULE_INTERVAL_MS:-900000}
+      WORKER_BATCH_SIZE: ${WORKER_BATCH_SIZE:-10}
+    security_opt:
+      - no-new-privileges:true
+    # The worker does not serve HTTP. Do not inherit the app healthcheck.
+    healthcheck:
+      disable: true
+    networks:
+      - derlist
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    profiles: [with-caddy]
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN when using the Caddy profile}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - derlist
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:
+
+networks:
+  derlist:
+    driver: bridge

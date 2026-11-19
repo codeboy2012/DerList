@@ -822,6 +822,12 @@ registration, username-or-email sign-in, optional SMTP-backed email verification
 recovery, rate-limited authentication endpoints, case-insensitive identity constraints, and
 first-run onboarding without sample data.
 
+### v0.14.1 — Container images and automated quality gate
+
+**Published 2026-11-19.** Multi-platform GHCR images with immutable release tags, digest-first
+verification, SBOM/provenance, a reusable CI gate covering E2E and security checks, CodeQL,
+dependency review, Dependabot, and a published-image Compose example with backup/restore docs.
+
 ### v0.15.0 — Importing improvements
 
 **In development.** Better extraction, import progress, retries, history, duplicate detection, and

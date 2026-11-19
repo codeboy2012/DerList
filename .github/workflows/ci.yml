@@ -1,18 +1,24 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# DerList CI Pipeline
+# DerList CI Quality Gate
 #
-# Runs on every push to main and on pull requests.
-# Steps: lint, typecheck, prisma validate, prisma generate, migrate, test, build,
-# then a Docker runtime verification of the production image and compose stack.
+# Runs on pull requests, and is called by the publish workflow for main
+# branches and version tags. Publishing never runs in this workflow.
+#
+# Jobs: unit/integration + build, browser E2E, security checks, and a real
+# Docker Compose runtime verification. The publish workflow can only reach
+# GHCR after every job here succeeds.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -21,12 +27,13 @@ concurrency:
 env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/derlist_test
   NEXT_PUBLIC_APP_URL: http://localhost:3000
+  NEXT_TELEMETRY_DISABLED: '1'
 
 jobs:
   ci:
-    name: Lint, Typecheck & Build
+    name: Lint, Typecheck, Tests & Build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -56,6 +63,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check whitespace errors
+        run: git diff --check
+
       - name: Validate Prisma Schema
         run: npx prisma validate
 
@@ -66,6 +76,9 @@ jobs:
       # must exist before the tests run.
       - name: Run migrations
         run: npx prisma migrate deploy
+
+      - name: Verify migration status
+        run: npx prisma migrate status
 
       - name: Test
         run: npm test
@@ -81,10 +94,139 @@ jobs:
         env:
           NODE_ENV: production
 
+  e2e:
+    name: Browser E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: ci
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: derlist_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/derlist_test
+      NEXT_PUBLIC_APP_URL: http://localhost:3100
+      E2E_PORT: '3100'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run migrations
+        run: npx prisma migrate deploy
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  security:
+    name: Security Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: derlist_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout full history for secret scanning
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Dependency vulnerability audit
+        run: npm audit --audit-level=high
+
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_COMMENTS: 'false'
+
+      - name: Reject committed environment and key files
+        run: |
+          set -euo pipefail
+          tracked=$(git ls-files)
+          bad_env=$(printf '%s\n' "$tracked" | grep -E '(^|/)\.env($|\.)' | grep -vE '\.env\.(example|sample|template)$' || true)
+          bad_keys=$(printf '%s\n' "$tracked" | grep -E '(^|/)(\.dev\.vars|id_rsa|id_ed25519|[^/]+\.(pem|p12|pfx|key))$' || true)
+          if [ -n "$bad_env$bad_keys" ]; then
+            echo "::error::Sensitive environment or key files are tracked in git:"
+            printf '%s\n%s\n' "$bad_env" "$bad_keys"
+            exit 1
+          fi
+          echo "No committed environment or private-key files found."
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run migrations
+        run: npx prisma migrate deploy
+
+      - name: Authentication, authorization, isolation and upload tests
+        run: npx vitest run tests/security tests/auth
+
   docker-verify:
     name: Docker Runtime Verification
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     needs: ci
 
     # CI-only values. None of these are production credentials.
@@ -104,6 +246,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Dockerfile build checks
+        run: docker build --check .
+
       # docker compose reads this file for variable substitution. The same
       # patterns are excluded from the build context by .dockerignore, so the
       # image never contains it.
@@ -122,6 +267,9 @@ jobs:
             echo "NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL"
             echo "APP_PORT=$APP_PORT"
           } > .env
+
+      - name: Validate the Compose configuration
+        run: docker compose config --quiet
 
       - name: Build and start the production stack
         run: docker compose up -d --build
@@ -184,11 +332,35 @@ jobs:
           echo "--- worker runtime available in the same image ---"
           docker compose exec -T app sh -lc 'test -x /app/node_modules/.bin/tsx'
 
+          echo "--- production install excludes direct development packages ---"
+          docker compose exec -T app sh -lc 'test ! -d node_modules/vitest'
+          docker compose exec -T app sh -lc 'test ! -d node_modules/eslint'
+
+          echo "--- no runtime secrets baked into the image config ---"
+          image=$(docker compose images -q app)
+          docker image inspect "$image" --format '{{json .Config.Env}}' > /tmp/image-env.json
+          if grep -Eiq 'POSTGRES_PASSWORD|ADMIN_PASSWORD|SMTP_PASSWORD|CLIENT_SECRET|PROVIDER_ENCRYPTION_KEY' /tmp/image-env.json; then
+            echo "A runtime secret was baked into the image environment."
+            cat /tmp/image-env.json
+            exit 1
+          fi
+
           echo "--- image metadata and size ---"
           image=$(docker compose images -q app)
           docker image inspect "$image" \
             --format 'User={{.Config.User}} WorkDir={{.Config.WorkingDir}} Entrypoint={{.Config.Entrypoint}} Size={{.Size}}'
           docker images --format '{{.Repository}}:{{.Tag}} {{.Size}}' | head -5
+
+      - name: Reject startup without a required DATABASE_URL
+        run: |
+          set -euo pipefail
+          image=$(docker compose images -q app)
+          if docker run --rm "$image" > /tmp/missing-env.log 2>&1; then
+            echo "The image started without DATABASE_URL; required configuration is not validated."
+            exit 1
+          fi
+          cat /tmp/missing-env.log
+          grep -q 'DATABASE_URL is not set' /tmp/missing-env.log
 
       - name: Verify migrations, seed and PostgreSQL persistence
         run: |
@@ -268,6 +440,15 @@ jobs:
             sleep 2
           done
           docker compose logs --no-color worker | grep -q 'worker.started'
+
+          # The worker does not serve HTTP, so it must not inherit the app's
+          # wget-based healthcheck.
+          worker_health=$(docker inspect --format '{{json .Config.Healthcheck.Test}}' "$(docker compose ps -q worker)")
+          echo "worker healthcheck: $worker_health"
+          if printf '%s' "$worker_health" | grep -qi 'api/health\|wget'; then
+            echo "The worker inherited an HTTP healthcheck."
+            exit 1
+          fi
 
           docker compose ps
           state=$(docker inspect --format '{{.State.Status}}' "$(docker compose ps -q worker)")

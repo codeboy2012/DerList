@@ -2,6 +2,10 @@ node_modules
 .next
 .git
 .gitignore
+.github
+docs
+uploads
+*.log
 .env
 .env.*
 !.env.example

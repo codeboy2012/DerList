@@ -76,6 +76,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json ./tsconfig.json
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
+LABEL org.opencontainers.image.title="DerList"
+LABEL org.opencontainers.image.description="A private, self-hosted wishlist and personal product organizer."
+LABEL org.opencontainers.image.source="https://github.com/codeboy2012/DerList"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.vendor="DerList"
+
 USER nextjs
 
 EXPOSE 3000

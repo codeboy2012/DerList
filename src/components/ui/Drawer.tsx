@@ -45,12 +45,23 @@ const sizeMap = {
   full: 'max-w-full',
 } as const;
 
-/** Elements inside the panel that can receive keyboard focus. */
+/**
+ * Elements inside the panel that can receive keyboard focus.
+ *
+ * Hidden or inert controls (for example a closed overflow menu that stays in
+ * the DOM) must be excluded. Otherwise the trap treats an unfocusable node as
+ * the boundary and lets Tab escape the drawer.
+ */
 function getFocusableElements(panel: HTMLElement): HTMLElement[] {
   return Array.from(
     panel.querySelectorAll<HTMLElement>(
       'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
     )
+  ).filter(
+    (element) =>
+      element.getClientRects().length > 0 &&
+      !element.closest('[inert]') &&
+      !element.closest('[aria-hidden="true"]')
   );
 }
 

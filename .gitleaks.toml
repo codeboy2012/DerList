@@ -1,0 +1,18 @@
+# Gitleaks configuration.
+#
+# The repository contains no real credentials. CI workflows intentionally use
+# fixed, publicly visible test values; they are allowlisted by exact value and
+# path so a real secret added elsewhere is still detected.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public CI-only test values and test fixtures"
+paths = [
+  '''^tests/''',
+]
+regexes = [
+  '''0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef''',
+  '''ci_only_password''',
+]

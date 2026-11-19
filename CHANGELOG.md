@@ -7,6 +7,79 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.14.1] - 2026-11-19
+
+**Container images and automated quality gate**
+
+> **Status:** released. The published image is documented in the GitHub Release.
+
+### Added
+
+- GitHub Actions publishes `ghcr.io/codeboy2012/derlist` with Docker Buildx, GitHub Actions cache,
+  OCI labels, SBOM and provenance attestations.
+- Multi-platform images for `linux/amd64` and `linux/arm64`.
+- Release tags: `vX.Y.Z` (immutable), `X.Y`, `X`, `latest` for non-prerelease releases,
+  `main` for the latest successful main build, and the full commit SHA for provenance.
+- Images are built and pushed by digest first, verified for both architectures, and only then
+  promoted to release tags. A prerelease tag such as `v0.15.0-beta.1` never updates `latest`.
+- Reusable CI quality gate: unit/integration tests, Playwright E2E, Prisma validation and
+  migration status, TypeScript, ESLint, production build and `git diff --check`.
+- Security gate: dependency audit, Gitleaks secret scanning, committed environment/private-key
+  detection, authentication/authorization/isolation/upload regression tests, and a dedicated
+  CodeQL workflow.
+- Dependency review for pull requests and weekly Dependabot updates for npm, GitHub Actions and
+  the Docker base image.
+- A published-image Compose example (`docker-compose.ghcr.yml`) with PostgreSQL, the app, the
+  worker, persistent database and upload volumes, restart policies, healthchecks and an optional
+  Caddy HTTPS profile.
+- Docker documentation for pulling, pinning, upgrading, backing up/restoring, logs, reverse proxy,
+  OAuth callbacks and SMTP.
+
+### Changed
+
+- The Docker runtime verification now also checks Dockerfile build rules, Compose configuration,
+  missing `DATABASE_URL` startup failure, absence of runtime secrets in the image environment,
+  direct production dependency installation, and the worker healthcheck configuration.
+- The worker keeps its deliberate `healthcheck: disable: true`; it does not inherit the app's HTTP
+  healthcheck.
+- The application image carries static OCI labels in addition to the workflow-generated metadata.
+
+### Fixed
+
+- The product drawer focus trap now ignores hidden, inert and `aria-hidden` controls. Previously a
+  closed overflow menu could be mistaken for the last focusable element, allowing Tab to leave the
+  drawer. The Playwright focus-trap test now covers the corrected boundary behavior.
+- The legacy archived-specification browser test scopes its assertion to the visible app landmark,
+  avoiding a hidden stale page retained by the development router.
+
+### Security
+
+- Upgraded `nodemailer` from 7.x to 10.6.0 and removed the separate `@types/nodemailer` package.
+  This resolves the high-severity advisory reported by `npm audit` for the previous range.
+  `npm audit` now reports **0 vulnerabilities**.
+- Publishing is least-privilege: workflows default to `contents: read`; only the publish job adds
+  `packages: write`. Pull requests never publish.
+- Version tags are checked for an existing registry tag before promotion and are never overwritten.
+- `latest` is promoted only after the digest manifest is verified and only for non-prerelease
+  release tags; main-branch builds publish only `main` and the commit SHA.
+
+### Deployment
+
+- Pull `ghcr.io/codeboy2012/derlist:v0.14.1` and use the documented backup and preflight order.
+  Changing the image does not make an existing production database safe to migrate without a
+  recent backup and zero blocking preflight violations.
+- No production deployment, production migration or live SMTP/OAuth delivery was performed as part
+  of this release.
+
+### Testing
+
+- The existing 374 Vitest tests and 32 Playwright tests continue to run in CI. The security job
+  additionally runs the security and authentication suites explicitly.
+- Added repository-hygiene tests for the Dockerfile, Compose worker healthcheck, published-image
+  workflow permissions/tags, and absence of tracked environment or key files.
+
+---
+
 ## [0.14.0] - 2026-11-19
 
 **Open Beta — public registration**
@@ -819,6 +892,7 @@ It introduces the redesigned wishlist experience, administration panel, database
 | Version    | Release Date | Status             |
 | ---------- | ------------ | ------------------ |
 | Unreleased | —            | In Development     |
+| 0.14.1     | 2026-11-19   | Open Beta          |
 | 0.14.0     | 2026-11-19   | Open Beta          |
 | 0.13.0     | 2026-11-19   | Stable             |
 | 0.12.0     | 2026-11-18   | Stable             |

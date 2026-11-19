@@ -260,8 +260,11 @@ test.describe('archived product details', () => {
     const page = await context.newPage();
     await page.goto(`/wishlists/${collectionA.id}/archive/${legacy.id}`);
 
-    await expect(page.getByText(/Impedance/)).toBeVisible();
-    await expect(page.getByText(/32 ohm/)).toBeVisible();
+    // Scope to the visible app landmark: the dev router can retain a hidden
+    // copy of a previously visited page with the same specification text.
+    const main = page.locator('#main-content');
+    await expect(main.getByText('Impedance', { exact: true })).toBeVisible();
+    await expect(main.getByText('32 ohm', { exact: true })).toBeVisible();
 
     await context.close();
   });

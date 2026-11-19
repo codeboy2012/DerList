@@ -1,0 +1,250 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DerList GHCR Publisher
+#
+# Builds and publishes the production container image only after the reusable
+# CI quality gate (unit/integration tests, E2E, security checks, production
+# build, Docker Compose runtime verification) succeeds for the same commit.
+#
+# Tags:
+#   main        latest successful main-branch build
+#   vX.Y.Z      exact immutable release version
+#   X.Y / X     release minor / major
+#   latest      newest non-prerelease release (never from main or a pre-release)
+#   <full SHA>  exact build provenance
+#
+# Pull requests never reach this workflow.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Publish Container Image
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the image to GHCR after the quality gate
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/codeboy2012/derlist
+
+jobs:
+  quality:
+    name: Quality Gate
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Build, Verify & Publish GHCR Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    needs: quality
+    if: |
+      github.event_name != 'pull_request' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) &&
+      (github.event_name != 'workflow_dispatch' || inputs.publish)
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout the intended commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Verify the ref points at the checked-out commit
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            git fetch --tags --force origin
+            test "$(git rev-parse "$GITHUB_REF_NAME^{commit}")" = "$GITHUB_SHA"
+            echo "Tag $GITHUB_REF_NAME points to $GITHUB_SHA."
+          fi
+
+      - name: Set up QEMU for arm64 emulation
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Read application version
+        id: app
+        run: echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Generate OCI metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.title=DerList
+            org.opencontainers.image.description=A private, self-hosted wishlist and personal product organizer.
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.vendor=DerList
+            org.opencontainers.image.version=${{ steps.app.outputs.version }}
+
+      - name: Resolve release tags
+        id: tags
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+            if [[ "$version" == *-* ]]; then
+              # Pre-release channel: exact tag only, never latest.
+              tags="$GITHUB_REF_NAME"
+              latest=false
+            else
+              tags="$GITHUB_REF_NAME ${version%.*} ${version%%.*}"
+              latest=true
+            fi
+            primary="$GITHUB_REF_NAME"
+          else
+            tags="main"
+            latest=false
+            primary="main"
+          fi
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "primary=$primary" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "Resolved tags: $tags (latest=$latest)"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by commit SHA
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Verify the registry manifest and architectures
+        id: digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "$DIGEST"
+          docker buildx imagetools inspect "$IMAGE_NAME@$DIGEST" --raw > /tmp/manifest.json
+          jq -e '[.manifests[].platform.architecture] | index("amd64") != null and index("arm64") != null' /tmp/manifest.json
+          docker pull "$IMAGE_NAME@$DIGEST"
+          pulled_arch=$(docker image inspect "$IMAGE_NAME@$DIGEST" --format '{{.Architecture}}')
+          test "$pulled_arch" = "amd64"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Verified $IMAGE_NAME@$DIGEST (amd64 + arm64, pulled $pulled_arch)."
+
+      - name: Refuse to overwrite an immutable version tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          if docker buildx imagetools inspect "$IMAGE_NAME:$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "::error::$IMAGE_NAME:$GITHUB_REF_NAME already exists. Version tags are immutable."
+            exit 1
+          fi
+
+      - name: Promote verified base tags
+        env:
+          DIGEST: ${{ steps.digest.outputs.digest }}
+          TAGS: ${{ steps.tags.outputs.tags }}
+        run: |
+          set -euo pipefail
+          args=()
+          for tag in $TAGS; do
+            args+=(-t "$IMAGE_NAME:$tag")
+          done
+          docker buildx imagetools create "${args[@]}" "$IMAGE_NAME@$DIGEST"
+
+      - name: Promote latest only for a non-prerelease release
+        if: steps.tags.outputs.latest == 'true'
+        env:
+          DIGEST: ${{ steps.digest.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create -t "$IMAGE_NAME:latest" "$IMAGE_NAME@$DIGEST"
+
+      - name: Verify every published tag and architecture
+        env:
+          DIGEST: ${{ steps.digest.outputs.digest }}
+          TAGS: ${{ steps.tags.outputs.tags }}
+          LATEST: ${{ steps.tags.outputs.latest }}
+        run: |
+          set -euo pipefail
+          verify_tags="$TAGS"
+          if [ "$LATEST" = "true" ]; then verify_tags="$verify_tags latest"; fi
+          for tag in $verify_tags; do
+            echo "--- $IMAGE_NAME:$tag"
+            docker buildx imagetools inspect "$IMAGE_NAME:$tag" >/dev/null
+          done
+          docker buildx imagetools inspect "$IMAGE_NAME:${{ steps.tags.outputs.primary }}" --raw > /tmp/tag-manifest.json
+          jq -e '[.manifests[].platform.architecture] | index("amd64") != null and index("arm64") != null' /tmp/tag-manifest.json
+
+      - name: Attempt to make the GHCR package public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh api --method PATCH /user/packages/container/derlist -f visibility=public >/tmp/visibility.json 2>/tmp/visibility.err; then
+            echo "GHCR package visibility is public."
+          else
+            echo "::warning title=GHCR package visibility::The workflow token cannot change package visibility. Set the package to Public in GitHub Package settings."
+            cat /tmp/visibility.err || true
+          fi
+
+      - name: Verify anonymous pull when the package is public
+        env:
+          PRIMARY: ${{ steps.tags.outputs.primary }}
+        run: |
+          set -euo pipefail
+          docker logout ghcr.io
+          if docker pull "$IMAGE_NAME:$PRIMARY"; then
+            echo "Anonymous pull of $IMAGE_NAME:$PRIMARY succeeded."
+          else
+            echo "::warning title=GHCR package is private::Anonymous pull failed. Set package visibility to Public in GitHub Package settings; authenticated pulls work."
+          fi
+
+      - name: Write job summary
+        if: always()
+        env:
+          DIGEST: ${{ steps.digest.outputs.digest }}
+          TAGS: ${{ steps.tags.outputs.tags }}
+          LATEST: ${{ steps.tags.outputs.latest }}
+        run: |
+          {
+            echo "## DerList container image"
+            echo ""
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Digest: \`${DIGEST:-not built}\`"
+            echo "- Tags: \`${TAGS:-none}${LATEST:+ latest}\`"
+            echo "- Platforms: \`linux/amd64\`, \`linux/arm64\`"
+            echo ""
+            echo "Pull:"
+            echo ""
+            echo "\`\`\`bash"
+            echo "docker pull $IMAGE_NAME:${TAGS%% *}"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"

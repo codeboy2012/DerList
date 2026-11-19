@@ -10,6 +10,22 @@ export const metadata: Metadata = {
 
 const releases = [
   {
+    version: '0.14.1',
+    date: 'November 2026',
+    badge: 'Open Beta',
+    badgeVariant: 'default' as const,
+    changes: [
+      { type: 'feature', text: 'Published multi-platform container images on GHCR' },
+      { type: 'feature', text: 'Automated E2E, security, CodeQL and Docker quality gates' },
+      { type: 'feature', text: 'Immutable release tags and verified image digests' },
+      {
+        type: 'improvement',
+        text: 'Dependency audit is clean after the nodemailer security upgrade',
+      },
+      { type: 'improvement', text: 'Published-image Compose example with backup and restore docs' },
+    ],
+  },
+  {
     version: '0.14.0',
     date: 'November 2026',
     badge: 'Open Beta',
